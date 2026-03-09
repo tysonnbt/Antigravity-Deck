@@ -798,10 +798,13 @@ function setupRoutes(app) {
     });
     // === File read — for artifact/review file preview ===
     // Uses POST to avoid Cloudflare WAF blocking file:// URIs in query params
+    // Security: restricts reads to workspace root and active workspace folders only
+    // Defenses: path.resolve (traversal), realpathSync (symlink), allowedRoots whitelist
     app.post('/api/file/read', async (req, res) => {
         try {
             const fs = require('fs');
-            let filePath = req.body?.path || '';
+            const path = require('path');
+            let filePath = typeof req.body?.path === 'string' ? req.body.path : '';
             // Handle file:// URIs
             if (filePath.startsWith('file:///')) {
                 try { filePath = decodeURIComponent(new URL(filePath).pathname); } catch { filePath = decodeURIComponent(filePath.replace('file://', '')); }
@@ -809,9 +812,49 @@ function setupRoutes(app) {
                 if (/^\/[a-zA-Z]:/.test(filePath)) filePath = filePath.substring(1);
             }
             if (!filePath) return res.status(400).json({ error: 'Missing path parameter' });
-            if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
-            const content = fs.readFileSync(filePath, 'utf-8');
-            res.json({ content, path: filePath });
+
+            // Resolve to absolute path — prevents ../ traversal
+            const normalized = path.resolve(filePath);
+
+            // Build allowed roots: workspace root + all active workspace folders
+            const { lsInstances, getSettings } = require('./config');
+            const settings = getSettings();
+            const allowedRoots = [];
+            // 1. Default workspace root from settings
+            if (settings.defaultWorkspaceRoot) {
+                allowedRoots.push(path.resolve(settings.defaultWorkspaceRoot));
+            }
+            // 2. All active workspace folder paths
+            for (const inst of lsInstances) {
+                if (inst.workspaceFolderUri) {
+                    const wsPath = uriToFsPath(inst.workspaceFolderUri);
+                    if (wsPath) allowedRoots.push(path.resolve(wsPath));
+                }
+            }
+
+            // Deny if no workspace roots configured — nothing to allow
+            if (allowedRoots.length === 0) {
+                return res.status(403).json({ error: 'Access denied — no workspace configured' });
+            }
+
+            // File must exist before symlink resolution
+            if (!fs.existsSync(normalized)) return res.status(404).json({ error: 'File not found' });
+
+            // Resolve symlinks to real path — prevents symlink-to-outside-workspace bypass
+            const realPath = fs.realpathSync(normalized);
+
+            // Check: real path must be inside an allowed workspace root
+            // .gemini/ paths are allowed only when inside a workspace root (not arbitrary .gemini dirs)
+            const isAllowed = allowedRoots.some(root =>
+                realPath.startsWith(root + path.sep) || realPath === root
+            );
+
+            if (!isAllowed) {
+                return res.status(403).json({ error: 'Access denied — path outside workspace' });
+            }
+
+            const content = fs.readFileSync(realPath, 'utf-8');
+            res.json({ content, path: realPath });
         } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
