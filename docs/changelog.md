@@ -65,3 +65,7 @@ All notable changes made by Claude Code are documented here.
 - **Sidebar sections**: Thêm SidebarSeparator full-width giữa các section (Header, Active Workspaces, Available, New Workspace, Playground).
 
 - **Profile menu icon**: Đổi ChevronsUpDown → EllipsisVertical (⋮) cho trực quan hơn.
+
+- **Connected indicator mobile**: Hiển thị full pill (dot + text) trên mobile, thay vì chỉ dot.
+
+- **Footer cleanup**: Xoá separator thừa sau Shortcuts, hiển thị text "Shortcuts" trên mobile.

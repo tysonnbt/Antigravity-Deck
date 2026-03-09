@@ -421,10 +421,8 @@ export default function Home() {
               )}
               {showChat && <span className="text-xs text-muted-foreground font-mono hidden md:inline">{steps.length > 0 ? `${steps.length} steps` : ''}</span>}
               {lastUpdate && <span className="text-xs text-muted-foreground hidden md:inline">{lastUpdate}</span>}
-              {/* Mobile: just the dot */}
-              <div className={`w-1.5 h-1.5 rounded-full sm:hidden ${connected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
-              {/* Desktop: full pill with text */}
-              <div className={`hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium ${connected ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+              {/* Connected indicator pill — visible on all screen sizes */}
+              <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium ${connected ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
                 <div className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
                 <span>{connected ? 'Connected' : 'Detecting...'}</span>
               </div>
@@ -556,9 +554,8 @@ export default function Home() {
               <button onClick={() => setShowShortcuts(v => !v)}
                 className="flex items-center gap-1 hover:text-foreground transition-colors">
                 <kbd className="px-1 py-0.5 bg-muted/50 rounded text-[9px] font-mono">?</kbd>
-                <span className="hidden sm:inline">Shortcuts</span>
+                <span>Shortcuts</span>
               </button>
-              <span className="w-px h-3 bg-border hidden sm:block" />
             </div>
           </footer>
         </div>{/* end main content */}
