@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { API_BASE } from '@/lib/config';
 import { authHeaders } from '@/lib/auth';
+import { BarChart2, Zap } from 'lucide-react';
 
 interface TokenData {
     totalInput: number;
@@ -45,11 +46,11 @@ export function TokenUsage({ cascadeId }: { cascadeId: string | null }) {
     return (
         <div className="px-4 py-2 bg-muted/10 border-t border-border/30 text-[10px] text-muted-foreground">
             <div className="flex items-center gap-3 flex-wrap">
-                <span>📊 <strong className="text-foreground/70">{total.toLocaleString()}</strong> tokens</span>
+                <span className="flex items-center gap-1"><BarChart2 className="h-3 w-3" /> <strong className="text-foreground/70">{total.toLocaleString()}</strong> tokens</span>
                 <span className="text-green-400/70">↓ {data.totalInput.toLocaleString()} in</span>
                 <span className="text-blue-400/70">↑ {data.totalOutput.toLocaleString()} out</span>
                 {data.totalCache > 0 && (
-                    <span className="text-yellow-400/70">⚡ {data.totalCache.toLocaleString()} cached</span>
+                    <span className="text-yellow-400/70 flex items-center gap-1"><Zap className="h-3 w-3" /> {data.totalCache.toLocaleString()} cached</span>
                 )}
                 {Object.entries(data.byModel).map(([model, d]) => (
                     <span key={model} className="text-muted-foreground/50">

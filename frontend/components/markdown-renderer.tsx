@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import { useState, useCallback, memo, useEffect, useRef } from 'react';
-import { X, FileCode2, ExternalLink, Loader2 } from 'lucide-react';
+import { X, FileCode2, ExternalLink, Loader2, Copy, Check } from 'lucide-react';
 import { API_BASE } from '@/lib/config';
 import { authHeaders } from '@/lib/auth';
 import dynamic from 'next/dynamic';
@@ -283,7 +283,7 @@ function CopyButton({ text }: { text: string }) {
     }, [text]);
     return (
         <button onClick={handleCopy} className="copy-btn" title="Copy code">
-            {copied ? '✓ Copied' : '📋 Copy'}
+            {copied ? <><Check className="h-3 w-3 mr-1 inline" />Copied</> : <><Copy className="h-3 w-3 mr-1 inline" />Copy</>}
         </button>
     );
 }

@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { MarkdownRenderer } from './markdown-renderer';
+import { User, Bot, Star, Copy, Check, Wrench, ArrowUp, ArrowDown, MessageSquare } from 'lucide-react';
+import { StepIcon } from './ui/step-icon';
 
 // === Classification ===
 function isUserInput(step: Step): boolean {
@@ -79,14 +81,14 @@ function UserMessage({ step, index, searchQuery, onStepClick, isBookmarked }: {
         )}>
             <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-full bg-blue-500/20 flex items-center justify-center text-sm">👤</div>
+                    <div className="w-7 h-7 rounded-full bg-blue-500/20 flex items-center justify-center text-sm"><User className="h-3.5 w-3.5 text-blue-400" /></div>
                     <span className="text-xs font-bold text-blue-400 uppercase tracking-widest">User</span>
                     <Badge variant="secondary" className="text-[9px] font-mono h-4 px-1.5 bg-blue-500/10 text-blue-400/70 border-blue-500/20">{tag}</Badge>
                 </div>
                 <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {isBookmarked && <span className="text-xs opacity-100">⭐</span>}
+                    {isBookmarked && <span className="text-xs opacity-100"><Star className="h-3 w-3 fill-yellow-500 text-yellow-500" /></span>}
                     <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={(e) => copy(content, e)}>
-                        {copied ? '✓' : '📋'}
+                        {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                     </Button>
                     <Badge variant="outline" className="text-[9px] font-mono cursor-pointer hover:bg-muted/80 transition-colors" onClick={() => onStepClick?.(index)}>#{index + 1}</Badge>
                 </div>
@@ -114,14 +116,14 @@ function AgentResponse({ step, index, searchQuery, onStepClick, isBookmarked }: 
         )}>
             <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-full bg-purple-500/20 flex items-center justify-center text-sm">🤖</div>
+                    <div className="w-7 h-7 rounded-full bg-purple-500/20 flex items-center justify-center text-sm"><Bot className="h-3.5 w-3.5 text-purple-400" /></div>
                     <span className="text-xs font-bold text-purple-400 uppercase tracking-widest">Agent</span>
                     <Badge variant="secondary" className="text-[9px] font-mono h-4 px-1.5 bg-purple-500/10 text-purple-400/70 border-purple-500/20">{tag}</Badge>
                 </div>
                 <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {isBookmarked && <span className="text-xs opacity-100">⭐</span>}
+                    {isBookmarked && <span className="text-xs opacity-100"><Star className="h-3 w-3 fill-yellow-500 text-yellow-500" /></span>}
                     <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={(e) => copy(content, e)}>
-                        {copied ? '✓' : '📋'}
+                        {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                     </Button>
                     <Badge variant="outline" className="text-[9px] font-mono cursor-pointer hover:bg-muted/80 transition-colors" onClick={() => onStepClick?.(index)}>#{index + 1}</Badge>
                 </div>
@@ -163,10 +165,10 @@ function ProcessingGroup({ steps: groupSteps, searchQuery, onStepClick, bookmark
                 )}
             >
                 <span className={cn('transition-transform duration-200 text-[10px] text-muted-foreground', expanded && 'rotate-90')}>▶</span>
-                <span className="text-muted-foreground/80">🔧</span>
+                <span className="text-muted-foreground/80"><Wrench className="h-3 w-3 text-muted-foreground/80" /></span>
                 <span className="font-semibold text-muted-foreground">{groupSteps.length} processing steps</span>
                 <span className="text-[10px] text-muted-foreground/50 truncate flex-1 text-left font-mono">{summary}</span>
-                {hasBookmarks && <span className="text-[10px]">⭐</span>}
+                {hasBookmarks && <span className="text-[10px]"><Star className="h-2.5 w-2.5 fill-yellow-500 text-yellow-500" /></span>}
                 <Badge variant="outline" className="text-[9px] font-mono text-muted-foreground/60">#{first}{first !== last ? `–${last}` : ''}</Badge>
             </button>
 
@@ -181,10 +183,10 @@ function ProcessingGroup({ steps: groupSteps, searchQuery, onStepClick, bookmark
                                 className="flex items-start gap-2 py-1.5 px-3 text-xs text-muted-foreground hover:bg-white/[0.03] rounded-md cursor-pointer transition-colors"
                                 onClick={() => onStepClick?.(originalIndex)}
                             >
-                                <span className="shrink-0 mt-0.5">{config.icon}</span>
+                                <span className="shrink-0 mt-0.5"><StepIcon name={config.icon} className="text-muted-foreground/70" /></span>
                                 <span className="font-medium text-foreground/60 shrink-0 min-w-16">{config.label}</span>
                                 <span className="truncate opacity-60 flex-1">{content.substring(0, 150)}</span>
-                                {bookmarkedSteps?.has(originalIndex) && <span className="shrink-0">⭐</span>}
+                                {bookmarkedSteps?.has(originalIndex) && <span className="shrink-0"><Star className="h-2.5 w-2.5 fill-yellow-500 text-yellow-500" /></span>}
                                 <Badge variant="outline" className="text-[8px] font-mono shrink-0 opacity-50">#{originalIndex + 1}</Badge>
                             </div>
                         );
@@ -205,13 +207,13 @@ function ScrollControls({ containerRef, show }: { containerRef: React.RefObject<
                 size="sm"
                 className="h-8 w-8 p-0 rounded-full shadow-lg bg-background/90 backdrop-blur border border-border hover:bg-muted"
                 onClick={() => containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
-            >↑</Button>
+            ><ArrowUp className="h-4 w-4" /></Button>
             <Button
                 variant="secondary"
                 size="sm"
                 className="h-8 w-8 p-0 rounded-full shadow-lg bg-background/90 backdrop-blur border border-border hover:bg-muted"
                 onClick={() => containerRef.current?.scrollTo({ top: containerRef.current.scrollHeight, behavior: 'smooth' })}
-            >↓</Button>
+            ><ArrowDown className="h-4 w-4" /></Button>
         </div>
     );
 }
@@ -249,7 +251,7 @@ export function ChatArea({ steps, searchQuery, activeFilters, onStepClick, bookm
         return (
             <div className="flex-1 flex items-center justify-center">
                 <div className="text-center text-muted-foreground space-y-3">
-                    <div className="text-5xl animate-pulse">�</div>
+                    <div className="text-5xl animate-pulse"><MessageSquare className="h-12 w-12 text-muted-foreground/30" /></div>
                     <p className="text-lg font-medium">Chat Mirror</p>
                     <p className="text-sm opacity-60">Select a conversation to start viewing</p>
                 </div>

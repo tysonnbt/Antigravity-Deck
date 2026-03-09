@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ImageIcon } from 'lucide-react';
+import { ImageIcon, User, RefreshCw, MessageSquare, RefreshCcw } from 'lucide-react';
 import { CreditCard } from './profile/credit-card';
 import { FeatureBadge } from './profile/feature-badge';
 import { CollapsibleSection } from './profile/collapsible-section';
@@ -134,10 +134,10 @@ export function AccountInfoView() {
 
                 {/* Header */}
                 <div className="flex items-center gap-2">
-                    <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">👤 Profile</h2>
+                    <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"><User className="h-3.5 w-3.5" /> Profile</h2>
                     <div className="flex-1 h-px bg-border/30" />
                     <Button variant="outline" size="sm" onClick={loadAll} className="h-7 text-[10px]">
-                        🔄 Refresh
+                        <RefreshCw className="h-3 w-3" /> Refresh
                     </Button>
                 </div>
 
@@ -161,10 +161,10 @@ export function AccountInfoView() {
 
                 {/* Credits */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <CreditCard label="Prompt Credits" icon="💬"
+                    <CreditCard label="Prompt Credits" icon={<MessageSquare className="h-4 w-4" />}
                         used={maxPromptCredits - promptCredits} available={promptCredits}
                         total={maxPromptCredits} pct={promptPct} />
-                    <CreditCard label="Flow Credits" icon="🔄"
+                    <CreditCard label="Flow Credits" icon={<RefreshCcw className="h-4 w-4" />}
                         used={maxFlowCredits - flowCredits} available={flowCredits}
                         total={maxFlowCredits} pct={flowPct} />
                 </div>

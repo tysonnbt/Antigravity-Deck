@@ -5,7 +5,8 @@ import { extractStepContent, getStepConfig } from '@/lib/step-utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Wrench } from 'lucide-react';
+import { StepIcon } from '../ui/step-icon';
 import { cn } from '@/lib/utils';
 import { WaitingStep } from './waiting-step';
 import { RawJsonViewer } from './raw-json-viewer';
@@ -92,7 +93,7 @@ export const ProcessingGroup = memo(function ProcessingGroup({ steps: groupSteps
                                 )}
                             >
                                 <ChevronRight className={cn('h-3 w-3 text-muted-foreground transition-transform duration-200 shrink-0', expanded && 'rotate-90')} />
-                                <span className="text-muted-foreground/80">🔧</span>
+                                <span className="text-muted-foreground/80"><Wrench className="h-3 w-3 text-muted-foreground/80" /></span>
                                 <span className="font-semibold text-muted-foreground">{normalSteps.length} steps</span>
                                 <span className="text-[10px] text-muted-foreground/50 truncate flex-1 text-left font-mono">{summary}</span>
                                 <Badge variant="outline" className="text-[9px] font-mono text-muted-foreground/60 shrink-0">#{first}{first !== last ? `–${last}` : ''}</Badge>
@@ -105,7 +106,7 @@ export const ProcessingGroup = memo(function ProcessingGroup({ steps: groupSteps
                                     const content = extractStepContent(step) || '';
                                     return (
                                         <div key={originalIndex} className="flex items-start gap-2 py-1.5 px-3 text-xs text-muted-foreground hover:bg-white/[0.03] rounded-md transition-colors">
-                                            <span className="shrink-0 mt-0.5">{config.icon}</span>
+                                            <StepIcon name={config.icon} className="shrink-0 mt-0.5 text-muted-foreground/70" />
                                             <span className="font-medium text-foreground/60 shrink-0 min-w-16">{config.label}</span>
                                             <span className="truncate opacity-60 flex-1">{String(content ?? '').substring(0, 150)}</span>
                                             <Badge variant="outline" className="text-[8px] font-mono shrink-0 opacity-50">#{originalIndex + 1}</Badge>

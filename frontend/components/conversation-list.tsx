@@ -8,7 +8,7 @@ import { getWorkspaces } from '@/lib/cascade-api';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, ChevronRight } from 'lucide-react';
+import { Plus, ChevronRight, Folder, MessageSquare } from 'lucide-react';
 
 interface ConvSummary {
     id: string;
@@ -100,7 +100,7 @@ export function ConversationList({ workspaceName, wsVersion, onSelectConversatio
                 <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2.5">
                         <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-sm">
-                            📁
+                            <Folder className="h-4 w-4" />
                         </div>
                         <div>
                             <h2 className="text-base font-semibold text-foreground">
@@ -129,7 +129,7 @@ export function ConversationList({ workspaceName, wsVersion, onSelectConversatio
                 ) : conversations.length === 0 ? (
                     <div className="flex items-center justify-center py-16">
                         <div className="text-center space-y-3">
-                            <div className="text-4xl">💬</div>
+                            <div><MessageSquare className="h-10 w-10 text-muted-foreground/40" /></div>
                             <h3 className="text-sm font-medium text-foreground/70">No conversations yet</h3>
                             <p className="text-xs text-muted-foreground max-w-xs">
                                 Start a new chat to begin working in this workspace.

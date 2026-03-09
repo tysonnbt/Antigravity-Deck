@@ -13,6 +13,7 @@ import {
     DialogTitle,
     DialogDescription,
 } from '@/components/ui/dialog';
+import { Plug } from 'lucide-react';
 
 interface Plugin {
     id: string;
@@ -78,7 +79,7 @@ export function PluginManager({ open, onClose }: { open: boolean; onClose: () =>
             <DialogContent className="w-[500px] max-w-[95vw] p-0 overflow-hidden">
                 <DialogHeader className="px-5 pt-5 pb-4 border-b border-border">
                     <DialogTitle className="flex items-center gap-2 text-sm">
-                        🔌 Plugin Manager
+                        <Plug className="h-4 w-4" /> Plugin Manager
                     </DialogTitle>
                     <DialogDescription className="text-[10px]">
                         Manage Cascade plugins
@@ -95,7 +96,7 @@ export function PluginManager({ open, onClose }: { open: boolean; onClose: () =>
                             </div>
                         ) : plugins.length === 0 ? (
                             <div className="text-center py-8">
-                                <div className="text-2xl mb-2">🔌</div>
+                                <div className="mb-2"><Plug className="h-8 w-8 text-muted-foreground" /></div>
                                 <div className="text-sm text-muted-foreground">No plugins available</div>
                                 <div className="text-[10px] text-muted-foreground/60 mt-1">
                                     Plugins will appear here when the API supports them
@@ -125,7 +126,7 @@ export function PluginManager({ open, onClose }: { open: boolean; onClose: () =>
                                             )}
                                         </div>
                                         {p.description && (
-                                            <div className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                                            <div className="text-[10px] text-muted-foreground mt-0.5 line-clamp-3">
                                                 {p.description}
                                             </div>
                                         )}

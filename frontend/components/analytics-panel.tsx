@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Step } from '@/lib/types';
 import { computeStats } from '@/lib/step-utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { BarChart2, User, Bot, Wrench, Settings, XCircle } from 'lucide-react';
 
 const barColors = [
     'bg-blue-500', 'bg-purple-500', 'bg-orange-500', 'bg-green-500',
@@ -27,12 +28,12 @@ export function AnalyticsPanel({ steps }: AnalyticsPanelProps) {
     const maxCount = Math.max(...Object.values(stats.typeCounts), 1);
 
     const cards = [
-        { label: 'Total Steps', value: stats.total, emoji: '📊' },
-        { label: 'User Inputs', value: stats.user, emoji: '👤' },
-        { label: 'Agent', value: stats.agent, emoji: '🤖' },
-        { label: 'Tool Calls', value: stats.tool, emoji: '🔧' },
-        { label: 'System', value: stats.system, emoji: '⚙️' },
-        { label: 'Errors', value: stats.error, emoji: '❌' },
+        { label: 'Total Steps', value: stats.total, icon: <BarChart2 className="h-3 w-3" /> },
+        { label: 'User Inputs', value: stats.user, icon: <User className="h-3 w-3" /> },
+        { label: 'Agent', value: stats.agent, icon: <Bot className="h-3 w-3" /> },
+        { label: 'Tool Calls', value: stats.tool, icon: <Wrench className="h-3 w-3" /> },
+        { label: 'System', value: stats.system, icon: <Settings className="h-3 w-3" /> },
+        { label: 'Errors', value: stats.error, icon: <XCircle className="h-3 w-3" /> },
     ];
 
     return (
@@ -43,7 +44,7 @@ export function AnalyticsPanel({ steps }: AnalyticsPanelProps) {
                     <Card key={c.label} className="bg-muted/30 border-border/50 hover:bg-muted/50 transition-all">
                         <CardContent className="p-3 text-center">
                             <div className="text-xl font-bold font-mono">{c.value}</div>
-                            <div className="text-[10px] text-muted-foreground mt-0.5">{c.emoji} {c.label}</div>
+                            <div className="text-[10px] text-muted-foreground mt-0.5 flex items-center justify-center gap-1">{c.icon} {c.label}</div>
                         </CardContent>
                     </Card>
                 ))}

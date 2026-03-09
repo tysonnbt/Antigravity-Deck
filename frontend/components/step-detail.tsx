@@ -9,6 +9,9 @@ import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MarkdownRenderer } from '@/components/markdown-renderer';
 import { useState, useMemo } from 'react';
+import { Star, Copy, Check } from 'lucide-react';
+import { StepIcon } from './ui/step-icon';
+import { cn } from '@/lib/utils';
 
 interface StepDetailProps {
     step: Step | null;
@@ -64,7 +67,7 @@ export function StepDetail({ step, index, open, onClose, onNavigate, totalSteps,
             <SheetContent className="w-full sm:w-[600px] sm:max-w-[600px] overflow-y-auto">
                 <SheetHeader>
                     <SheetTitle className="flex items-center gap-2">
-                        <span>{config.icon}</span>
+                        <StepIcon name={config.icon} />
                         <span>{config.label}</span>
                         <Badge variant="outline" className="font-mono text-[10px]">#{index + 1}</Badge>
                         <Badge variant={String(step.status ?? '').includes('ERROR') ? 'destructive' : 'secondary'} className="text-[10px]">
@@ -81,8 +84,8 @@ export function StepDetail({ step, index, open, onClose, onNavigate, totalSteps,
                         <span className="text-xs text-muted-foreground ml-2">{index + 1} / {totalSteps}</span>
                     </div>
                     <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="sm" onClick={onToggleBookmark}>{isBookmarked ? '⭐' : '☆'}</Button>
-                        <Button variant="ghost" size="sm" onClick={handleCopy}>{copied ? '✓ Copied' : '📋 Copy'}</Button>
+                        <Button variant="ghost" size="sm" onClick={onToggleBookmark}><Star className={cn("h-4 w-4", isBookmarked ? "fill-yellow-500 text-yellow-500" : "text-muted-foreground")} /></Button>
+                        <Button variant="ghost" size="sm" onClick={handleCopy}>{copied ? <><Check className="h-3 w-3 mr-1 inline" />Copied</> : <><Copy className="h-3 w-3 mr-1 inline" />Copy</>}</Button>
                     </div>
                 </div>
 

@@ -21,7 +21,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Settings, Folder, Zap, BarChart2, RefreshCcw, SendHorizontal, Square, Paperclip, GitBranch, Plus, X, ChevronDown, Activity, Download, Bell, BellOff } from 'lucide-react';
+import { Settings, Folder, Zap, BarChart2, RefreshCcw, SendHorizontal, Square, Paperclip, GitBranch, Plus, X, ChevronDown, Activity, Download, Bell, BellOff, Rocket, ArrowDown as ArrowDownIcon, Camera, Brain, Image as ImageIcon } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 
 // === Props ===
@@ -392,7 +392,7 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, ca
                         {displaySteps.length === 0 ? (
                             <div className="flex items-center justify-center h-full">
                                 <div className="text-center space-y-4">
-                                    <div className="text-5xl">🚀</div>
+                                    <div className="text-5xl"><Rocket className="h-12 w-12 text-muted-foreground/40" /></div>
                                     <h2 className="text-xl font-semibold text-foreground/80">AntigravityChat</h2>
                                     <p className="text-sm text-muted-foreground max-w-md">
                                         {currentConvId ? 'Loading conversation...' : 'Select a conversation from the sidebar or start a new one'}
@@ -426,7 +426,7 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, ca
                                 size="sm"
                                 className="scroll-bottom-btn"
                             >
-                                ⬇ New messages
+                                <ArrowDownIcon className="h-3 w-3 mr-1 inline" /> New messages
                             </Button>
                         )}
                     </div>
@@ -441,7 +441,7 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, ca
                         {isDragOver && (
                             <div className="absolute inset-0 z-50 flex items-center justify-center bg-primary/5 border-2 border-dashed border-primary/40 rounded-lg backdrop-blur-sm pointer-events-none">
                                 <div className="text-center space-y-2">
-                                    <div className="text-3xl">📸</div>
+                                    <div className="text-3xl"><Camera className="h-8 w-8 text-primary/60" /></div>
                                     <p className="text-sm font-medium text-primary/80">Drop images here</p>
                                 </div>
                             </div>
@@ -453,7 +453,7 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, ca
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                         <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground h-7 px-2 font-normal">
-                                            <span>🧠</span>
+                                            <span><Brain className="h-3.5 w-3.5" /></span>
                                             <span className="truncate max-w-[80px] sm:max-w-[140px]">{selectedModelLabel}</span>
                                             <ChevronDown className="h-3 w-3 opacity-50" />
                                         </Button>
@@ -471,7 +471,7 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, ca
                                                     {m.isRecommended && <Badge variant="secondary" className="text-[8px] h-3.5 px-1 shrink-0">★</Badge>}
                                                 </div>
                                                 <div className="flex items-center gap-1.5 shrink-0">
-                                                    {m.supportsImages && <span className="text-[9px]">🖼️</span>}
+                                                    {m.supportsImages && <span className="text-[9px]"><ImageIcon className="h-3 w-3" /></span>}
                                                     <div className="w-12 h-1.5 rounded-full bg-muted overflow-hidden">
                                                         <div className="h-full rounded-full bg-green-500/70" style={{ width: `${Math.round(m.quota * 100)}%` }} />
                                                     </div>

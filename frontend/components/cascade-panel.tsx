@@ -5,6 +5,7 @@ import { cascadeSend, cascadeSubmit, getWorkspaces, getModels } from '@/lib/casc
 import type { Workspace, CascadeModel } from '@/lib/cascade-api';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { Image as ImageIcon } from 'lucide-react';
 
 interface CascadeMessage {
     id: string;
@@ -301,7 +302,7 @@ export function CascadePanel({ currentConvId, currentWorkspace, wsVersion, onCas
                                             <div className="font-medium truncate flex items-center gap-1">
                                                 {m.label}
                                                 {m.isRecommended && <span className="text-[8px] text-amber-400 font-semibold">★</span>}
-                                                {m.supportsImages && <span className="text-[8px] text-muted-foreground/50">🖼</span>}
+                                                {m.supportsImages && <ImageIcon className="h-2.5 w-2.5 text-muted-foreground/50" />}
                                             </div>
                                             <div className="flex items-center gap-1.5 mt-0.5">
                                                 <div className="h-1 flex-1 rounded-full bg-muted overflow-hidden">

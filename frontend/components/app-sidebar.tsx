@@ -36,7 +36,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-import { Settings, User, Plug, Book, Globe, Moon, Sun, Plus, FolderOpen, ChevronsUpDown, Activity, Bot } from "lucide-react"
+import { Settings, User, Plug, Book, Globe, Moon, Sun, Plus, FolderOpen, ChevronsUpDown, Activity, Bot, MessageCircle, Loader2, Circle } from "lucide-react"
 
 import { WorkspaceGroup } from "./sidebar/workspace-group"
 import type { ConvSummary, WorkspaceData } from "./sidebar/workspace-group"
@@ -252,7 +252,7 @@ export function AppSidebar({
         <Sidebar variant="inset">
             <SidebarHeader>
                 <div className="flex items-center gap-2 px-4 py-2 mt-2">
-                    <span className="text-xl">💭</span>
+                    <MessageCircle className="h-5 w-5 text-primary" />
                     <span className="font-semibold text-lg tracking-tight">Chat Mirror</span>
                 </div>
             </SidebarHeader>
@@ -296,7 +296,7 @@ export function AppSidebar({
                                             <FolderOpen className="shrink-0" />
                                             <span className="flex-1 truncate min-w-0">{folder.name}</span>
                                             <span className="ml-auto opacity-0 group-hover/menu-item:opacity-100 text-[9px] text-muted-foreground/50 transition-opacity shrink-0">
-                                                {openingFolder === folder.name ? '⏳' : 'Open'}
+                                                {openingFolder === folder.name ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Open'}
                                             </span>
                                         </SidebarMenuButton>
                                     </SidebarMenuItem>
@@ -324,7 +324,7 @@ export function AppSidebar({
                                 disabled={creating}
                                 className="h-8 px-3 text-[10px] shrink-0"
                             >
-                                {creating ? "⏳" : "Create"}
+                                {creating ? <Loader2 className="h-3 w-3 animate-spin" /> : "Create"}
                             </Button>
                         )}
                     </div>
@@ -334,7 +334,7 @@ export function AppSidebar({
                     <SidebarGroup>
                         <SidebarGroupLabel className="flex items-center justify-between">
                             <span>Playground</span>
-                            <span className="text-muted-foreground/30">⊙</span>
+                            <Circle className="h-3 w-3 text-muted-foreground/30" />
                         </SidebarGroupLabel>
                         <SidebarGroupContent>
                             {playgroundWs.map((wd) => {
