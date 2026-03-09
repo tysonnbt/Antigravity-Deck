@@ -4,6 +4,11 @@ All notable changes made by Claude Code are documented here.
 
 ## [2026-03-09]
 
+### Added
+- **Connection detection screens**: Welcome screen giờ phân biệt 2 trạng thái:
+  - **Antigravity Not Detected** (`WifiOff` icon): hiển thị khi WS chưa kết nối, kèm 3 bước hướng dẫn + detecting animation (pulsing amber dot)
+  - **No Workspace Selected** (`FolderOpen` icon): hiển thị khi đã kết nối nhưng chưa chọn workspace
+
 ### Refactored
 - **Source Control & Explorer mobile responsiveness**: Cải thiện trải nghiệm mobile cho cả hai panel.
   - Explorer panel: thêm mobile toggle/collapse (slide in/out overlay)
