@@ -499,7 +499,6 @@ export default function Home() {
                 <span className="hidden sm:inline">Shortcuts</span>
               </button>
               <span className="w-px h-3 bg-border hidden sm:block" />
-              <a href="https://github.com/AGI-is-going-to-arrive/Antigravity-Context-Window-Monitor" target="_blank" rel="noopener" className="hover:text-foreground transition-colors hidden sm:inline">GitHub ↗</a>
             </div>
           </footer>
         </div>{/* end main content */}
