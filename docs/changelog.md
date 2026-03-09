@@ -9,6 +9,12 @@ All notable changes made by Claude Code are documented here.
   - **Antigravity Not Detected** (`WifiOff` icon): hiển thị khi WS chưa kết nối, kèm 3 bước hướng dẫn + detecting animation (pulsing amber dot)
   - **No Workspace Selected** (`FolderOpen` icon): hiển thị khi đã kết nối nhưng chưa chọn workspace
 
+- **Create workspace dialog**: Thay inline input bằng Dialog modal chuyên nghiệp hơn.
+  - Nút "+ New Workspace" trên sidebar mở dialog
+  - Validation: ký tự đặc biệt, tên trùng active/available workspace, tên quá dài
+  - Error messages inline, input border đỏ khi invalid
+  - Hint text hướng dẫn, Cancel/Create buttons, loading spinner, Enter key support
+
 ### Refactored
 - **Source Control & Explorer mobile responsiveness**: Cải thiện trải nghiệm mobile cho cả hai panel.
   - Explorer panel: thêm mobile toggle/collapse (slide in/out overlay)
