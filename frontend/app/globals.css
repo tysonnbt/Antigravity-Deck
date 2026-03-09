@@ -144,6 +144,11 @@
   button {
     font-family: inherit;
   }
+
+  button,
+  [role="button"] {
+    cursor: pointer;
+  }
 }
 
 /* Step content styles */
