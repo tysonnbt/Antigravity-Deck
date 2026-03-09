@@ -351,15 +351,8 @@ function ExplorerTab({ workspace }: { workspace: string }) {
             )}>
                 {/* Tree header */}
                 <div className="flex items-center justify-between px-3 h-8 border-b border-border/30 shrink-0">
-                    <div className="flex items-center gap-1.5">
-                        <FolderOpen className="w-3.5 h-3.5 text-muted-foreground/40" />
-                        {rootEntries && rootEntries.length > 0 && (
-                            <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-muted/40 text-[9px] text-muted-foreground/60 font-bold">
-                                {rootEntries.length}
-                            </span>
-                        )}
-                    </div>
-                    <div className="flex items-center gap-1 -mr-2.5">
+                    <FolderOpen className="w-3.5 h-3.5 text-muted-foreground/40" />
+                    <div className="flex items-center gap-1 -mr-2.5 md:mr-0">
                         <button
                             onClick={loadRoot}
                             className="p-1 rounded hover:bg-muted/30 text-muted-foreground/30 hover:text-muted-foreground/70 transition-colors"
@@ -599,7 +592,7 @@ function SourceControlTab({ workspace }: { workspace: string }) {
                                 <Minus className="w-2.5 h-2.5" />{totalDeleted}
                             </span>
                         )}
-                        <div className="flex items-center gap-1 -mr-2.5">
+                        <div className="flex items-center gap-1 -mr-2.5 md:mr-0">
                             <button onClick={refresh} className="p-1 rounded hover:bg-muted/30 text-muted-foreground/30 hover:text-muted-foreground/70 transition-colors" title="Refresh">
                                 <RefreshCw className={cn('w-3 h-3', loading && 'animate-spin')} />
                             </button>

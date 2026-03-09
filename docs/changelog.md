@@ -10,10 +10,10 @@ All notable changes made by Claude Code are documented here.
   - Source Control panel: giảm chiều rộng overlay trên mobile cho thoáng hơn
   - Cả hai panel: thêm nút đóng (X) trên mobile header
   - Cả hai panel: thêm nút "Open file tree/list" khi panel đóng và chưa chọn file
-  - Thay text "EXPLORER" bằng FolderOpen icon + file count badge
+  - Thay text "EXPLORER" bằng FolderOpen icon (bỏ file count badge vì API không hỗ trợ tổng file count)
   - Thay text "CHANGES" bằng FileDiff icon
   - Chuẩn hoá chiều cao header tất cả panel thành h-8 cho đồng nhất
-  - Căn refresh/close buttons sát cạnh phải với -mr-2.5
+  - Căn refresh/close buttons sát cạnh phải trên mobile (`-mr-2.5 md:mr-0`)
   - Tách +/- stats khỏi action buttons trong Changes header cho icon positioning nhất quán
 
 ### Changed
