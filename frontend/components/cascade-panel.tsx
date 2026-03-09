@@ -124,26 +124,26 @@ export function CascadePanel({ currentConvId, currentWorkspace, wsVersion, onCas
             if (mode === 'new' || !activeCascadeId) {
                 // Start new conversation + send
                 const activeWs = workspaces.find(w => w.workspaceName === targetWorkspace) || workspaces[0];
-                addMessage('system', `⏳ Creating cascade in ${activeWs?.workspaceName || '?'}...`);
+                addMessage('system', `[Loading] Creating cascade in ${activeWs?.workspaceName || '?'}...`);
                 const result = await cascadeSubmit(text, selectedModelId || undefined, undefined, activeWs?.workspaceName);
                 setActiveCascadeId(result.cascadeId);
                 setMode('continue');
                 onCascadeCreated?.(result.cascadeId);
-                addMessage('system', `✅ Sent to cascade \`${result.cascadeId.substring(0, 8)}...\` (${activeWs?.workspaceName || '?'})\n\nStatus: ${result.result.status}`, result.cascadeId);
+                addMessage('system', `[OK] Sent to cascade \`${result.cascadeId.substring(0, 8)}...\` (${activeWs?.workspaceName || '?'})\n\nStatus: ${result.result.status}`, result.cascadeId);
                 if (result.result.data) {
                     addMessage('system', result.result.data);
                 }
             } else {
                 // Continue existing conversation
-                addMessage('system', `⏳ Sending to \`${activeCascadeId.substring(0, 8)}...\``);
+                addMessage('system', `[Loading] Sending to \`${activeCascadeId.substring(0, 8)}...\``);
                 const result = await cascadeSend(activeCascadeId, text, selectedModelId || undefined);
-                addMessage('system', `✅ Status: ${result.status}`, activeCascadeId);
+                addMessage('system', `[OK] Status: ${result.status}`, activeCascadeId);
                 if (result.data) {
                     addMessage('system', result.data);
                 }
             }
         } catch (e) {
-            addMessage('error', `❌ ${e instanceof Error ? e.message : 'Unknown error'}`);
+            addMessage('error', `[Error] ${e instanceof Error ? e.message : 'Unknown error'}`);
         } finally {
             setLoading(false);
             inputRef.current?.focus();
@@ -160,7 +160,7 @@ export function CascadePanel({ currentConvId, currentWorkspace, wsVersion, onCas
     const handleNewConversation = useCallback(() => {
         setActiveCascadeId(null);
         setMode('new');
-        addMessage('system', '🆕 Switched to new conversation mode');
+        addMessage('system', '[New] Switched to new conversation mode');
         onNewConversation?.(); // tell parent to clear currentConvId
     }, [addMessage, onNewConversation]);
 

@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { MarkdownRenderer } from './markdown-renderer';
-import { User, Bot, Star, Copy, Check, Wrench, ArrowUp, ArrowDown, MessageSquare } from 'lucide-react';
+import { User, Bot, Star, Copy, Check, Wrench, ArrowUp, ArrowDown, MessageSquare, ChevronRight } from 'lucide-react';
 import { StepIcon } from './ui/step-icon';
 
 // === Classification ===
@@ -164,7 +164,7 @@ function ProcessingGroup({ steps: groupSteps, searchQuery, onStepClick, bookmark
                     expanded ? 'bg-muted/40 border-border/50 rounded-b-none' : 'hover:border-border/30'
                 )}
             >
-                <span className={cn('transition-transform duration-200 text-[10px] text-muted-foreground', expanded && 'rotate-90')}>▶</span>
+                <span className={cn('transition-transform duration-200 text-muted-foreground', expanded && 'rotate-90')}><ChevronRight className="w-3 h-3" /></span>
                 <span className="text-muted-foreground/80"><Wrench className="h-3 w-3 text-muted-foreground/80" /></span>
                 <span className="font-semibold text-muted-foreground">{groupSteps.length} processing steps</span>
                 <span className="text-[10px] text-muted-foreground/50 truncate flex-1 text-left font-mono">{summary}</span>

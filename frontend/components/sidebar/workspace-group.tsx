@@ -129,13 +129,13 @@ export function WorkspaceGroup({
                                                     isActive={conv.id === currentConvId}
                                                     onClick={() => onSelectConv(conv.id)}
                                                     title={`${conv.summary}\n${conv.stepCount} steps · ${conv.id}`}
-                                                    className="cursor-pointer text-xs peer pr-8"
+                                                    className="text-xs peer pr-8"
                                                 >
                                                     <MessageSquare className="h-3 w-3 shrink-0" />
                                                     <span className="truncate min-w-0">{conv.summary}</span>
                                                 </SidebarMenuSubButton>
                                                 <SidebarMenuAction
-                                                    className="opacity-0 group-hover/conv:opacity-100 text-sidebar-foreground/30 hover:text-destructive hover:bg-destructive/10"
+                                                    className="!top-1/2 !-translate-y-1/2 opacity-100 sm:opacity-0 sm:group-hover/conv:opacity-100 text-sidebar-foreground/30 hover:text-destructive hover:bg-destructive/10"
                                                     title="Delete conversation"
                                                     onClick={(e) => {
                                                         e.stopPropagation()
@@ -150,7 +150,7 @@ export function WorkspaceGroup({
                                             <SidebarMenuSubItem>
                                                 <SidebarMenuSubButton
                                                     onClick={onToggleShowAll}
-                                                    className="text-sidebar-foreground/50 text-[10px] cursor-pointer"
+                                                    className="text-sidebar-foreground/50 text-[10px]"
                                                 >
                                                     {data.conversations.length - SHOW_LIMIT} more…
                                                 </SidebarMenuSubButton>

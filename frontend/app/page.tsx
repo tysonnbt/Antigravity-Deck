@@ -7,7 +7,7 @@ import { extractStepContent, exportToMarkdown } from '@/lib/step-utils';
 import { Timeline } from '@/components/timeline';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { MoreVertical, BarChart2, Download, Bell, BellOff } from 'lucide-react';
+import { MoreVertical, BarChart2, Download, Bell, BellOff, MessageCircle, Star, Rocket } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -348,9 +348,15 @@ export default function Home() {
               {/* Hamburger — provided by Shadcn SidebarTrigger */}
               <SidebarTrigger className="-ml-1 w-9 h-9" />
               <div className="flex items-center gap-1.5">
-                <span className="text-sm">💬</span>
-                <span className="font-semibold text-sm hidden sm:inline">Chat Mirror</span>
-                <Badge variant="outline" className="text-[9px] h-4 px-1 font-mono hidden sm:inline-flex">v3</Badge>
+                <MessageCircle className="w-4 h-4" />
+                {activeWorkspace ? (
+                  <span className="font-semibold text-sm truncate max-w-[120px] sm:max-w-[200px]">{activeWorkspace}</span>
+                ) : (
+                  <>
+                    <span className="font-semibold text-sm">Chat Mirror</span>
+                    <Badge variant="outline" className="text-[9px] h-4 px-1 font-mono inline-flex">v3</Badge>
+                  </>
+                )}
               </div>
               {currentConvId && (
                 <>
@@ -368,13 +374,16 @@ export default function Home() {
             <div className="flex items-center gap-1.5 sm:gap-3">
 
               {bookmarkedSteps.size > 0 && (
-                <Badge variant="secondary" className="text-[10px] hidden sm:inline-flex">⭐ {bookmarkedSteps.size}</Badge>
+                <Badge variant="secondary" className="text-[10px] hidden sm:inline-flex gap-1"><Star className="w-3 h-3" /> {bookmarkedSteps.size}</Badge>
               )}
               {showChat && <span className="text-xs text-muted-foreground font-mono hidden md:inline">{steps.length > 0 ? `${steps.length} steps` : ''}</span>}
               {lastUpdate && <span className="text-xs text-muted-foreground hidden md:inline">{lastUpdate}</span>}
-              <div className={`flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] font-medium ${connected ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+              {/* Mobile: just the dot */}
+              <div className={`w-1.5 h-1.5 rounded-full sm:hidden ${connected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
+              {/* Desktop: full pill with text */}
+              <div className={`hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium ${connected ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
                 <div className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
-                <span className="hidden sm:inline">{connected ? 'Connected' : 'Detecting...'}</span>
+                <span>{connected ? 'Connected' : 'Detecting...'}</span>
               </div>
             </div>
 
@@ -420,8 +429,10 @@ export default function Home() {
           {showWelcome && (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center space-y-4">
-                <div className="text-5xl">🚀</div>
-                <h2 className="text-xl font-semibold text-foreground/80">AntigravityChat</h2>
+                <div className="flex items-center justify-center gap-3">
+                  <Rocket className="w-8 h-8 text-muted-foreground/50" />
+                  <h2 className="text-xl font-semibold text-foreground/80">AntigravityChat</h2>
+                </div>
                 <p className="text-sm text-muted-foreground max-w-md">
                   Select a workspace from the sidebar to view conversations, or start a new one.
                 </p>
@@ -488,7 +499,7 @@ export default function Home() {
           {/* Footer */}
           <footer className="flex items-center justify-between px-2 sm:px-4 h-8 bg-background border-t border-border flex-shrink-0 text-[10px] text-muted-foreground/60 safe-area-bottom">
             <div className="flex items-center gap-2 sm:gap-3">
-              <span>💬 Chat Mirror v3</span>
+              <span><MessageCircle className="w-3 h-3 inline-block mr-1" />Chat Mirror v3</span>
               <span className="w-px h-3 bg-border hidden sm:block" />
               <span className="hidden sm:inline">AntigravityChat</span>
             </div>
