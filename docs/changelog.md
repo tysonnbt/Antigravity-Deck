@@ -66,6 +66,8 @@ All notable changes made by Claude Code are documented here.
 
 - **Empty state centering**: "No conversations yet" giờ nằm giữa trang (tách ra ngoài ScrollArea để flex-1 hoạt động đúng).
 
+- **App icon**: Đổi `MessageCircle` → `FolderSync` cho sidebar logo, header, và footer — phù hợp hơn với chức năng sync workspace.
+
 - **Plugin Manager modal**: Description text bị cắt mất do dùng `truncate` (1 dòng). Đổi sang `line-clamp-3` để hiển thị tối đa 3 dòng.
   - File: `frontend/components/plugin-manager.tsx` (dòng 128)
 

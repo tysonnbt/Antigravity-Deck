@@ -44,7 +44,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-import { Settings, User, Plug, Book, Globe, Moon, Sun, Plus, FolderOpen, FolderPlus, EllipsisVertical, Activity, Bot, MessageCircle, Loader2, Circle } from "lucide-react"
+import { Settings, User, Plug, Book, Globe, Moon, Sun, Plus, FolderOpen, FolderPlus, EllipsisVertical, Activity, Bot, FolderSync, Loader2, Circle } from "lucide-react"
 
 import { WorkspaceGroup } from "./sidebar/workspace-group"
 import type { ConvSummary, WorkspaceData } from "./sidebar/workspace-group"
@@ -284,7 +284,7 @@ export function AppSidebar({
                     onClick={onGoHome}
                     className="flex items-center gap-2 px-4 py-2 mt-2 hover:opacity-80 transition-opacity cursor-pointer"
                 >
-                    <MessageCircle className="h-5 w-5 text-primary" />
+                    <FolderSync className="h-5 w-5 text-primary" />
                     <span className="font-semibold text-lg tracking-tight">Chat Mirror</span>
                 </button>
             </SidebarHeader>

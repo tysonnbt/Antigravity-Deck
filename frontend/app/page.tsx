@@ -7,7 +7,7 @@ import { extractStepContent, exportToMarkdown } from '@/lib/step-utils';
 import { Timeline } from '@/components/timeline';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { MoreVertical, BarChart2, Download, Bell, BellOff, MessageCircle, Star, WifiOff, FolderOpen } from 'lucide-react';
+import { MoreVertical, BarChart2, Download, Bell, BellOff, FolderSync, Star, WifiOff, FolderOpen } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -391,7 +391,7 @@ export default function Home() {
               {/* Hamburger — provided by Shadcn SidebarTrigger */}
               <SidebarTrigger className="-ml-1 w-9 h-9" />
               <div className="flex items-center gap-1.5">
-                <MessageCircle className="w-4 h-4" />
+                <FolderSync className="w-4 h-4" />
                 {activeWorkspace ? (
                   <span className="font-semibold text-sm truncate max-w-[120px] sm:max-w-[200px]">{activeWorkspace}</span>
                 ) : (
@@ -578,7 +578,7 @@ export default function Home() {
           {/* Footer */}
           <footer className="flex items-center justify-between px-2 sm:px-4 h-8 bg-background border-t border-border flex-shrink-0 text-[10px] text-muted-foreground/60 safe-area-bottom">
             <div className="flex items-center gap-2 sm:gap-3">
-              <span><MessageCircle className="w-3 h-3 inline-block mr-1" />Chat Mirror v3</span>
+              <span><FolderSync className="w-3 h-3 inline-block mr-1" />Chat Mirror v3</span>
               <span className="w-px h-3 bg-border hidden sm:block" />
               <span className="hidden sm:inline">AntigravityChat</span>
             </div>
