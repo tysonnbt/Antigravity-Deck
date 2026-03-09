@@ -454,7 +454,7 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, ca
                                     <DropdownMenuTrigger asChild>
                                         <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground h-7 px-2 font-normal">
                                             <span><Brain className="h-3.5 w-3.5" /></span>
-                                            <span className="truncate max-w-[80px] sm:max-w-[140px]">{selectedModelLabel}</span>
+                                            <span className="truncate max-w-[200px] sm:max-w-[240px]">{selectedModelLabel}</span>
                                             <ChevronDown className="h-3 w-3 opacity-50" />
                                         </Button>
                                     </DropdownMenuTrigger>
@@ -648,7 +648,7 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, ca
                                     onKeyDown={handleKeyDown}
                                     onPaste={handlePaste}
                                     placeholder={currentConvId ? "Continue conversation..." : "Start a new conversation..."}
-                                    className="flex-1 resize-none min-h-[36px] sm:min-h-[44px] max-h-[200px] text-sm"
+                                    className="flex-1 resize-none min-h-[36px] sm:min-h-[44px] max-h-[200px] text-sm !py-[8px] sm:!py-[12px]"
                                     rows={1}
                                     onInput={(e) => {
                                         const target = e.target as HTMLTextAreaElement;
