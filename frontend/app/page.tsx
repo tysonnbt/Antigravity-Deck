@@ -29,6 +29,16 @@ import { AgentBridgeView } from '@/components/agent-bridge-view';
 const AnalyticsPanel = dynamic(() => import('@/components/analytics-panel').then(m => ({ default: m.AnalyticsPanel })), { ssr: false });
 const StepDetail = dynamic(() => import('@/components/step-detail').then(m => ({ default: m.StepDetail })), { ssr: false });
 
+/** Read a JSON-serialised value from localStorage (SSR-safe). */
+function getStoredValue<T>(key: string, fallback: T): T {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const stored = localStorage.getItem(key);
+    if (stored === null) return fallback;
+    return JSON.parse(stored) as T;
+  } catch { return fallback; }
+}
+
 export default function Home() {
   const { connected, steps, conversations, currentConvId, cascadeStatus, conversationsVersion, selectConversation, lastUpdate } = useWebSocket();
 
@@ -70,17 +80,17 @@ export default function Home() {
   }, []);
 
   // === Active workspace name — which workspace the user is "in" ===
-  const [activeWorkspace, setActiveWorkspace] = useState<string | null>(null);
+  const [activeWorkspace, setActiveWorkspace] = useState<string | null>(() => getStoredValue('antigravity-active-workspace', null));
   // NEW: When true, show ChatView in "new chat" mode (no conversation yet)
   const [newChatMode, setNewChatMode] = useState(false);
   // NEW: When true, show AccountInfoView in main panel
-  const [showAccountInfo, setShowAccountInfo] = useState(false);
+  const [showAccountInfo, setShowAccountInfo] = useState(() => getStoredValue('antigravity-show-account-info', false));
   // NEW: When true, show SettingsView in main panel
-  const [showSettings, setShowSettings] = useState(false);
+  const [showSettings, setShowSettings] = useState(() => getStoredValue('antigravity-show-settings', false));
   // NEW: When true, show AgentLogsView in main panel
-  const [showLogs, setShowLogs] = useState(false);
+  const [showLogs, setShowLogs] = useState(() => getStoredValue('antigravity-show-logs', false));
   // NEW: When true, show Agent Bridge in main panel
-  const [showBridge, setShowBridge] = useState(false);
+  const [showBridge, setShowBridge] = useState(() => getStoredValue('antigravity-show-bridge', false));
   // Bumped when sidebar creates a workspace, so panels refresh their lists
   const [wsVersion, setWsVersion] = useState(0);
 
@@ -88,6 +98,26 @@ export default function Home() {
   useEffect(() => {
     if (conversationsVersion > 0) setWsVersion(v => v + 1);
   }, [conversationsVersion]);
+
+  // === Persist navigation state to localStorage ===
+  useEffect(() => { localStorage.setItem('antigravity-active-workspace', JSON.stringify(activeWorkspace)); }, [activeWorkspace]);
+  useEffect(() => { localStorage.setItem('antigravity-show-settings', JSON.stringify(showSettings)); }, [showSettings]);
+  useEffect(() => { localStorage.setItem('antigravity-show-account-info', JSON.stringify(showAccountInfo)); }, [showAccountInfo]);
+  useEffect(() => { localStorage.setItem('antigravity-show-logs', JSON.stringify(showLogs)); }, [showLogs]);
+  useEffect(() => { localStorage.setItem('antigravity-show-bridge', JSON.stringify(showBridge)); }, [showBridge]);
+
+  // Persist currentConvId and restore on mount
+  useEffect(() => {
+    localStorage.setItem('antigravity-current-conv-id', JSON.stringify(currentConvId));
+  }, [currentConvId]);
+
+  useEffect(() => {
+    const storedConvId = getStoredValue<string | null>('antigravity-current-conv-id', null);
+    if (storedConvId) {
+      selectConversation(storedConvId);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run once on mount
 
   // Step detail state
   const [selectedStep, setSelectedStep] = useState<number | null>(null);
@@ -199,6 +229,17 @@ export default function Home() {
     setShowSettings(false);
     setShowLogs(false);
     setShowBridge(true);
+  }, [selectConversation]);
+
+  // === Go Home — reset all navigation state to welcome screen ===
+  const handleGoHome = useCallback(() => {
+    selectConversation(null);
+    setActiveWorkspace(null);
+    setNewChatMode(false);
+    setShowAccountInfo(false);
+    setShowSettings(false);
+    setShowLogs(false);
+    setShowBridge(false);
   }, [selectConversation]);
 
   // When CascadePanel creates a new cascade, track it
@@ -336,6 +377,7 @@ export default function Home() {
           onShowSettings={handleShowSettings}
           onShowLogs={handleShowLogs}
           onShowBridge={handleShowBridge}
+          onGoHome={handleGoHome}
           onWorkspaceCreated={handleWorkspaceCreated}
           wsVersion={wsVersion}
         />

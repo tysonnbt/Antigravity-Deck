@@ -37,3 +37,23 @@ All notable changes made by Claude Code are documented here.
 ### Fixed
 - **Plugin Manager modal**: Description text bị cắt mất do dùng `truncate` (1 dòng). Đổi sang `line-clamp-3` để hiển thị tối đa 3 dòng.
   - File: `frontend/components/plugin-manager.tsx` (dòng 128)
+
+- **Sidebar toggle icon**: Đổi thành hamburger icon (Menu) trên mobile. Desktop dùng PanelLeftClose khi menu mở, PanelLeftOpen khi menu đóng.
+
+- **Connected indicator dot**: Mobile chỉ hiển thị dot (không text, không pill border). Desktop giữ nguyên full pill.
+
+- **Delete button mobile**: Luôn hiển thị trên mobile (trước đó chỉ hiện khi hover). Căn giữa dọc icon với text conversation.
+
+- **Cursor-pointer**: Thêm cursor-pointer cho toàn bộ button, sidebar actions, menu items (Tailwind v4 không set mặc định).
+
+- **Header "Chat Mirror v3"**: Hiển thị trên cả mobile. Khi mở workspace → rút gọn thành tên workspace thay vì "Chat Mirror v3".
+
+- **Chat input text**: Căn giữa text/placeholder theo chiều dọc trong textarea.
+
+- **Model selector width**: Tăng max-width hiển thị tên model (200px mobile, 240px desktop).
+
+- **Emoji cleanup bổ sung**: Thay 5 emoji UI còn sót (💬→MessageCircle, ⭐→Star, 🚀→Rocket, ▶→ChevronRight) + 6 emoji chat message (⏳✅❌🆕 → text prefix).
+
+- **Persist state across refresh**: Lưu navigation state (workspace, conversation, settings, logs, bridge) vào localStorage. Refresh giữ nguyên trang đang xem thay vì reset về welcome screen.
+
+- **Sidebar logo → Home link**: Click vào icon + "Chat Mirror" trong sidebar để quay về welcome screen.

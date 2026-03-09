@@ -50,6 +50,7 @@ interface AppSidebarProps {
     onShowSettings: () => void
     onShowLogs: () => void
     onShowBridge: () => void
+    onGoHome: () => void
     activeWorkspace: string | null
     wsVersion?: number
     onWorkspaceCreated?: () => void
@@ -64,6 +65,7 @@ export function AppSidebar({
     onShowSettings,
     onShowLogs,
     onShowBridge,
+    onGoHome,
     activeWorkspace,
     wsVersion,
     onWorkspaceCreated,
@@ -251,10 +253,13 @@ export function AppSidebar({
     return (
         <Sidebar variant="inset">
             <SidebarHeader>
-                <div className="flex items-center gap-2 px-4 py-2 mt-2">
+                <button
+                    onClick={onGoHome}
+                    className="flex items-center gap-2 px-4 py-2 mt-2 hover:opacity-80 transition-opacity cursor-pointer"
+                >
                     <MessageCircle className="h-5 w-5 text-primary" />
                     <span className="font-semibold text-lg tracking-tight">Chat Mirror</span>
-                </div>
+                </button>
             </SidebarHeader>
 
             <SidebarContent>
