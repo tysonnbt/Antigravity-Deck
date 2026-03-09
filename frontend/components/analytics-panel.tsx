@@ -37,12 +37,12 @@ export function AnalyticsPanel({ steps }: AnalyticsPanelProps) {
     ];
 
     return (
-        <div className="border-b border-border bg-background/50 backdrop-blur px-4 py-3 space-y-3 animate-in slide-in-from-top duration-200">
+        <div className="border-b border-border bg-background/50 backdrop-blur px-4 py-3 space-y-3">
             {/* Stat Cards */}
-            <div className="grid grid-cols-6 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
                 {cards.map(c => (
-                    <Card key={c.label} className="bg-muted/30 border-border/50 hover:bg-muted/50 transition-all">
-                        <CardContent className="p-3 text-center">
+                    <Card key={c.label} className="bg-muted/30 border-border/50 hover:bg-muted/50 transition-all !py-0 !gap-0 sm:!py-6 sm:!gap-6">
+                        <CardContent className="px-3 py-1.5 sm:p-3 text-center">
                             <div className="text-xl font-bold font-mono">{c.value}</div>
                             <div className="text-[10px] text-muted-foreground mt-0.5 flex items-center justify-center gap-1">{c.icon} {c.label}</div>
                         </CardContent>

@@ -54,6 +54,10 @@ All notable changes made by Claude Code are documented here.
 
 - **Emoji cleanup bổ sung**: Thay 5 emoji UI còn sót (💬→MessageCircle, ⭐→Star, 🚀→Rocket, ▶→ChevronRight) + 6 emoji chat message (⏳✅❌🆕 → text prefix).
 
-- **Persist state across refresh**: Lưu navigation state (workspace, conversation, settings, logs, bridge) vào localStorage. Refresh giữ nguyên trang đang xem thay vì reset về welcome screen.
+- **Persist state across refresh**: Lưu navigation state (workspace, conversation, settings, logs, bridge, stats, tokens) vào localStorage. Refresh giữ nguyên trang đang xem thay vì reset về welcome screen.
 
 - **Sidebar logo → Home link**: Click vào icon + "Chat Mirror" trong sidebar để quay về welcome screen.
+
+- **Stats panel mobile**: Grid 2 cột (thay vì 6), giảm padding card cho compact hơn trên điện thoại.
+
+- **Stats panel close animation**: Thêm hiệu ứng slide up + fade out khi đóng panel (trước đó chỉ có mở).

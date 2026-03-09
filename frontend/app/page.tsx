@@ -42,7 +42,7 @@ function getStoredValue<T>(key: string, fallback: T): T {
 export default function Home() {
   const { connected, steps, conversations, currentConvId, cascadeStatus, conversationsVersion, selectConversation, lastUpdate } = useWebSocket();
 
-  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(() => getStoredValue('antigravity-show-analytics', false));
   const [showTimeline, setShowTimeline] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('showTimeline');
@@ -105,6 +105,7 @@ export default function Home() {
   useEffect(() => { localStorage.setItem('antigravity-show-account-info', JSON.stringify(showAccountInfo)); }, [showAccountInfo]);
   useEffect(() => { localStorage.setItem('antigravity-show-logs', JSON.stringify(showLogs)); }, [showLogs]);
   useEffect(() => { localStorage.setItem('antigravity-show-bridge', JSON.stringify(showBridge)); }, [showBridge]);
+  useEffect(() => { localStorage.setItem('antigravity-show-analytics', JSON.stringify(showAnalytics)); }, [showAnalytics]);
 
   // Persist currentConvId and restore on mount
   useEffect(() => {
@@ -464,8 +465,14 @@ export default function Home() {
             />
           )}
 
-          {/* Analytics */}
-          {currentConvId && showAnalytics && steps.length > 0 && <AnalyticsPanel steps={steps} />}
+          {/* Analytics — always mounted when data available, animate open/close */}
+          {currentConvId && steps.length > 0 && (
+            <div className={`grid transition-all duration-200 ease-in-out ${showAnalytics ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+              <div className="overflow-hidden">
+                <AnalyticsPanel steps={steps} />
+              </div>
+            </div>
+          )}
 
           {/* === Main panel content === */}
           {showWelcome && (

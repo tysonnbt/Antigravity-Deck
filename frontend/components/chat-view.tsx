@@ -91,7 +91,10 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, ca
     const [selectedModel, setSelectedModel] = useState<string>('');
     const [showWsPicker, setShowWsPicker] = useState(false);
     const [showModelPicker, setShowModelPicker] = useState(false);
-    const [showTokens, setShowTokens] = useState(false);
+    const [showTokens, setShowTokens] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        try { const v = localStorage.getItem('antigravity-show-tokens'); return v ? JSON.parse(v) : false; } catch { return false; }
+    });
     // Multi-image state: array of pending images
     const [pendingImages, setPendingImages] = useState<{ id: string; name: string; mimeType: string; base64: string; dataUrl: string }[]>([]);
     const [pendingMessage, setPendingMessage] = useState<string | null>(null);
@@ -141,6 +144,7 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, ca
     }, []);
 
     // Load workspaces + models + settings in parallel
+    useEffect(() => { localStorage.setItem('antigravity-show-tokens', JSON.stringify(showTokens)); }, [showTokens]);
     const modelInitRef = useRef(false);
     useEffect(() => {
         const fetchModels = modelInitRef.current ? Promise.resolve(null) : getModels();
