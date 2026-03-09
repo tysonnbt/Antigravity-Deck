@@ -251,8 +251,10 @@ export function ChatArea({ steps, searchQuery, activeFilters, onStepClick, bookm
         return (
             <div className="flex-1 flex items-center justify-center">
                 <div className="text-center text-muted-foreground space-y-3">
-                    <div className="text-5xl animate-pulse"><MessageSquare className="h-12 w-12 text-muted-foreground/30" /></div>
-                    <p className="text-lg font-medium">Chat Mirror</p>
+                    <div className="flex items-center justify-center gap-3">
+                        <MessageSquare className="h-8 w-8 text-muted-foreground/30 animate-pulse" />
+                        <p className="text-lg font-medium">Chat Mirror</p>
+                    </div>
                     <p className="text-sm opacity-60">Select a conversation to start viewing</p>
                 </div>
             </div>

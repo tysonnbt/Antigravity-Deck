@@ -396,8 +396,10 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, ca
                         {displaySteps.length === 0 ? (
                             <div className="flex items-center justify-center h-full">
                                 <div className="text-center space-y-4">
-                                    <div className="text-5xl"><Rocket className="h-12 w-12 text-muted-foreground/40" /></div>
-                                    <h2 className="text-xl font-semibold text-foreground/80">AntigravityChat</h2>
+                                    <div className="flex items-center justify-center gap-3">
+                                        <Rocket className="h-8 w-8 text-muted-foreground/40" />
+                                        <h2 className="text-xl font-semibold text-foreground/80">AntigravityChat</h2>
+                                    </div>
                                     <p className="text-sm text-muted-foreground max-w-md">
                                         {currentConvId ? 'Loading conversation...' : 'Select a conversation from the sidebar or start a new one'}
                                     </p>
@@ -445,8 +447,10 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, ca
                         {isDragOver && (
                             <div className="absolute inset-0 z-50 flex items-center justify-center bg-primary/5 border-2 border-dashed border-primary/40 rounded-lg backdrop-blur-sm pointer-events-none">
                                 <div className="text-center space-y-2">
-                                    <div className="text-3xl"><Camera className="h-8 w-8 text-primary/60" /></div>
-                                    <p className="text-sm font-medium text-primary/80">Drop images here</p>
+                                    <div className="flex items-center justify-center gap-2">
+                                        <Camera className="h-6 w-6 text-primary/60" />
+                                        <p className="text-sm font-medium text-primary/80">Drop images here</p>
+                                    </div>
                                 </div>
                             </div>
                         )}

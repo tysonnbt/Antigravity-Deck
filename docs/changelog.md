@@ -47,6 +47,14 @@ All notable changes made by Claude Code are documented here.
   - File sửa: `frontend/components/sidebar/workspace-group.tsx`
 
 ### Fixed
+- **Icon + text alignment**: Sửa 5 chỗ icon nằm tách dòng với heading text → inline cùng hàng (flex row).
+  - `conversation-list.tsx`: MessageSquare + "No conversations yet"
+  - `chat-area.tsx`: MessageSquare + "Chat Mirror"
+  - `chat-view.tsx`: Rocket + "AntigravityChat", Camera + "Drop images here"
+  - `plugin-manager.tsx`: Plug + "No plugins available"
+
+- **Empty state centering**: "No conversations yet" giờ nằm giữa trang (tách ra ngoài ScrollArea để flex-1 hoạt động đúng).
+
 - **Plugin Manager modal**: Description text bị cắt mất do dùng `truncate` (1 dòng). Đổi sang `line-clamp-3` để hiển thị tối đa 3 dòng.
   - File: `frontend/components/plugin-manager.tsx` (dòng 128)
 

@@ -96,8 +96,10 @@ export function PluginManager({ open, onClose }: { open: boolean; onClose: () =>
                             </div>
                         ) : plugins.length === 0 ? (
                             <div className="text-center py-8">
-                                <div className="mb-2"><Plug className="h-8 w-8 text-muted-foreground" /></div>
-                                <div className="text-sm text-muted-foreground">No plugins available</div>
+                                <div className="flex items-center justify-center gap-2 mb-2">
+                                    <Plug className="h-6 w-6 text-muted-foreground" />
+                                    <div className="text-sm text-muted-foreground">No plugins available</div>
+                                </div>
                                 <div className="text-[10px] text-muted-foreground/60 mt-1">
                                     Plugins will appear here when the API supports them
                                 </div>

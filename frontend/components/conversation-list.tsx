@@ -119,27 +119,29 @@ export function ConversationList({ workspaceName, wsVersion, onSelectConversatio
             </div>
 
             {/* Conversation list */}
-            <ScrollArea className="flex-1">
-                {loading ? (
-                    <div className="p-4 space-y-2">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                            <Skeleton key={i} className="h-14 w-full rounded-lg" />
-                        ))}
-                    </div>
-                ) : conversations.length === 0 ? (
-                    <div className="flex items-center justify-center py-16">
-                        <div className="text-center space-y-3">
-                            <div><MessageSquare className="h-10 w-10 text-muted-foreground/40" /></div>
+            {loading ? (
+                <div className="p-4 space-y-2">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                        <Skeleton key={i} className="h-14 w-full rounded-lg" />
+                    ))}
+                </div>
+            ) : conversations.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center">
+                    <div className="text-center space-y-3">
+                        <div className="flex items-center justify-center gap-3">
+                            <MessageSquare className="h-8 w-8 text-muted-foreground/40" />
                             <h3 className="text-sm font-medium text-foreground/70">No conversations yet</h3>
-                            <p className="text-xs text-muted-foreground max-w-xs">
-                                Start a new chat to begin working in this workspace.
-                            </p>
-                            <Button variant="outline" size="sm" onClick={onNewChat} className="mt-2">
-                                Start your first chat
-                            </Button>
                         </div>
+                        <p className="text-xs text-muted-foreground max-w-xs">
+                            Start a new chat to begin working in this workspace.
+                        </p>
+                        <Button variant="outline" size="sm" onClick={onNewChat} className="mt-2">
+                            Start your first chat
+                        </Button>
                     </div>
-                ) : (
+                </div>
+            ) : (
+                <ScrollArea className="flex-1">
                     <div className="p-2 sm:p-4 space-y-1 sm:space-y-1.5">
                         {conversations.map(conv => (
                             <Button
@@ -176,8 +178,8 @@ export function ConversationList({ workspaceName, wsVersion, onSelectConversatio
                             </Button>
                         ))}
                     </div>
-                )}
-            </ScrollArea>
+                </ScrollArea>
+            )}
         </div>
     );
 }
