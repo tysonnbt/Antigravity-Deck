@@ -4,6 +4,18 @@ All notable changes made by Claude Code are documented here.
 
 ## [2026-03-09]
 
+### Refactored
+- **Source Control & Explorer mobile responsiveness**: Cải thiện trải nghiệm mobile cho cả hai panel.
+  - Explorer panel: thêm mobile toggle/collapse (slide in/out overlay)
+  - Source Control panel: giảm chiều rộng overlay trên mobile cho thoáng hơn
+  - Cả hai panel: thêm nút đóng (X) trên mobile header
+  - Cả hai panel: thêm nút "Open file tree/list" khi panel đóng và chưa chọn file
+  - Thay text "EXPLORER" bằng FolderOpen icon + file count badge
+  - Thay text "CHANGES" bằng FileDiff icon
+  - Chuẩn hoá chiều cao header tất cả panel thành h-8 cho đồng nhất
+  - Căn refresh/close buttons sát cạnh phải với -mr-2.5
+  - Tách +/- stats khỏi action buttons trong Changes header cho icon positioning nhất quán
+
 ### Changed
 - **Replace all UI emoji with Lucide React icons**: Thay thế ~87 emoji Unicode bằng lucide-react icons trên toàn bộ frontend cho UI nhất quán, chuyên nghiệp. Giữ nguyên emoji trong markdown content strings (`extractStepContent`).
   - File tạo: `frontend/components/ui/step-icon.tsx` — helper component map icon name → Lucide component

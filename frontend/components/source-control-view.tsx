@@ -13,7 +13,7 @@ import {
     GitBranch, RefreshCw, X, Folder, FolderOpen,
     ChevronRight, ChevronDown, File, FileCode2,
     FileText, FileJson, Settings2, Image as ImageIcon, Table2,
-    Plus, Minus, AlertCircle, Copy, Check,
+    Plus, Minus, AlertCircle, Copy, Check, FileDiff,
 } from 'lucide-react';
 
 const SyntaxHighlighter = dynamic(
@@ -131,7 +131,7 @@ function CodeViewer({ content, ext }: { content: string; ext?: string }) {
     return (
         <div className="flex flex-col h-full">
             {/* Toolbar */}
-            <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/20 bg-muted/5 shrink-0">
+            <div className="flex items-center justify-between px-3 h-8 border-b border-border/20 bg-muted/5 shrink-0">
                 <div className="flex items-center gap-2 text-[10px] text-muted-foreground/40">
                     <span>{lines} lines</span>
                     {lang && lang !== 'text' && (
@@ -308,6 +308,7 @@ function ExplorerTab({ workspace }: { workspace: string }) {
     const [fileContent, setFileContent] = useState<string | null>(null);
     const [fileLoading, setFileLoading] = useState(false);
     const [fileError, setFileError] = useState<string | null>(null);
+    const [mobileListOpen, setMobileListOpen] = useState(true);
 
     const loadRoot = useCallback(async () => {
         setLoading(true); setError(null);
@@ -325,6 +326,7 @@ function ExplorerTab({ workspace }: { workspace: string }) {
         setFileContent(null);
         setFileError(null);
         setFileLoading(true);
+        setMobileListOpen(false); // auto-collapse list on mobile when file selected
         try {
             const data = await getWorkspaceFile(workspace, path);
             if (data.error && data.content === null) setFileError(data.error);
@@ -336,21 +338,44 @@ function ExplorerTab({ workspace }: { workspace: string }) {
     const selectedExt = selectedFile ? selectedFile.split('.').pop() : undefined;
 
     return (
-        <div className="flex-1 flex min-h-0 overflow-hidden">
+        <div className="flex-1 flex min-h-0 overflow-hidden relative">
             {/* ── File tree ─────────────────────────────── */}
-            <div className="w-[220px] xl:w-[260px] border-r border-border/50 flex flex-col shrink-0 overflow-hidden">
+            <div className={cn(
+                'shrink-0 border-r border-border/50 flex flex-col overflow-hidden transition-all duration-200',
+                // Desktop: always shown fixed width
+                'md:w-[220px] xl:w-[260px] md:translate-x-0 md:relative md:flex',
+                // Mobile: slide in/out
+                mobileListOpen
+                    ? 'w-[200px] flex absolute inset-y-0 left-0 z-10 bg-background'
+                    : 'w-0 hidden',
+            )}>
                 {/* Tree header */}
-                <div className="flex items-center justify-between px-3 py-2 border-b border-border/30 shrink-0">
-                    <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/40">
-                        Explorer
-                    </span>
-                    <button
-                        onClick={loadRoot}
-                        className="p-1 rounded hover:bg-muted/30 text-muted-foreground/30 hover:text-muted-foreground/70 transition-colors"
-                        title="Refresh"
-                    >
-                        <RefreshCw className="w-3 h-3" />
-                    </button>
+                <div className="flex items-center justify-between px-3 h-8 border-b border-border/30 shrink-0">
+                    <div className="flex items-center gap-1.5">
+                        <FolderOpen className="w-3.5 h-3.5 text-muted-foreground/40" />
+                        {rootEntries && rootEntries.length > 0 && (
+                            <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-muted/40 text-[9px] text-muted-foreground/60 font-bold">
+                                {rootEntries.length}
+                            </span>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-1 -mr-2.5">
+                        <button
+                            onClick={loadRoot}
+                            className="p-1 rounded hover:bg-muted/30 text-muted-foreground/30 hover:text-muted-foreground/70 transition-colors"
+                            title="Refresh"
+                        >
+                            <RefreshCw className="w-3 h-3" />
+                        </button>
+                        {/* Mobile: close panel button */}
+                        <button
+                            onClick={() => setMobileListOpen(false)}
+                            className="md:hidden p-1 rounded hover:bg-muted/30 text-muted-foreground/30 hover:text-muted-foreground/70 transition-colors"
+                            title="Close panel"
+                        >
+                            <X className="w-3 h-3" />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Tree scroll area */}
@@ -394,7 +419,15 @@ function ExplorerTab({ workspace }: { workspace: string }) {
                 {selectedFile ? (
                     <>
                         {/* Tab style file title bar */}
-                        <div className="flex items-center gap-0 border-b border-border/30 bg-muted/5 shrink-0 overflow-x-auto">
+                        <div className="flex items-center gap-0 h-8 border-b border-border/30 bg-muted/5 shrink-0 overflow-x-auto">
+                            {/* Mobile: button to toggle file tree */}
+                            <button
+                                onClick={() => setMobileListOpen(v => !v)}
+                                className="md:hidden flex items-center px-3 py-2.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors border-r border-border/30 shrink-0"
+                                title="Toggle file tree"
+                            >
+                                <ChevronRight className={cn('w-4 h-4 transition-transform', mobileListOpen && 'rotate-180')} />
+                            </button>
                             <div className="flex items-center gap-1.5 px-3 py-2 border-b-2 border-primary bg-background text-foreground min-w-0 max-w-[300px]">
                                 <FileIcon ext={selectedExt} size={13} />
                                 <span className="text-xs font-medium truncate">{basename(selectedFile)}</span>
@@ -436,6 +469,15 @@ function ExplorerTab({ workspace }: { workspace: string }) {
                     </>
                 ) : (
                     <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground/20">
+                        {/* Mobile: button to reopen file tree when closed */}
+                        {!mobileListOpen && (
+                            <button
+                                onClick={() => setMobileListOpen(true)}
+                                className="md:hidden mb-2 px-3 py-1.5 rounded-md bg-muted/20 text-muted-foreground/50 text-xs hover:bg-muted/40 transition-colors"
+                            >
+                                Open file tree
+                            </button>
+                        )}
                         <FileText className="w-10 h-10" />
                         <p className="text-xs">Click a file to view its contents</p>
                     </div>
@@ -534,14 +576,12 @@ function SourceControlTab({ workspace }: { workspace: string }) {
                 'md:w-[220px] xl:w-[260px] md:translate-x-0 md:relative md:flex',
                 // Mobile: slide in/out
                 mobileListOpen
-                    ? 'w-[240px] flex absolute inset-y-0 left-0 z-10 bg-background'
+                    ? 'w-[200px] flex absolute inset-y-0 left-0 z-10 bg-background'
                     : 'w-0 hidden',
             )}>
-                <div className="flex items-center justify-between px-3 py-2 border-b border-border/30 shrink-0">
-                    <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/40">
-                            Changes
-                        </span>
+                <div className="flex items-center justify-between px-3 h-8 border-b border-border/30 shrink-0">
+                    <div className="flex items-center gap-1.5">
+                        <FileDiff className="w-3.5 h-3.5 text-muted-foreground/40" />
                         {files.length > 0 && (
                             <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-muted/40 text-[9px] text-muted-foreground/60 font-bold">
                                 {files.length}
@@ -559,9 +599,19 @@ function SourceControlTab({ workspace }: { workspace: string }) {
                                 <Minus className="w-2.5 h-2.5" />{totalDeleted}
                             </span>
                         )}
-                        <button onClick={refresh} className="p-1 rounded hover:bg-muted/30 text-muted-foreground/30 hover:text-muted-foreground/70 transition-colors" title="Refresh">
-                            <RefreshCw className={cn('w-3 h-3', loading && 'animate-spin')} />
-                        </button>
+                        <div className="flex items-center gap-1 -mr-2.5">
+                            <button onClick={refresh} className="p-1 rounded hover:bg-muted/30 text-muted-foreground/30 hover:text-muted-foreground/70 transition-colors" title="Refresh">
+                                <RefreshCw className={cn('w-3 h-3', loading && 'animate-spin')} />
+                            </button>
+                            {/* Mobile: close panel button */}
+                            <button
+                                onClick={() => setMobileListOpen(false)}
+                                className="md:hidden p-1 rounded hover:bg-muted/30 text-muted-foreground/30 hover:text-muted-foreground/70 transition-colors"
+                                title="Close panel"
+                            >
+                                <X className="w-3 h-3" />
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -707,6 +757,15 @@ function SourceControlTab({ workspace }: { workspace: string }) {
                     </>
                 ) : (
                     <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground/20">
+                        {/* Mobile: button to reopen file list when closed */}
+                        {!mobileListOpen && (
+                            <button
+                                onClick={() => setMobileListOpen(true)}
+                                className="md:hidden mb-2 px-3 py-1.5 rounded-md bg-muted/20 text-muted-foreground/50 text-xs hover:bg-muted/40 transition-colors"
+                            >
+                                Open file list
+                            </button>
+                        )}
                         <GitBranch className="w-10 h-10" />
                         <p className="text-xs">Select a changed file to view diff</p>
                     </div>
