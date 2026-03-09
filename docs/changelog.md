@@ -61,3 +61,7 @@ All notable changes made by Claude Code are documented here.
 - **Stats panel mobile**: Grid 2 cột (thay vì 6), giảm padding card cho compact hơn trên điện thoại.
 
 - **Stats panel close animation**: Thêm hiệu ứng slide up + fade out khi đóng panel (trước đó chỉ có mở).
+
+- **Sidebar sections**: Thêm SidebarSeparator full-width giữa các section (Header, Active Workspaces, Available, New Workspace, Playground).
+
+- **Profile menu icon**: Đổi ChevronsUpDown → EllipsisVertical (⋮) cho trực quan hơn.

@@ -36,7 +36,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-import { Settings, User, Plug, Book, Globe, Moon, Sun, Plus, FolderOpen, ChevronsUpDown, Activity, Bot, MessageCircle, Loader2, Circle } from "lucide-react"
+import { Settings, User, Plug, Book, Globe, Moon, Sun, Plus, FolderOpen, EllipsisVertical, Activity, Bot, MessageCircle, Loader2, Circle } from "lucide-react"
 
 import { WorkspaceGroup } from "./sidebar/workspace-group"
 import type { ConvSummary, WorkspaceData } from "./sidebar/workspace-group"
@@ -263,6 +263,7 @@ export function AppSidebar({
             </SidebarHeader>
 
             <SidebarContent>
+                <SidebarSeparator className="mx-0" />
                 <SidebarGroup>
                     <SidebarGroupLabel>Active Workspaces</SidebarGroupLabel>
                     <SidebarGroupContent>
@@ -286,6 +287,8 @@ export function AppSidebar({
                 </SidebarGroup>
 
                 {closedFolders.length > 0 && (
+                    <>
+                    <SidebarSeparator className="mx-0" />
                     <SidebarGroup>
                         <SidebarGroupLabel>Available Workspaces</SidebarGroupLabel>
                         <SidebarGroupContent>
@@ -309,7 +312,10 @@ export function AppSidebar({
                             </SidebarMenu>
                         </SidebarGroupContent>
                     </SidebarGroup>
+                    </>
                 )}
+
+                <SidebarSeparator className="mx-0" />
 
                 <div className="px-4 py-3">
                     <div className="flex items-center gap-1.5">
@@ -336,6 +342,8 @@ export function AppSidebar({
                 </div>
 
                 {playgroundWs.length > 0 && (
+                    <>
+                    <SidebarSeparator className="mx-0" />
                     <SidebarGroup>
                         <SidebarGroupLabel className="flex items-center justify-between">
                             <span>Playground</span>
@@ -360,6 +368,7 @@ export function AppSidebar({
                             })}
                         </SidebarGroupContent>
                     </SidebarGroup>
+                    </>
                 )}
             </SidebarContent>
 
@@ -384,7 +393,7 @@ export function AppSidebar({
                                         <span className="truncate font-medium text-xs">{userProfile?.name ?? 'Loading...'}</span>
                                         <span className="truncate text-[10px] text-sidebar-foreground/60">{userProfile?.tier ?? ''}</span>
                                     </div>
-                                    <ChevronsUpDown className="ml-auto size-4" />
+                                    <EllipsisVertical className="ml-auto size-4" />
                                 </SidebarMenuButton>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent
