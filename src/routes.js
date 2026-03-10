@@ -779,26 +779,97 @@ function setupRoutes(app) {
     });
 
     // === File Read (for rendering artifacts like .md files) ===
+    // Security: Uses same robust validation as POST /api/file/read
     app.get('/api/file/read', async (req, res) => {
         try {
-            let filePath = req.query.path;
+            const fs = require('fs');
+            const path = require('path');
+            const os = require('os');
+            let filePath = typeof req.query.path === 'string' ? req.query.path : '';
+            
             if (!filePath) return res.status(400).json({ error: 'path query parameter is required' });
+            
             // Support file:/// URIs
             if (filePath.startsWith('file:///')) {
                 try { filePath = decodeURIComponent(new URL(filePath).pathname); } catch { filePath = decodeURIComponent(filePath.replace('file://', '')); }
                 // Windows: /C:/Users/... → C:/Users/...
                 if (/^\/[a-zA-Z]:/.test(filePath)) filePath = filePath.substring(1);
             }
-            // Security: only allow reading from .gemini/antigravity/brain paths
-            const normalized = require('path').resolve(filePath);
-            if (!normalized.includes('.gemini')) {
-                return res.status(403).json({ error: 'Access denied — only .gemini paths allowed' });
+            
+            // Build allowlist of permitted directories FIRST (before realpathSync to avoid path existence leaks)
+            const { lsInstances, getSettings } = require('./config');
+            const settings = getSettings();
+            const allowedRoots = [];
+            
+            // Add default workspace root
+            if (settings.defaultWorkspaceRoot) {
+                try {
+                    allowedRoots.push(fs.realpathSync(settings.defaultWorkspaceRoot));
+                } catch { }
             }
-            const fs = require('fs');
-            if (!fs.existsSync(normalized)) return res.status(404).json({ error: 'File not found' });
-            const content = fs.readFileSync(normalized, 'utf-8');
-            res.json({ path: normalized, content });
-        } catch (e) { res.status(500).json({ error: e.message }); }
+            
+            // Add all active workspace folders
+            for (const inst of lsInstances) {
+                if (inst.workspaceFolderUri) {
+                    const fsPath = uriToFsPath(inst.workspaceFolderUri);
+                    if (fsPath) {
+                        try {
+                            allowedRoots.push(fs.realpathSync(fsPath));
+                        } catch { }
+                    }
+                }
+            }
+            
+            // Add .gemini brain directory
+            const geminiBrainDir = path.join(os.homedir(), '.gemini', 'antigravity', 'brain');
+            try {
+                allowedRoots.push(fs.realpathSync(geminiBrainDir));
+            } catch { }
+            
+            // Security: Lexical validation BEFORE realpathSync to prevent path existence leaks
+            // Normalize the requested path and check if it's lexically within allowed roots
+            const normalizedPath = path.resolve(filePath);
+            const isLexicallyAllowed = allowedRoots.some(root => {
+                const normalizedRoot = path.resolve(root);
+                return process.platform === 'win32'
+                    ? normalizedPath.toLowerCase() === normalizedRoot.toLowerCase() ||
+                      normalizedPath.toLowerCase().startsWith(normalizedRoot.toLowerCase() + path.sep)
+                    : normalizedPath === normalizedRoot ||
+                      normalizedPath.startsWith(normalizedRoot + path.sep);
+            });
+            
+            if (!isLexicallyAllowed) {
+                return res.status(403).json({ error: 'Access denied: file outside allowed directories' });
+            }
+            
+            // Now resolve symlinks (after lexical check passed)
+            let realPath;
+            try {
+                realPath = fs.realpathSync(filePath);
+            } catch (e) {
+                // File doesn't exist or can't be accessed - return generic 403 to avoid leaking existence
+                return res.status(403).json({ error: 'Access denied' });
+            }
+            
+            // Re-check the resolved path against allowed roots (catches symlink escapes)
+            const isAllowed = allowedRoots.some(root => {
+                const normalizedRoot = path.resolve(root);
+                return process.platform === 'win32'
+                    ? realPath.toLowerCase() === normalizedRoot.toLowerCase() ||
+                      realPath.toLowerCase().startsWith(normalizedRoot.toLowerCase() + path.sep)
+                    : realPath === normalizedRoot ||
+                      realPath.startsWith(normalizedRoot + path.sep);
+            });
+            
+            if (!isAllowed) {
+                return res.status(403).json({ error: 'Access denied: file outside allowed directories' });
+            }
+            
+            const content = fs.readFileSync(realPath, 'utf-8');
+            res.json({ path: filePath, content });
+        } catch (e) { 
+            res.status(500).json({ error: 'Failed to read file' }); 
+        }
     });
 
     // === Media Upload (SaveMediaAsArtifact proxy) ===
@@ -1049,19 +1120,8 @@ function setupRoutes(app) {
 
             if (!filePath) return res.status(400).json({ error: 'Missing path parameter' });
 
-            // Security: Resolve real path (follows symlinks) and verify it exists
-            let realPath;
-            try {
-                realPath = fs.realpathSync(filePath);
-            } catch (e) {
-                if (e.code === 'ENOENT') {
-                    return res.status(404).json({ error: 'File not found' });
-                }
-                return res.status(400).json({ error: 'Invalid file path' });
-            }
-
-            // Security: Only allow reading files within workspace directories
-            // Build allowed roots: defaultWorkspaceRoot (from settings) + all active workspace folders + .gemini brain
+            // Security: Build allowed roots FIRST (before realpathSync to avoid path existence leaks)
+            // Allowed roots: defaultWorkspaceRoot (from settings) + all active workspace folders + .gemini brain
             const { lsInstances, getSettings } = require('./config');
             const os = require('os');
             const settings = getSettings();
@@ -1097,7 +1157,31 @@ function setupRoutes(app) {
                 return res.status(403).json({ error: 'Access denied: no workspace configured' });
             }
 
-            // Check if file is within any allowed workspace (case-insensitive on Windows)
+            // Security: Lexical validation BEFORE realpathSync to prevent path existence leaks
+            const normalizedPath = path.resolve(filePath);
+            const isLexicallyAllowed = allowedRoots.some(root => {
+                const normalizedRoot = path.resolve(root);
+                return process.platform === 'win32'
+                    ? normalizedPath.toLowerCase() === normalizedRoot.toLowerCase() ||
+                      normalizedPath.toLowerCase().startsWith(normalizedRoot.toLowerCase() + path.sep)
+                    : normalizedPath === normalizedRoot ||
+                      normalizedPath.startsWith(normalizedRoot + path.sep);
+            });
+
+            if (!isLexicallyAllowed) {
+                return res.status(403).json({ error: 'Access denied: file outside workspace' });
+            }
+
+            // Now resolve symlinks (after lexical check passed)
+            let realPath;
+            try {
+                realPath = fs.realpathSync(filePath);
+            } catch (e) {
+                // File doesn't exist or can't be accessed - return generic 403 to avoid leaking existence
+                return res.status(403).json({ error: 'Access denied' });
+            }
+
+            // Re-check the resolved path against allowed roots (catches symlink escapes)
             const isAllowed = allowedRoots.some(root => {
                 const normalizedRoot = path.resolve(root);
                 return process.platform === 'win32'
@@ -1145,16 +1229,7 @@ function setupRoutes(app) {
                 return res.status(403).json({ error: 'File type not allowed' });
             }
 
-            // Resolve real path (follows symlinks)
-            let realPath;
-            try {
-                realPath = fs.realpathSync(filePath);
-            } catch (e) {
-                if (e.code === 'ENOENT') return res.status(404).json({ error: 'File not found' });
-                return res.status(400).json({ error: 'Invalid file path' });
-            }
-
-            // Build allowed roots (same as POST /api/file/read)
+            // Build allowed roots FIRST (before realpathSync to avoid path existence leaks)
             const { lsInstances, getSettings } = require('./config');
             const settings = getSettings();
             const allowedRoots = [];
@@ -1174,7 +1249,31 @@ function setupRoutes(app) {
                 return res.status(403).json({ error: 'Access denied: no workspace configured' });
             }
 
-            // Verify file is within allowed roots
+            // Security: Lexical validation BEFORE realpathSync to prevent path existence leaks
+            const normalizedPath = path.resolve(filePath);
+            const isLexicallyAllowed = allowedRoots.some(root => {
+                const normalizedRoot = path.resolve(root);
+                return process.platform === 'win32'
+                    ? normalizedPath.toLowerCase() === normalizedRoot.toLowerCase() ||
+                      normalizedPath.toLowerCase().startsWith(normalizedRoot.toLowerCase() + path.sep)
+                    : normalizedPath === normalizedRoot ||
+                      normalizedPath.startsWith(normalizedRoot + path.sep);
+            });
+
+            if (!isLexicallyAllowed) {
+                return res.status(403).json({ error: 'Access denied: file outside workspace' });
+            }
+
+            // Now resolve symlinks (after lexical check passed)
+            let realPath;
+            try {
+                realPath = fs.realpathSync(filePath);
+            } catch (e) {
+                // File doesn't exist or can't be accessed - return generic 403 to avoid leaking existence
+                return res.status(403).json({ error: 'Access denied' });
+            }
+
+            // Re-check the resolved path against allowed roots (catches symlink escapes)
             const isAllowed = allowedRoots.some(root => {
                 const normalizedRoot = path.resolve(root);
                 return process.platform === 'win32'

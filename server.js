@@ -17,14 +17,29 @@ app.use('/api/cascade/send', express.json({ limit: '10mb' }));
 app.use('/api/cascade/submit', express.json({ limit: '10mb' }));
 // Default 1mb limit for all other endpoints
 app.use(express.json({ limit: '1mb' }));
-// CORS — allow frontend on any port/origin to call backend API
+// CORS — explicit allowlist for security
 app.use((req, res, next) => {
-  const origin = req.headers.origin || '*';
-  res.header('Access-Control-Allow-Origin', origin);
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:9808',
+    process.env.FRONTEND_URL,
+  ].filter(Boolean);
+
+  const origin = req.headers.origin;
+  
+  // Only set CORS headers if origin is in allowlist or no origin (same-origin requests)
+  if (!origin || allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin || allowedOrigins[0]);
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
+  // For disallowed origins: omit CORS headers (browser will block)
+  // Do NOT set 'null' - that's an explicit allow for null-origin contexts
+  
   res.header('Access-Control-Allow-Headers', 'Content-Type, X-Auth-Key, Authorization, Accept, Origin, X-Requested-With');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-  res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Max-Age', '86400'); // Cache preflight for 24h
+  res.header('Vary', 'Origin'); // Prevent proxy caching issues
+  
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
@@ -39,10 +54,11 @@ const AUTH_KEY = process.env.AUTH_KEY || '';
 if (AUTH_KEY) {
   console.log(`  🔒 Auth enabled (key length: ${AUTH_KEY.length})`);
   app.use('/api', (req, res, next) => {
-    // Always allow requests from localhost — no key needed for local access
+    // Localhost bypass only if explicitly enabled (disabled by default for security)
     const ip = req.ip || req.socket.remoteAddress || '';
     const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
-    if (isLocal) return next();
+    const allowLocalBypass = process.env.ALLOW_LOCALHOST_BYPASS === 'true';
+    if (isLocal && allowLocalBypass) return next();
 
     const key = req.headers['x-auth-key'] || req.query.auth_key;
     if (key !== AUTH_KEY) {

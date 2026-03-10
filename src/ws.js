@@ -10,12 +10,15 @@ const clientConvMap = new Map(); // Map<ws, convId> — per-client conversation 
 
 function setupWebSocket(wss, { ensureCached, stepCache }) {
     wss.on('connection', (ws, req) => {
-        // Auth check for WebSocket (skip for localhost connections — same policy as HTTP)
+        // Auth check for WebSocket (localhost bypass only if explicitly enabled)
         const authKey = process.env.AUTH_KEY || '';
         if (authKey) {
             const ip = req.socket.remoteAddress || '';
             const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
-            if (!isLocal) {
+            const allowLocalBypass = process.env.ALLOW_LOCALHOST_BYPASS === 'true';
+            
+            // Check auth (no localhost bypass unless explicitly enabled)
+            if (!(isLocal && allowLocalBypass)) {
                 const url = new URL(req.url, 'http://localhost');
                 const key = url.searchParams.get('auth_key');
                 if (key !== authKey) {
