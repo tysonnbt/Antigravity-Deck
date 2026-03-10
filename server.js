@@ -2,6 +2,7 @@
 const express = require('express');
 const http = require('http');
 const crypto = require('crypto');
+const cookieParser = require('cookie-parser');
 const { WebSocketServer } = require('ws');
 const { PORT } = require('./src/config');
 const { init, startAutoRescan } = require('./src/detector');
@@ -13,6 +14,9 @@ const morgan = require('morgan');
 const rfs = require('rotating-file-stream');
 const fs = require('fs');
 const path = require('path');
+const { verifyAccessToken } = require('./src/jwt-utils');
+const authRoutes = require('./src/auth-routes');
+const csrfProtection = require('./src/csrf-middleware');
 
 const app = express();
 const server = http.createServer(app);
@@ -162,6 +166,8 @@ app.use('/api/cascade/send', express.json({ limit: '10mb' }));
 app.use('/api/cascade/submit', express.json({ limit: '10mb' }));
 // Default 1mb limit for all other endpoints
 app.use(express.json({ limit: '1mb' }));
+// Cookie parser for JWT tokens
+app.use(cookieParser());
 // CORS — explicit allowlist for security
 app.use((req, res, next) => {
   const allowedOrigins = [
@@ -180,7 +186,7 @@ app.use((req, res, next) => {
   // For disallowed origins: omit CORS headers (browser will block)
   // Do NOT set 'null' - that's an explicit allow for null-origin contexts
   
-  res.header('Access-Control-Allow-Headers', 'Content-Type, X-Auth-Key, Authorization, Accept, Origin, X-Requested-With');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, X-Auth-Key, Authorization, X-CSRF-Token, Accept, Origin, X-Requested-With');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
   res.header('Access-Control-Max-Age', '86400'); // Cache preflight for 24h
   res.header('Vary', 'Origin'); // Prevent proxy caching issues
@@ -194,13 +200,19 @@ app.get('/api/ws-url', (req, res) => {
   res.json({ wsPort: Number(process.env.PORT || 3500) });
 });
 
-// Auth middleware — only active when AUTH_KEY env var is set
+// Mount auth routes (login, refresh, logout) - public endpoints
+app.use('/api/auth', authRoutes);
+
+// JWT Authentication Middleware
+const JWT_SECRET = process.env.JWT_SECRET || '';
 const AUTH_KEY = process.env.AUTH_KEY || '';
-if (AUTH_KEY) {
-  console.log(`  🔒 Auth enabled (key length: ${AUTH_KEY.length})`);
+
+if (JWT_SECRET) {
+  console.log(`  🔒 JWT Auth enabled`);
+  
   app.use('/api', (req, res, next) => {
     // Skip auth for public endpoints
-    if (req.path === '/ws-url') {
+    if (req.path === '/ws-url' || req.path.startsWith('/auth/')) {
       return next();
     }
     
@@ -208,11 +220,71 @@ if (AUTH_KEY) {
     const ip = req.ip || req.socket.remoteAddress || '';
     const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
     const allowLocalBypass = process.env.ALLOW_LOCALHOST_BYPASS === 'true';
+    if (isLocal && allowLocalBypass) {
+      req.user = { id: 'localhost-bypass' };
+      return next();
+    }
+
+    // Extract JWT from Authorization header or cookie
+    let token = null;
+    
+    // Try Authorization header first (Bearer token)
+    const authHeader = req.headers['authorization'];
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    }
+    
+    // Fallback to cookie
+    if (!token && req.cookies.access_token) {
+      token = req.cookies.access_token;
+    }
+    
+    if (!token) {
+      return res.status(401).json({ 
+        error: 'Unauthorized - no token provided',
+        code: 'NO_TOKEN'
+      });
+    }
+    
+    // Verify JWT
+    try {
+      const decoded = verifyAccessToken(token);
+      req.user = { id: decoded.sub };
+      next();
+    } catch (err) {
+      return res.status(401).json({ 
+        error: err.message,
+        code: err.code || 'TOKEN_INVALID'
+      });
+    }
+  });
+  
+  // Apply CSRF protection to all API routes (after auth)
+  app.use('/api', csrfProtection);
+  
+  // Apply strict rate limiter to auth endpoints
+  app.use('/api/auth/login', strictLimiter);
+  app.use('/api/auth/refresh', strictLimiter);
+  
+  // Apply strict rate limiter to settings endpoint (sensitive operations)
+  app.use('/api/settings', strictLimiter);
+} else if (AUTH_KEY) {
+  console.log('  ⚠️  JWT_SECRET not set - falling back to legacy x-auth-key authentication');
+  console.log('  ⚠️  Please set JWT_SECRET environment variable for secure authentication');
+  
+  // Legacy auth for backward compatibility during migration
+  app.use('/api', (req, res, next) => {
+    if (req.path === '/ws-url' || req.path.startsWith('/auth/')) {
+      return next();
+    }
+    
+    const ip = req.ip || req.socket.remoteAddress || '';
+    const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+    const allowLocalBypass = process.env.ALLOW_LOCALHOST_BYPASS === 'true';
     if (isLocal && allowLocalBypass) return next();
 
     const key = req.headers['x-auth-key'] || req.query.auth_key;
     
-    // Timing-safe comparison to prevent timing attacks
     if (!key || key.length !== AUTH_KEY.length) {
       return res.status(401).json({ error: 'Unauthorized — invalid or missing auth key' });
     }
@@ -231,10 +303,9 @@ if (AUTH_KEY) {
     next();
   });
   
-  // Apply strict rate limiter to settings endpoint (sensitive operations)
   app.use('/api/settings', strictLimiter);
 } else {
-  console.log('  ⚠️  No AUTH_KEY set — API is open (safe for local dev)');
+  console.log('  ⚠️  No JWT_SECRET or AUTH_KEY set — API is open (safe for local dev only)');
 }
 
 // Routes & WebSocket
