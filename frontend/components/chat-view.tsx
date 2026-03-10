@@ -21,7 +21,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Settings, Folder, Zap, BarChart2, RefreshCcw, SendHorizontal, Square, Paperclip, GitBranch, Plus, X, ChevronDown, Activity, Download, Bell, BellOff, Rocket, ArrowDown as ArrowDownIcon, Camera, Brain, Image as ImageIcon } from 'lucide-react';
+import { Settings, Folder, Zap, BarChart2, RefreshCcw, SendHorizontal, Square, Paperclip, GitBranch, Plus, X, ChevronDown, Activity, Download, Bell, BellOff, Rocket, ArrowDown as ArrowDownIcon, Camera, Brain, Image as ImageIcon, Star } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 
 // === Props ===
@@ -505,12 +505,12 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, st
                                             >
                                                 <div className="flex items-center gap-2 min-w-0">
                                                     <span className="truncate">{m.label}</span>
-                                                    {m.isRecommended && <Badge variant="secondary" className="text-[8px] h-3.5 px-1 shrink-0">★</Badge>}
+                                                    {m.isRecommended && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 shrink-0"><Star className="w-2.5 h-2.5 text-amber-400" /></Badge>}
                                                 </div>
                                                 <div className="flex items-center gap-1.5 shrink-0">
                                                     {m.supportsImages && <span className="text-[9px]"><ImageIcon className="h-3 w-3" /></span>}
                                                     <div className="w-12 h-1.5 rounded-full bg-muted overflow-hidden">
-                                                        <div className="h-full rounded-full bg-green-500/70" style={{ width: `${Math.round(m.quota * 100)}%` }} />
+                                                        <div className="h-full rounded-full bg-emerald-500/70" style={{ width: `${Math.round(m.quota * 100)}%` }} />
                                                     </div>
                                                 </div>
                                             </DropdownMenuItem>
@@ -550,7 +550,7 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, st
                                     <DropdownMenuContent align="end" className="w-56 mb-1 bg-popover/95 backdrop-blur-sm shadow-xl rounded-lg border-border">
                                         <DropdownMenuLabel className="flex items-center gap-2 text-xs font-normal text-muted-foreground px-2 py-1.5">
                                             <Folder className="w-3.5 h-3.5" />
-                                            <span className="truncate flex-1">{selectedWsName}</span>
+                                            <span className="truncate flex-1 min-w-0">{selectedWsName}</span>
                                         </DropdownMenuLabel>
                                         <DropdownMenuSeparator className="bg-border" />
                                         <DropdownMenuItem

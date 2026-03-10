@@ -93,7 +93,7 @@ function UserMessage({ step, index, searchQuery, onStepClick, isBookmarked }: {
                     <Badge variant="outline" className="text-[9px] font-mono cursor-pointer hover:bg-muted/80 transition-colors" onClick={() => onStepClick?.(index)}>#{index + 1}</Badge>
                 </div>
             </div>
-            <div className="text-[14px] leading-relaxed"><MarkdownRenderer content={content} /></div>
+            <div className="text-sm leading-relaxed"><MarkdownRenderer content={content} /></div>
         </div>
     );
 }
@@ -128,7 +128,7 @@ function AgentResponse({ step, index, searchQuery, onStepClick, isBookmarked }: 
                     <Badge variant="outline" className="text-[9px] font-mono cursor-pointer hover:bg-muted/80 transition-colors" onClick={() => onStepClick?.(index)}>#{index + 1}</Badge>
                 </div>
             </div>
-            <div className="text-[14px] leading-relaxed"><MarkdownRenderer content={content} /></div>
+            <div className="text-sm leading-relaxed"><MarkdownRenderer content={content} /></div>
         </div>
     );
 }
@@ -185,9 +185,9 @@ function ProcessingGroup({ steps: groupSteps, searchQuery, onStepClick, bookmark
                             >
                                 <span className="shrink-0 mt-0.5"><StepIcon name={config.icon} className="text-muted-foreground/70" /></span>
                                 <span className="font-medium text-foreground/60 shrink-0 min-w-16">{config.label}</span>
-                                <span className="truncate opacity-60 flex-1">{content.substring(0, 150)}</span>
+                                <span className="truncate opacity-60 flex-1 min-w-0">{content.substring(0, 150)}</span>
                                 {bookmarkedSteps?.has(originalIndex) && <span className="shrink-0"><Star className="h-2.5 w-2.5 fill-yellow-500 text-yellow-500" /></span>}
-                                <Badge variant="outline" className="text-[8px] font-mono shrink-0 opacity-50">#{originalIndex + 1}</Badge>
+                                <Badge variant="outline" className="text-[9px] font-mono shrink-0 opacity-50">#{originalIndex + 1}</Badge>
                             </div>
                         );
                     })}
@@ -268,7 +268,7 @@ export function ChatArea({ steps, searchQuery, activeFilters, onStepClick, bookm
                 <div className="sticky top-0 z-10 -mx-6 -mt-5 mb-4">
                     <div className="h-[2px] bg-border/30">
                         <div
-                            className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-green-500 transition-all duration-300"
+                            className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-emerald-500 transition-all duration-300"
                             style={{
                                 width: containerRef.current
                                     ? `${Math.min(100, (containerRef.current.scrollTop / (containerRef.current.scrollHeight - containerRef.current.clientHeight)) * 100)}%`

@@ -495,7 +495,7 @@ export function AppSidebar({
                             {(nameValidationError || createError) && newWsName.trim() && (
                                 <p className="text-xs text-destructive">{nameValidationError || createError}</p>
                             )}
-                            <p className="text-[11px] text-muted-foreground">
+                            <p className="text-xs text-muted-foreground">
                                 This will create a folder in your workspace root directory.
                             </p>
                         </div>

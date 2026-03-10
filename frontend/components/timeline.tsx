@@ -15,7 +15,7 @@ const roleColors: Record<string, string> = {
     thinking: 'bg-gray-500',
     response: 'bg-purple-500',
     tool: 'bg-orange-500',
-    system: 'bg-green-500',
+    system: 'bg-emerald-500',
     error: 'bg-red-500',
 };
 
@@ -55,7 +55,7 @@ export function Timeline({ steps, onSelectStep }: TimelineProps) {
                     <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-blue-500 inline-block" /> User</span>
                     <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-purple-500 inline-block" /> Agent</span>
                     <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-orange-500 inline-block" /> Tool</span>
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-green-500 inline-block" /> System</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-emerald-500 inline-block" /> System</span>
                 </div>
                 <span className="text-[9px] text-muted-foreground">#{steps.length}</span>
             </div>

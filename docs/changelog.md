@@ -2,6 +2,19 @@
 
 All notable changes made by Claude Code are documented here.
 
+## [2026-03-10]
+
+### Refactored
+- **UI consistency audit & fix**: Khảo sát toàn bộ codebase và fix tất cả UI inconsistencies theo design guidelines.
+  - **Text sizes** (29 chỗ, 14 files): `text-[11px]`→`text-xs`, `text-[8px]`→`text-[9px]`, `text-[14px]`→`text-sm`
+  - **Hardcoded colors** (~20 chỗ, 12 files): `green-500`/`green-400`→`emerald-500`/`emerald-400` cho success states; `purple-300`→`purple-400`; `yellow-400`→`amber-400`; `blue-400`→`sky-400` cho info states
+  - **Emoji → Lucide icon** (2 chỗ): ★ → `<Star />` trong cascade-panel và chat-view
+  - **Flex overflow** (5 chỗ): Thêm `min-w-0` vào flex-1 + truncate elements (agent-response, processing-group, chat-area, chat-view, markdown-renderer)
+  - **Icon sizing** (1 chỗ): `h-10 w-10`→`h-8 w-8` trong auth-gate (chuẩn size grid)
+
+### Changed
+- **Design guidelines updated** (`docs/design-guidelines.md`): Bổ sung tech stack table, semantic status color palette (8 loại), chat message colors, bookmark colors, data visualization colors, git/diff/role color maps, z-index scale, accessibility section, banned text sizes rule, component sizing guideline.
+
 ## [2026-03-09]
 
 ### Added

@@ -18,7 +18,7 @@ export function CreditCard({ label, icon, used, available, total, pct }: {
             <div className="h-2 bg-muted/30 rounded-full overflow-hidden mb-1.5">
                 <div className={cn(
                     "h-full rounded-full transition-all duration-500",
-                    pct > 50 ? "bg-green-500/80" :
+                    pct > 50 ? "bg-emerald-500/80" :
                         pct > 20 ? "bg-amber-500/80" : "bg-red-500/80"
                 )} style={{ width: `${pct}%` }} />
             </div>
