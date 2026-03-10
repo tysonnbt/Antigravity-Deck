@@ -52,9 +52,49 @@ function saveSettings(updates) {
 
 function getSettings() { return loadSettings(); }
 
+// --- Bridge-specific settings (bridge.settings.json) ---
+const BRIDGE_SETTINGS_PATH = path.join(__dirname, '..', 'bridge.settings.json');
+const DEFAULT_BRIDGE_SETTINGS = {
+    discordBotToken: '',
+    discordChannelId: '',
+    discordGuildId: '',
+    stepSoftLimit: 500,
+    allowedBotIds: [],
+    autoStart: false,
+    currentWorkspace: '',
+    lastCascadeId: '',
+    lastStepCount: 0,
+    lastRelayedStepIndex: -1,
+};
+
+let _bridgeSettings = null;
+
+function loadBridgeSettings() {
+    if (_bridgeSettings) return _bridgeSettings;
+    try {
+        if (fs.existsSync(BRIDGE_SETTINGS_PATH)) {
+            _bridgeSettings = { ...DEFAULT_BRIDGE_SETTINGS, ...JSON.parse(fs.readFileSync(BRIDGE_SETTINGS_PATH, 'utf-8')) };
+        } else {
+            _bridgeSettings = { ...DEFAULT_BRIDGE_SETTINGS };
+        }
+    } catch {
+        _bridgeSettings = { ...DEFAULT_BRIDGE_SETTINGS };
+    }
+    return _bridgeSettings;
+}
+
+function saveBridgeSettings(updates) {
+    _bridgeSettings = { ...loadBridgeSettings(), ...updates };
+    fs.writeFileSync(BRIDGE_SETTINGS_PATH, JSON.stringify(_bridgeSettings, null, 2), 'utf-8');
+    return _bridgeSettings;
+}
+
+function getBridgeSettings() { return loadBridgeSettings(); }
+
 module.exports = {
     lsConfig, lsInstances, platform, PORT,
     POLL_INTERVAL, FAST_POLL_INTERVAL, SLOW_POLL_INTERVAL, BATCH_SIZE,
     STEP_WINDOW_SIZE, STEP_LOAD_CHUNK,
     getSettings, saveSettings,
+    getBridgeSettings, saveBridgeSettings,
 };

@@ -129,18 +129,6 @@ function setupRoutes(app) {
         autoAccept: z.boolean().optional(),
         defaultWorkspaceRoot: z.string().max(500).optional(),
         defaultModel: z.string().max(100).optional(),
-        agentBridge: z.object({
-            discordBotToken: z.string().max(200).optional(),
-            discordChannelId: z.string().max(100).optional(),
-            discordGuildId: z.string().max(100).optional(),
-            stepSoftLimit: z.number().int().min(0).max(10000).optional(),
-            allowedBotIds: z.array(z.string()).optional(),
-            autoStart: z.boolean().optional(),
-            currentWorkspace: z.string().max(500).optional(),
-            lastCascadeId: z.string().max(100).optional(),
-            lastStepCount: z.number().int().min(0).optional(),
-            lastRelayedStepIndex: z.number().int().optional(),
-        }).optional(),
     }).strict();
 
     app.post('/api/settings', (req, res) => {
@@ -1428,6 +1416,35 @@ function setupRoutes(app) {
 
     app.get('/api/agent-bridge/status', (req, res) => {
         res.json(bridge.getStatus());
+    });
+
+    // Bridge-specific settings (bridge.settings.json)
+    const BridgeSettingsSchema = z.object({
+        discordBotToken: z.string().max(200).optional(),
+        discordChannelId: z.string().max(100).optional(),
+        discordGuildId: z.string().max(100).optional(),
+        stepSoftLimit: z.number().int().min(0).max(10000).optional(),
+        allowedBotIds: z.array(z.string()).optional(),
+        autoStart: z.boolean().optional(),
+    }).strict();
+
+    app.get('/api/agent-bridge/settings', (req, res) => {
+        const { getBridgeSettings } = require('./config');
+        res.json(getBridgeSettings());
+    });
+
+    app.post('/api/agent-bridge/settings', (req, res) => {
+        try {
+            const validated = BridgeSettingsSchema.parse(req.body);
+            const { saveBridgeSettings } = require('./config');
+            const updated = saveBridgeSettings(validated);
+            res.json(updated);
+        } catch (error) {
+            if (error instanceof z.ZodError) {
+                return res.status(400).json({ error: 'Invalid settings', details: error.issues });
+            }
+            throw error;
+        }
     });
 }
 

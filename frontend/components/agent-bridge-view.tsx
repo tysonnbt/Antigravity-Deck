@@ -4,8 +4,6 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { API_BASE } from '@/lib/config';
 import { authHeaders } from '@/lib/auth';
-import { getSettings, updateSettings } from '@/lib/cascade-api';
-import type { AppSettings } from '@/lib/cascade-api';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -94,9 +92,10 @@ export function AgentBridgeView() {
     // Load persistent settings from backend
     const loadSettings = useCallback(async () => {
         try {
-            const data = await getSettings();
-            const b = (data as Record<string, unknown>).agentBridge as Partial<BridgeSettings> | undefined;
-            const bridgeData: BridgeSettings = { ...DEFAULT_BRIDGE, ...b };
+            const res = await fetch(`${API_BASE}/api/agent-bridge/settings`, { headers: authHeaders() });
+            if (!res.ok) return;
+            const data = await res.json();
+            const bridgeData: BridgeSettings = { ...DEFAULT_BRIDGE, ...data };
             setBridge(bridgeData);
             setBridgeOriginal(bridgeData);
             setSettingsLoaded(true);
@@ -132,18 +131,21 @@ export function AgentBridgeView() {
         setSaving(true);
         setSaveMsg('');
         try {
-            const updated = await updateSettings({
-                agentBridge: {
+            const res = await fetch(`${API_BASE}/api/agent-bridge/settings`, {
+                method: 'POST',
+                headers: authHeaders(),
+                body: JSON.stringify({
                     discordBotToken: bridge.discordBotToken,
                     discordChannelId: bridge.discordChannelId,
                     discordGuildId: bridge.discordGuildId,
                     stepSoftLimit: bridge.stepSoftLimit,
                     allowedBotIds: bridge.allowedBotIds,
                     autoStart: bridge.autoStart,
-                },
-            } as Partial<AppSettings>);
-            const b = (updated as Record<string, unknown>).agentBridge as Partial<BridgeSettings> | undefined;
-            const bridgeData: BridgeSettings = { ...DEFAULT_BRIDGE, ...b };
+                }),
+            });
+            if (!res.ok) throw new Error('Save failed');
+            const updated = await res.json();
+            const bridgeData: BridgeSettings = { ...DEFAULT_BRIDGE, ...updated };
             setBridge(bridgeData);
             setBridgeOriginal(bridgeData);
             setSaveMsg('saved');

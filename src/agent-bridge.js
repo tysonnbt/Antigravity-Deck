@@ -15,7 +15,7 @@ const discord = require('./discord-relay');
 const { startCascade, sendMessage: cascadeSend } = require('./cascade');
 const { getStepCountAndStatus } = require('./step-cache');
 const { waitAndExtractResponse } = require('./cascade-relay');
-const { getSettings, saveSettings } = require('./config');
+const { getSettings, saveSettings, getBridgeSettings, saveBridgeSettings } = require('./config');
 const { callApi: _callApi } = require('./api');
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -36,24 +36,20 @@ let bridgeLsInst = null; // Stored LS instance for bridge — independent from g
 // ── Persist bridge state to settings.json ────────────────────────────────────
 
 function saveBridgeState() {
-    const settings = getSettings();
-    saveSettings({
-        agentBridge: {
-            ...settings.agentBridge,
-            currentWorkspace: workspaceName,
-            lastCascadeId: activeCascadeId,
-            lastStepCount: stepCount,
-            lastRelayedStepIndex: lastRelayedStepIndex,
-        }
+    saveBridgeSettings({
+        currentWorkspace: workspaceName,
+        lastCascadeId: activeCascadeId,
+        lastStepCount: stepCount,
+        lastRelayedStepIndex: lastRelayedStepIndex,
     });
 }
 
 function restoreBridgeState() {
-    const bridgeSettings = getSettings().agentBridge || {};
-    if (bridgeSettings.lastCascadeId) {
-        activeCascadeId = bridgeSettings.lastCascadeId;
-        stepCount = bridgeSettings.lastStepCount || 0;
-        lastRelayedStepIndex = bridgeSettings.lastRelayedStepIndex ?? -1;
+    const bs = getBridgeSettings();
+    if (bs.lastCascadeId) {
+        activeCascadeId = bs.lastCascadeId;
+        stepCount = bs.lastStepCount || 0;
+        lastRelayedStepIndex = bs.lastRelayedStepIndex ?? -1;
         addLog('system', `Restored previous cascade: ${shortId(activeCascadeId)} (${stepCount} steps, lastRelayed=${lastRelayedStepIndex})`);
     }
 }
@@ -70,17 +66,15 @@ async function startBridge(config = {}) {
         throw new Error(`Bridge already ${state}`);
     }
 
-    const settings = getSettings();
-    const bridgeSettings = settings.agentBridge || {};
+    const bs = getBridgeSettings();
 
-    const token = config.discordBotToken || bridgeSettings.discordBotToken;
-    const channelId = config.discordChannelId || bridgeSettings.discordChannelId;
-    softLimit = config.stepSoftLimit || bridgeSettings.stepSoftLimit || 500;
+    const token = config.discordBotToken || bs.discordBotToken;
+    const channelId = config.discordChannelId || bs.discordChannelId;
+    softLimit = config.stepSoftLimit || bs.stepSoftLimit || 500;
 
-    // Load last-used workspace from settings
-    workspaceName = bridgeSettings.currentWorkspace
+    // Load last-used workspace from bridge settings
+    workspaceName = bs.currentWorkspace
         || config.workspaceName
-        || settings.workspaceName
         || 'AntigravityAuto';
 
     // Find the LS instance matching the workspace and bind bridgeLsInst
@@ -121,7 +115,7 @@ async function startBridge(config = {}) {
         if (event === 'ignored') addLog('system', `Discord ignored: "${data.text}"`);
     };
 
-    const guildId = config.discordGuildId || bridgeSettings.discordGuildId || '';
+    const guildId = config.discordGuildId || bs.discordGuildId || '';
     await discord.init(token, channelId, guildId, eventHook);
     discord.startListening(handlePiReply, handleCommand);
 
@@ -237,7 +231,7 @@ async function handleCommand(cmd, args, replyFn) {
                 bridgeLsInst = { port: lsInstances[matchIdx].port, csrfToken: lsInstances[matchIdx].csrfToken, useTls: lsInstances[matchIdx].useTls };
                 workspaceName = lsInstances[matchIdx].workspaceName;
                 addLog('system', `Switched LS → ${workspaceName} (port: ${lsInstances[matchIdx].port})`);
-                saveSettings({ agentBridge: { ...settings.agentBridge, currentWorkspace: workspaceName } });
+                saveBridgeSettings({ currentWorkspace: workspaceName });
 
                 if (state === STATES.ACTIVE || state === STATES.TRANSITIONING) {
                     await replyFn(`✅ Switched to \`${workspaceName}\` (port ${lsInstances[matchIdx].port})\n🔄 Starting new cascade...`);
@@ -298,7 +292,7 @@ async function handleCommand(cmd, args, replyFn) {
                 workspaceName = newWs;
             }
 
-            saveSettings({ agentBridge: { ...settings.agentBridge, currentWorkspace: workspaceName } });
+            saveBridgeSettings({ currentWorkspace: workspaceName });
             addLog('system', `Workspace opened: ${workspaceName}`);
 
             if (state === STATES.ACTIVE || state === STATES.TRANSITIONING) {
@@ -367,7 +361,7 @@ async function handleCommand(cmd, args, replyFn) {
                 workspaceName = newWsName;
             }
 
-            saveSettings({ agentBridge: { ...getSettings().agentBridge, currentWorkspace: workspaceName } });
+            saveBridgeSettings({ currentWorkspace: workspaceName });
             addLog('system', `Workspace created + opened: ${workspaceName}`);
 
             if (state === STATES.ACTIVE || state === STATES.TRANSITIONING) {
