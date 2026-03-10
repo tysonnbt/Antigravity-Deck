@@ -21,7 +21,36 @@ export function AuthGate({ children }: AuthGateProps) {
     useEffect(() => {
         if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
             setAuthenticated(true);
-        } else if (getAuthKey()) {
+            return;
+        }
+
+        // Auto-auth from URL ?key= param (QR code scanning)
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlKey = urlParams.get('key');
+        if (urlKey) {
+            // Strip key from URL immediately (security: don't leave in browser history)
+            const cleanUrl = new URL(window.location.href);
+            cleanUrl.searchParams.delete('key');
+            window.history.replaceState({}, '', cleanUrl.toString());
+
+            // Validate key against backend
+            setChecking(true);
+            fetch(`${API_BASE}/api/settings`, {
+                headers: { 'X-Auth-Key': urlKey.trim() }
+            }).then(res => {
+                if (res.ok) {
+                    setAuthKey(urlKey.trim());
+                    setAuthenticated(true);
+                }
+                // If invalid, fall through to show auth gate
+            }).catch(() => {
+                // Network error — show auth gate
+            }).finally(() => setChecking(false));
+            return;
+        }
+
+        // Check existing saved key
+        if (getAuthKey()) {
             setAuthenticated(true);
         }
     }, []);
