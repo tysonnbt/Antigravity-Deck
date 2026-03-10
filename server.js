@@ -11,8 +11,12 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
-// Middleware
-app.use(express.json({ limit: '50mb' }));
+// Middleware - Apply 10mb limit for image upload endpoints BEFORE default 1mb
+app.use('/api/media/save', express.json({ limit: '10mb' }));
+app.use('/api/cascade/send', express.json({ limit: '10mb' }));
+app.use('/api/cascade/submit', express.json({ limit: '10mb' }));
+// Default 1mb limit for all other endpoints
+app.use(express.json({ limit: '1mb' }));
 // CORS — allow frontend on any port/origin to call backend API
 app.use((req, res, next) => {
   const origin = req.headers.origin || '*';

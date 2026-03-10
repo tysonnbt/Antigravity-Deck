@@ -1,4 +1,5 @@
 // === Express HTTP Routes ===
+const express = require('express');
 const https = require('https');
 const { callApi, callApiOnInstance, callApiStream, callApiFireAndForget, callApiFireAndForgetOnInstance } = require('./api');
 const { stepCache, getAutoAccept, setAutoAccept, buildAcceptPayload } = require('./cache');
@@ -54,11 +55,42 @@ function setupRoutes(app) {
         res.json(getSettings());
     });
 
+    // Input validation schema for settings
+    const { z } = require('zod');
+    const SettingsSchema = z.object({
+        autoAccept: z.boolean().optional(),
+        defaultWorkspaceRoot: z.string().max(500).optional(),
+        defaultModel: z.string().max(100).optional(),
+        agentBridge: z.object({
+            discordBotToken: z.string().max(200).optional(),
+            discordChannelId: z.string().max(100).optional(),
+            discordGuildId: z.string().max(100).optional(),
+            stepSoftLimit: z.number().int().min(0).max(10000).optional(),
+            allowedBotIds: z.array(z.string()).optional(),
+            autoStart: z.boolean().optional(),
+            currentWorkspace: z.string().max(500).optional(),
+            lastCascadeId: z.string().max(100).optional(),
+            lastStepCount: z.number().int().min(0).optional(),
+            lastRelayedStepIndex: z.number().int().optional(),
+        }).optional(),
+    }).strict();
+
     app.post('/api/settings', (req, res) => {
-        const { saveSettings } = require('./config');
-        const updated = saveSettings(req.body);
-        console.log(`[*] Settings updated:`, JSON.stringify(updated));
-        res.json(updated);
+        try {
+            const validated = SettingsSchema.parse(req.body);
+            const { saveSettings } = require('./config');
+            const updated = saveSettings(validated);
+            console.log(`[*] Settings updated:`, JSON.stringify(updated));
+            res.json(updated);
+        } catch (error) {
+            if (error instanceof z.ZodError) {
+                return res.status(400).json({ 
+                    error: 'Invalid settings', 
+                    details: error.issues  // Zod v4 uses 'issues', not 'errors'
+                });
+            }
+            throw error;
+        }
     });
 
     // Workspace list — all detected LS instances
@@ -125,10 +157,30 @@ function setupRoutes(app) {
     }
 
 
+    // Validate workspace path to prevent command injection
+    function validateWorkspacePath(folderPath) {
+        const path = require('path');
+        
+        // Must be absolute path
+        if (!path.isAbsolute(folderPath)) {
+            throw new Error('Path must be absolute');
+        }
+        
+        // Resolve to prevent traversal
+        const resolved = path.resolve(folderPath);
+        
+        // Check for suspicious characters (shell metacharacters)
+        if (/[;&|`$(){}[\]<>]/.test(resolved)) {
+            throw new Error('Invalid characters in path');
+        }
+        
+        return resolved;
+    }
+
     // Create/open a workspace — accepts { path } or { name }
     // If name is given, resolves to defaultWorkspaceRoot/<name>
     app.post('/api/workspaces/create', async (req, res) => {
-        const { exec } = require('child_process');
+        const { spawn } = require('child_process');
         const fs = require('fs');
         const path = require('path');
         const { lsInstances, getSettings } = require('./config');
@@ -150,6 +202,13 @@ function setupRoutes(app) {
         }
 
         if (!folderPath) return res.status(400).json({ error: 'path or name is required' });
+
+        // Validate path to prevent command injection
+        try {
+            folderPath = validateWorkspacePath(folderPath);
+        } catch (error) {
+            return res.status(400).json({ error: error.message });
+        }
 
         // Create folder if it doesn't exist
         if (!fs.existsSync(folderPath)) {
@@ -178,10 +237,52 @@ function setupRoutes(app) {
         console.log(`[*] Opening Antigravity IDE: ${folderPath}`);
         const { platform } = require('./config');
         if (platform === 'darwin') {
-            // Try Antigravity first, then Windsurf (name may vary by install)
-            exec(`open -a "Antigravity" "${folderPath}" 2>/dev/null || open -a "Windsurf" "${folderPath}"`, { timeout: 10000 });
+            // Try Antigravity first using spawn (no shell = no command injection)
+            const child = spawn('open', ['-a', 'Antigravity', folderPath], {
+                timeout: 10000,
+                detached: true,
+                stdio: 'ignore'
+            });
+            
+            child.on('error', (err) => {
+                console.log(`[*] Antigravity not found, trying Windsurf...`);
+                const fallback = spawn('open', ['-a', 'Windsurf', folderPath], {
+                    timeout: 10000,
+                    detached: true,
+                    stdio: 'ignore'
+                });
+                fallback.on('error', (e) => console.error('[!] Failed to open IDE:', e.message));
+                fallback.unref();
+            });
+            
+            child.on('exit', (code) => {
+                if (code !== 0 && code !== null) {
+                    console.log(`[*] Antigravity exited with code ${code}, trying Windsurf...`);
+                    const fallback = spawn('open', ['-a', 'Windsurf', folderPath], {
+                        timeout: 10000,
+                        detached: true,
+                        stdio: 'ignore'
+                    });
+                    fallback.on('error', (e) => console.error('[!] Failed to open IDE:', e.message));
+                    fallback.unref();
+                }
+            });
+            
+            child.unref();
         } else {
-            exec(`antigravity --trust-workspace "${folderPath}"`, { timeout: 10000 });
+            // Windows/Linux: use spawn instead of exec
+            const child = spawn('antigravity', ['--trust-workspace', folderPath], {
+                timeout: 10000,
+                detached: true,
+                stdio: 'ignore'
+            });
+            
+            child.on('error', (err) => {
+                console.error('[!] Failed to launch antigravity:', err.message);
+                // Don't crash the server, just log the error
+            });
+            
+            child.unref();
         }
 
         // Poll for new LS instance (up to 30s)
