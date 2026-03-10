@@ -16,12 +16,12 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Chat Mirror v3",
+  title: "Antigravity Deck",
   description: "Real-time Antigravity conversation mirror",
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'Chat Mirror',
+    title: 'Antigravity Deck',
   },
   other: {
     'mobile-web-app-capable': 'yes',

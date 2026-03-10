@@ -397,7 +397,7 @@ export default function Home() {
                   <span className="font-semibold text-sm truncate max-w-[120px] sm:max-w-[200px]">{activeWorkspace}</span>
                 ) : (
                   <>
-                    <span className="font-semibold text-sm">Chat Mirror</span>
+                    <span className="font-semibold text-sm">Antigravity Deck</span>
                     <Badge variant="outline" className="text-[9px] h-4 px-1 font-mono inline-flex">v3</Badge>
                   </>
                 )}
@@ -485,7 +485,7 @@ export default function Home() {
                   {[
                     'Open Antigravity IDE',
                     'Open a project folder in Antigravity',
-                    'Chat Mirror will auto-detect it within ~10 seconds',
+                    'Antigravity Deck will auto-detect it within ~10 seconds',
                   ].map((text, i) => (
                     <li key={i} className="flex items-start gap-3 text-sm text-muted-foreground">
                       <span className="flex-shrink-0 w-5 h-5 rounded-full bg-muted/30 flex items-center justify-center text-xs font-medium text-muted-foreground/80">
@@ -609,7 +609,7 @@ export default function Home() {
           {/* Footer */}
           <footer className="flex items-center justify-between px-2 sm:px-4 h-8 bg-background border-t border-border flex-shrink-0 text-[10px] text-muted-foreground/60 safe-area-bottom">
             <div className="flex items-center gap-2 sm:gap-3">
-              <span><FolderSync className="w-3 h-3 inline-block mr-1" />Chat Mirror v3</span>
+              <span><FolderSync className="w-3 h-3 inline-block mr-1" />Antigravity Deck v3</span>
               <span className="w-px h-3 bg-border hidden sm:block" />
               <span className="hidden sm:inline">AntigravityChat</span>
             </div>

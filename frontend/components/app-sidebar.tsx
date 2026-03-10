@@ -315,7 +315,7 @@ export function AppSidebar({
                         className="flex items-center gap-2 px-4 py-2 mt-2 hover:opacity-80 transition-opacity cursor-pointer"
                     >
                         <FolderSync className="h-5 w-5 text-primary" />
-                        <span className="font-semibold text-lg tracking-tight">Chat Mirror</span>
+                        <span className="font-semibold text-lg tracking-tight">Antigravity Deck</span>
                     </button>
                 </SidebarHeader>
 

@@ -1,7 +1,7 @@
 {
-  "name": "antigravity-chat",
+  "name": "antigravity-deck",
   "version": "1.0.0",
-  "description": "Real-time chat mirror for Windsurf (Antigravity) with full conversation history, multi-workspace, and remote access",
+  "description": "Antigravity Deck — full-featured workspace dashboard for Antigravity (Windsurf) with conversation history, multi-workspace, and remote access",
   "main": "server.js",
   "scripts": {
     "setup": "npm install && npm install --prefix frontend && node -e \"const fs=require('fs');if(!fs.existsSync('settings.json'))fs.copyFileSync('settings.sample.json','settings.json');console.log('✅ Setup complete! Run: npm run dev')\"",
