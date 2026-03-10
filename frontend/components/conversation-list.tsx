@@ -8,7 +8,7 @@ import { getWorkspaces } from '@/lib/cascade-api';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, ChevronRight } from 'lucide-react';
+import { Plus, ChevronRight, Folder, MessageSquare } from 'lucide-react';
 
 interface ConvSummary {
     id: string;
@@ -100,7 +100,7 @@ export function ConversationList({ workspaceName, wsVersion, onSelectConversatio
                 <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2.5">
                         <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-sm">
-                            📁
+                            <Folder className="h-4 w-4" />
                         </div>
                         <div>
                             <h2 className="text-base font-semibold text-foreground">
@@ -119,27 +119,29 @@ export function ConversationList({ workspaceName, wsVersion, onSelectConversatio
             </div>
 
             {/* Conversation list */}
-            <ScrollArea className="flex-1">
-                {loading ? (
-                    <div className="p-4 space-y-2">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                            <Skeleton key={i} className="h-14 w-full rounded-lg" />
-                        ))}
-                    </div>
-                ) : conversations.length === 0 ? (
-                    <div className="flex items-center justify-center py-16">
-                        <div className="text-center space-y-3">
-                            <div className="text-4xl">💬</div>
+            {loading ? (
+                <div className="p-4 space-y-2">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                        <Skeleton key={i} className="h-14 w-full rounded-lg" />
+                    ))}
+                </div>
+            ) : conversations.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center">
+                    <div className="text-center space-y-3">
+                        <div className="flex items-center justify-center gap-3">
+                            <MessageSquare className="h-8 w-8 text-muted-foreground/40" />
                             <h3 className="text-sm font-medium text-foreground/70">No conversations yet</h3>
-                            <p className="text-xs text-muted-foreground max-w-xs">
-                                Start a new chat to begin working in this workspace.
-                            </p>
-                            <Button variant="outline" size="sm" onClick={onNewChat} className="mt-2">
-                                Start your first chat
-                            </Button>
                         </div>
+                        <p className="text-xs text-muted-foreground max-w-xs">
+                            Start a new chat to begin working in this workspace.
+                        </p>
+                        <Button variant="outline" size="sm" onClick={onNewChat} className="mt-2">
+                            Start your first chat
+                        </Button>
                     </div>
-                ) : (
+                </div>
+            ) : (
+                <ScrollArea className="flex-1">
                     <div className="p-2 sm:p-4 space-y-1 sm:space-y-1.5">
                         {conversations.map(conv => (
                             <Button
@@ -176,8 +178,8 @@ export function ConversationList({ workspaceName, wsVersion, onSelectConversatio
                             </Button>
                         ))}
                     </div>
-                )}
-            </ScrollArea>
+                </ScrollArea>
+            )}
         </div>
     );
 }

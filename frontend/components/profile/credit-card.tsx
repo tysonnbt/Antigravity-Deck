@@ -1,7 +1,8 @@
 import { cn } from '@/lib/utils';
+import type { ReactNode } from 'react';
 
 export function CreditCard({ label, icon, used, available, total, pct }: {
-    label: string; icon: string; used: number; available: number; total: number; pct: number;
+    label: string; icon: ReactNode; used: number; available: number; total: number; pct: number;
 }) {
     return (
         <div className="p-4 rounded-lg bg-muted/15 border border-border/50">

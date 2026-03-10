@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { API_BASE } from '@/lib/config';
 import { authHeaders } from '@/lib/auth';
-import { Play, Check, X, Loader2 } from 'lucide-react';
+import { Play, Check, X, Loader2, Zap, FolderOpen, Keyboard, Bell, FileText, AlertTriangle } from 'lucide-react';
 
 interface WaitingStepProps {
     step: Step;
@@ -69,7 +69,7 @@ export const WaitingStep = memo(function WaitingStep({ step, originalIndex, casc
         ? JSON.stringify(step, null, 2).substring(0, 3000) : '';
 
     // Determine display info
-    const icon = isCommand ? '⚡' : (isFileAccess || isCodeAction) ? '📁' : isTermInput ? '⌨️' : '🔔';
+    const icon = isCommand ? <Zap className="h-4 w-4" /> : (isFileAccess || isCodeAction) ? <FolderOpen className="h-4 w-4" /> : isTermInput ? <Keyboard className="h-4 w-4" /> : <Bell className="h-4 w-4" />;
     const title = isCommand ? 'Terminal Command'
         : isFileAccess ? 'File Access'
             : isCodeAction ? 'Code Action (File Permission?)'
@@ -123,7 +123,7 @@ export const WaitingStep = memo(function WaitingStep({ step, originalIndex, casc
                 {displayContent && (
                     <div className="bg-muted rounded-md p-4 font-mono text-sm text-foreground border border-border overflow-x-auto whitespace-pre-wrap break-all">
                         {isCommand && <span className="text-emerald-500/50 mr-2 select-none">$</span>}
-                        {isFileAccess && <span className="text-blue-500/50 mr-2 select-none">📄</span>}
+                        {isFileAccess && <FileText className="h-3.5 w-3.5 text-blue-500/50 mr-2 select-none inline" />}
                         {displayContent}
                     </div>
                 )}
@@ -131,7 +131,7 @@ export const WaitingStep = memo(function WaitingStep({ step, originalIndex, casc
                 {/* Debug: show raw step data when content extraction fails */}
                 {!displayContent && debugData && (
                     <div className="mt-3">
-                        <div className="text-[10px] text-amber-400/60 mb-1 font-semibold">⚠ Debug: Raw step data (file path not found)</div>
+                        <div className="text-[10px] text-amber-400/60 mb-1 font-semibold"><AlertTriangle className="h-3 w-3 inline mr-1" /> Debug: Raw step data (file path not found)</div>
                         <pre className="bg-muted rounded-md p-3 font-mono text-[10px] text-muted-foreground border border-border max-h-48 overflow-y-auto whitespace-pre-wrap break-all">
                             {debugData}
                         </pre>

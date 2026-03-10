@@ -5,6 +5,7 @@ import { authHeaders } from '@/lib/auth';
 import { getSettings, updateSettings } from '@/lib/cascade-api';
 import type { AppSettings } from '@/lib/cascade-api';
 import { cn } from '@/lib/utils';
+import { Check, X, Sparkles, CircleDot, Bot, Settings, Globe, Camera, Star } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -70,10 +71,10 @@ export function SettingsView() {
                 defaultModel: defaultModel === '__api_default__' ? '' : defaultModel,
             });
             setSettings(updated);
-            setSaveMsg('✅ Saved!');
+            setSaveMsg('saved');
             setTimeout(() => setSaveMsg(''), 2500);
         } catch {
-            setSaveMsg('❌ Error saving');
+            setSaveMsg('error');
         } finally {
             setSaving(false);
         }
@@ -92,10 +93,10 @@ export function SettingsView() {
     );
 
     const getModelIcon = (label: string) => {
-        if (label.toLowerCase().includes('gemini')) return '✨';
-        if (label.toLowerCase().includes('claude')) return '🟣';
-        if (label.toLowerCase().includes('gpt')) return '🟢';
-        return '🤖';
+        if (label.toLowerCase().includes('gemini')) return <Sparkles className="h-3.5 w-3.5 text-blue-400" />;
+        if (label.toLowerCase().includes('claude')) return <CircleDot className="h-3.5 w-3.5 text-purple-500" />;
+        if (label.toLowerCase().includes('gpt')) return <CircleDot className="h-3.5 w-3.5 text-green-500" />;
+        return <Bot className="h-3.5 w-3.5" />;
     };
 
     if (loading) {
@@ -117,7 +118,7 @@ export function SettingsView() {
 
                 {/* Header */}
                 <div className="flex items-center gap-2">
-                    <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">⚙️ Settings</h2>
+                    <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"><Settings className="h-3.5 w-3.5" /> Settings</h2>
                     <div className="flex-1 h-px bg-border/30" />
                 </div>
 
@@ -136,7 +137,10 @@ export function SettingsView() {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="__api_default__">
-                                    🌐 Use API default ({models.find(m => m.modelId === apiDefaultModel)?.label || 'Auto'})
+                                    <span className="flex items-center gap-1.5">
+                                        <Globe className="h-3.5 w-3.5" />
+                                        Use API default ({models.find(m => m.modelId === apiDefaultModel)?.label || 'Auto'})
+                                    </span>
                                 </SelectItem>
 
                                 <SelectSeparator />
@@ -147,13 +151,13 @@ export function SettingsView() {
                                         {geminiModels.map(m => (
                                             <SelectItem key={m.modelId} value={m.modelId}>
                                                 <span className="flex items-center gap-2">
-                                                    <span>{getModelIcon(m.label)}</span>
+                                                    {getModelIcon(m.label)}
                                                     <span>{m.label}</span>
                                                     {m.modelId === apiDefaultModel && (
                                                         <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary ml-1">API Default</span>
                                                     )}
                                                     {m.supportsImages && (
-                                                        <span className="text-[9px] text-blue-400">📷</span>
+                                                        <span className="text-[9px] text-blue-400"><Camera className="h-3 w-3" /></span>
                                                     )}
                                                 </span>
                                             </SelectItem>
@@ -167,13 +171,13 @@ export function SettingsView() {
                                         {claudeModels.map(m => (
                                             <SelectItem key={m.modelId} value={m.modelId}>
                                                 <span className="flex items-center gap-2">
-                                                    <span>{getModelIcon(m.label)}</span>
+                                                    {getModelIcon(m.label)}
                                                     <span>{m.label}</span>
                                                     {m.modelId === apiDefaultModel && (
                                                         <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary ml-1">API Default</span>
                                                     )}
                                                     {m.supportsImages && (
-                                                        <span className="text-[9px] text-blue-400">📷</span>
+                                                        <span className="text-[9px] text-blue-400"><Camera className="h-3 w-3" /></span>
                                                     )}
                                                 </span>
                                             </SelectItem>
@@ -187,7 +191,7 @@ export function SettingsView() {
                                         {otherModels.map(m => (
                                             <SelectItem key={m.modelId} value={m.modelId}>
                                                 <span className="flex items-center gap-2">
-                                                    <span>{getModelIcon(m.label)}</span>
+                                                    {getModelIcon(m.label)}
                                                     <span>{m.label}</span>
                                                     {m.modelId === apiDefaultModel && (
                                                         <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary ml-1">API Default</span>
@@ -202,7 +206,7 @@ export function SettingsView() {
 
                         {defaultModel && defaultModel !== '__api_default__' && (
                             <div className="text-[10px] text-primary/80 flex items-center gap-1">
-                                <span>⭐</span> Currently set to: <strong>{models.find(m => m.modelId === defaultModel)?.label || defaultModel}</strong>
+                                <Star className="h-3 w-3 fill-primary text-primary" /> Currently set to: <strong>{models.find(m => m.modelId === defaultModel)?.label || defaultModel}</strong>
                             </div>
                         )}
                     </CardContent>
@@ -237,8 +241,8 @@ export function SettingsView() {
                         {saving ? 'Saving…' : 'Save Settings'}
                     </Button>
                     {saveMsg && (
-                        <span className={cn("text-xs font-medium", saveMsg.includes('Saved') ? "text-green-500" : "text-destructive")}>
-                            {saveMsg}
+                        <span className={cn("text-xs font-medium flex items-center gap-1", saveMsg === 'saved' ? "text-green-500" : "text-destructive")}>
+                            {saveMsg === 'saved' ? <><Check className="h-3 w-3" /> Saved!</> : <><X className="h-3 w-3" /> Error saving</>}
                         </span>
                     )}
                     {hasChanges && !saveMsg && (
