@@ -538,23 +538,26 @@ function setupRoutes(app) {
     }
 
     // Git status: list changed files with stats
-    app.get('/api/workspaces/:name/git/status', (req, res) => {
-        const { execSync } = require('child_process');
+    app.get('/api/workspaces/:name/git/status', async (req, res) => {
         const inst = getInstanceByName(decodeURIComponent(req.params.name));
         if (!inst) return res.status(400).json({ error: 'Unknown workspace' });
         const cwd = uriToFsPath(inst.workspaceFolderUri);
         if (!cwd) return res.status(400).json({ error: 'No workspace folder' });
 
         try {
-            try { execSync('git rev-parse --is-inside-work-tree', { cwd, encoding: 'utf-8' }); }
-            catch { return res.json({ files: [], error: 'Not a git repository' }); }
+            // Check if it's a git repository
+            try {
+                await execGitSafe(['rev-parse', '--is-inside-work-tree'], cwd);
+            } catch {
+                return res.json({ files: [], error: 'Not a git repository' });
+            }
 
-            const porcelain = execSync('git status --porcelain', { cwd, encoding: 'utf-8', maxBuffer: 5 * 1024 * 1024 }).trim();
+            const porcelain = (await execGitSafe(['status', '--porcelain'], cwd)).trim();
             if (!porcelain) return res.json({ files: [] });
 
             let numstatMap = {};
             try {
-                const numstat = execSync('git diff --numstat', { cwd, encoding: 'utf-8', maxBuffer: 5 * 1024 * 1024 }).trim();
+                const numstat = (await execGitSafe(['diff', '--numstat'], cwd)).trim();
                 numstat.split('\n').forEach(line => {
                     const [add, del, file] = line.split('\t');
                     if (file) numstatMap[file] = { additions: parseInt(add) || 0, deletions: parseInt(del) || 0 };
@@ -574,7 +577,12 @@ function setupRoutes(app) {
                 };
             });
             res.json({ files });
-        } catch (e) { res.status(500).json({ error: e.message }); }
+        } catch (e) {
+            if (e.message === 'OUTPUT_LIMIT_EXCEEDED') {
+                return res.status(413).json({ error: 'Output too large' });
+            }
+            res.status(500).json({ error: e.message });
+        }
     });
 
     // Git diff: unified diff (all files or specific file)
@@ -714,11 +722,25 @@ function setupRoutes(app) {
         }
 
         try {
-            const fullPath = path.resolve(cwd, subpath);
-            const normalizedCwd = path.resolve(cwd);
+            // Resolve symlinks to prevent symlink traversal attacks
+            let realCwd, realPath;
+            try {
+                realCwd = fs.realpathSync(cwd);
+                realPath = fs.realpathSync(path.resolve(cwd, subpath));
+            } catch (e) {
+                if (e.code === 'ENOENT') {
+                    return res.status(404).json({ error: 'Path not found' });
+                }
+                return res.status(403).json({ error: 'Access denied: invalid path' });
+            }
+
+            // Verify resolved path is within workspace
             const isInside = process.platform === 'win32'
-                ? fullPath.toLowerCase().startsWith(normalizedCwd.toLowerCase())
-                : fullPath.startsWith(normalizedCwd);
+                ? realPath.toLowerCase() === realCwd.toLowerCase() ||
+                  realPath.toLowerCase().startsWith(realCwd.toLowerCase() + path.sep)
+                : realPath === realCwd ||
+                  realPath.startsWith(realCwd + path.sep);
+            
             if (!isInside) {
                 return res.status(403).json({ error: 'Access denied: path outside workspace' });
             }
@@ -726,7 +748,7 @@ function setupRoutes(app) {
             // Hidden dirs to skip (always)
             const SKIP_DIRS = new Set(['node_modules', '.git', '.next', 'dist', 'build', '__pycache__', '.cache']);
 
-            const dirents = fs.readdirSync(fullPath, { withFileTypes: true });
+            const dirents = fs.readdirSync(realPath, { withFileTypes: true });
             const entries = dirents
                 .filter(d => {
                     if (!showHidden && d.name.startsWith('.')) return false;
@@ -739,7 +761,7 @@ function setupRoutes(app) {
                         const ext = path.extname(d.name).toLowerCase().slice(1);
                         entry.ext = ext || '';
                         try {
-                            const stat = fs.statSync(path.join(fullPath, d.name));
+                            const stat = fs.statSync(path.join(realPath, d.name));
                             entry.size = stat.size;
                         } catch { entry.size = 0; }
                     }
@@ -1114,10 +1136,42 @@ function setupRoutes(app) {
     });
 
     // === Generic LS Proxy — call any method ===
+    // Security: Method whitelist to prevent arbitrary LS method invocation
+    const ALLOWED_LS_METHODS = new Set([
+        'GetCascadeModelConfigData',
+        'GetAllCascadeTrajectories',
+        'GetCascadeTrajectory',
+        'GetCascadeTrajectorySteps',
+        'GetCascadeTrajectoryGeneratorMetadata',
+        'HandleCascadeUserInteraction',
+        'CancelCascadeInvocation',
+        'DeleteCascadeTrajectory',
+        'GetUserStatus',
+        'GetProfileData',
+        'GetWorkspaceFolders',
+        'GetSettings',
+        'UpdateSettings',
+        'GetAvailableCascadePlugins',
+        'InstallCascadePlugin',
+        'UninstallCascadePlugin',
+        'StartCascadeInvocation',
+        'SendCascadeMessage',
+    ]);
+    
     app.post('/api/ls/:method', async (req, res) => {
         try {
+            const method = req.params.method;
+            
+            // Validate method against whitelist
+            if (!ALLOWED_LS_METHODS.has(method)) {
+                return res.status(403).json({ 
+                    error: 'Method not allowed',
+                    hint: 'This LS method is not in the allowed list for security reasons'
+                });
+            }
+            
             const inst = resolveInst(req);
-            const result = await callApi(req.params.method, req.body || {}, inst);
+            const result = await callApi(method, req.body || {}, inst);
             res.json(result);
         } catch (e) { res.status(500).json({ error: e.message }); }
     });

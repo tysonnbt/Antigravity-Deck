@@ -7,10 +7,88 @@ const { callApi, callApiOnInstance, callApiFireAndForgetOnInstance } = require('
 // (cache.js → ws.js → poller.js → auto-accept.js → ws.js)
 function _broadcast(data, targetConvId) { return require('./ws').broadcast(data, targetConvId); }
 const { detectApiStartIndex } = require('./step-cache');
+const fs = require('fs');
+const path = require('path');
 
 // State — persisted in settings.json so it survives restarts
 let autoAcceptEnabled = !!(getSettings().autoAccept);
 const autoAcceptedSet = new Set(); // debounce: track already auto-accepted cascade+step combos
+
+// --- Security: Workspace Path Validation ---
+
+// Helper: Convert file:// URI to filesystem path
+function uriToFsPath(uri) {
+    if (!uri) return null;
+    try {
+        const url = new URL(uri);
+        let p = decodeURIComponent(url.pathname);
+        if (process.platform === 'win32' && /^\/[a-zA-Z]:/.test(p)) p = p.substring(1);
+        return p;
+    } catch { return null; }
+}
+
+function validateFilePathInWorkspace(filePath) {
+    if (!filePath) return false;
+    
+    // Extract filesystem path from file:// URI
+    let fsPath = filePath;
+    if (fsPath.startsWith('file://')) {
+        try {
+            fsPath = decodeURIComponent(new URL(fsPath).pathname);
+        } catch {
+            fsPath = decodeURIComponent(fsPath.replace('file://', ''));
+        }
+        // Windows: /C:/Users/... → C:/Users/...
+        if (/^\/[a-zA-Z]:/.test(fsPath)) {
+            fsPath = fsPath.substring(1);
+        }
+    }
+    
+    // Build list of allowed workspace roots
+    const allowedRoots = [];
+    for (const inst of lsInstances) {
+        if (inst.workspaceFolderUri) {
+            const workspaceRoot = uriToFsPath(inst.workspaceFolderUri);
+            if (workspaceRoot) {
+                try {
+                    allowedRoots.push(fs.realpathSync(workspaceRoot));
+                } catch {
+                    // Workspace doesn't exist or can't be resolved - skip
+                }
+            }
+        }
+    }
+    
+    if (allowedRoots.length === 0) {
+        // No workspaces available - reject for safety
+        return false;
+    }
+    
+    // Resolve symlinks and check if file is within any workspace
+    let realPath;
+    try {
+        realPath = fs.realpathSync(fsPath);
+    } catch {
+        // File doesn't exist yet (new file) - validate lexically
+        realPath = path.resolve(fsPath);
+    }
+    
+    // Check if resolved path is within any allowed workspace
+    for (const root of allowedRoots) {
+        const normalizedRoot = path.resolve(root);
+        const isInside = process.platform === 'win32'
+            ? realPath.toLowerCase() === normalizedRoot.toLowerCase() ||
+              realPath.toLowerCase().startsWith(normalizedRoot.toLowerCase() + path.sep)
+            : realPath === normalizedRoot ||
+              realPath.startsWith(normalizedRoot + path.sep);
+        
+        if (isInside) {
+            return true;
+        }
+    }
+    
+    return false;
+}
 
 // --- Public API ---
 
@@ -77,12 +155,21 @@ function buildInteraction(stepInfo) {
                 }
             }
             if (filePath) {
-                interaction.filePermission = {
-                    allow: true,
-                    scope: 'PERMISSION_SCOPE_ONCE',
-                    absolutePathUri: filePath,
-                };
-                console.log(`[AutoAccept] File permission for: ${filePath}`);
+                // Security: Validate file path is within workspace boundaries
+                if (validateFilePathInWorkspace(filePath)) {
+                    interaction.filePermission = {
+                        allow: true,
+                        scope: 'PERMISSION_SCOPE_ONCE',
+                        absolutePathUri: filePath,
+                    };
+                    console.log(`[AutoAccept] File permission for: ${filePath}`);
+                } else {
+                    console.warn(`[AutoAccept] REJECTED file permission (outside workspace): ${filePath}`);
+                    interaction.filePermission = {
+                        allow: false,
+                        scope: 'PERMISSION_SCOPE_ONCE',
+                    };
+                }
             } else {
                 interaction.codeAction = { confirm: true };
             }
@@ -117,8 +204,14 @@ function buildInteraction(stepInfo) {
                 } catch { }
             }
             if (fp) {
-                interaction.filePermission = { allow: true, scope: 'PERMISSION_SCOPE_ONCE', absolutePathUri: fp };
-                console.log(`[AutoAccept] File permission (default) for: ${fp}`);
+                // Security: Validate file path is within workspace boundaries
+                if (validateFilePathInWorkspace(fp)) {
+                    interaction.filePermission = { allow: true, scope: 'PERMISSION_SCOPE_ONCE', absolutePathUri: fp };
+                    console.log(`[AutoAccept] File permission (default) for: ${fp}`);
+                } else {
+                    console.warn(`[AutoAccept] REJECTED file permission (outside workspace): ${fp}`);
+                    interaction.filePermission = { allow: false, scope: 'PERMISSION_SCOPE_ONCE' };
+                }
             } else {
                 console.log(`[AutoAccept] Unknown step type for interaction: ${stepType}, attempting generic confirm`);
                 interaction.confirm = true;
