@@ -241,7 +241,7 @@ async function buildAcceptPayload(cascadeId, instOrNull = null) {
 }
 
 // --- Dedicated auto-accept polling ---
-// Polls ALL running cascades (even those not open in Chat Mirror UI)
+// Polls ALL running cascades (even those not open in Antigravity Deck UI)
 // to detect WAITING steps and auto-accept them.
 
 let autoAcceptTimer = null;

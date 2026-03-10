@@ -171,6 +171,7 @@ function setupRoutes(app) {
             workspaceFolderUri: inst.workspaceFolderUri || '',
             category: inst.category || 'workspace',
             port: inst.port,
+            headless: !!inst.headless,
         })));
     });
 
@@ -205,6 +206,13 @@ function setupRoutes(app) {
 
         res.json({ root, folders: entries });
     });
+
+    // Resource usage snapshot for all workspace PIDs
+    app.get('/api/workspaces/resources', (req, res) => {
+        const { getResourceSnapshot } = require('./resource-monitor');
+        res.json(getResourceSnapshot());
+    });
+
 
     // --- resolveInst: determine which LS instance to route a request to ---
     function resolveInst(req) {
@@ -338,11 +346,13 @@ function setupRoutes(app) {
 
             child.unref();
         } else {
-            // Windows/Linux: use spawn instead of exec
+            // Windows/Linux: use spawn with shell:true on Windows (.cmd files need shell)
+            const { platform } = require('./config');
             const child = spawn('antigravity', ['--trust-workspace', folderPath], {
                 timeout: 10000,
                 detached: true,
-                stdio: 'ignore'
+                stdio: 'ignore',
+                shell: platform === 'win32', // Windows .cmd files require shell
             });
 
             child.on('error', (err) => {
@@ -428,6 +438,61 @@ function setupRoutes(app) {
             });
         } else {
             res.json({ created: false, message: `LS not detected after ${MAX_WAIT / 1000}s. Auto-rescan will pick it up later.` });
+        }
+    });
+
+    // === Headless LS Management ===
+    // Create a headless LS instance (no IDE UI) — requires running IDE for auth
+    app.post('/api/workspaces/create-headless', async (req, res) => {
+        const fs = require('fs');
+        const path = require('path');
+        const { getSettings } = require('./config');
+        const { launchHeadlessLS } = require('./headless-ls');
+
+        let folderPath = req.body.path;
+        const name = req.body.name;
+
+        // Same path/name resolution as /api/workspaces/create
+        if (!folderPath && name) {
+            const settings = getSettings();
+            const root = settings.defaultWorkspaceRoot;
+            if (!fs.existsSync(root)) {
+                fs.mkdirSync(root, { recursive: true });
+            }
+            folderPath = path.join(root, name);
+        }
+
+        if (!folderPath) return res.status(400).json({ error: 'path or name is required' });
+
+        try {
+            folderPath = validateWorkspacePath(folderPath);
+        } catch (error) {
+            return res.status(400).json({ error: error.message });
+        }
+
+        try {
+            const result = await launchHeadlessLS(folderPath);
+            res.json(result);
+        } catch (e) {
+            console.error(`[Headless] Launch failed: ${e.message}`);
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    // List headless LS instances
+    app.get('/api/workspaces/headless', (req, res) => {
+        const { getHeadlessInstances } = require('./headless-ls');
+        res.json(getHeadlessInstances());
+    });
+
+    // Kill a headless LS instance
+    app.delete('/api/workspaces/headless/:pid', (req, res) => {
+        const { killHeadlessLS } = require('./headless-ls');
+        try {
+            const result = killHeadlessLS(req.params.pid);
+            res.json(result);
+        } catch (e) {
+            res.status(400).json({ error: e.message });
         }
     });
 
@@ -699,6 +764,7 @@ function setupRoutes(app) {
                 supportsImages: !!m.supportsImages,
                 isRecommended: !!m.isRecommended,
                 quota: m.quotaInfo?.remainingFraction ?? 1,
+                resetTime: m.quotaInfo?.resetTime || null,
             }));
             const defaultModel = data.defaultOverrideModelConfig?.modelOrAlias?.model || '';
             res.json({ models, defaultModel });

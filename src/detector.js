@@ -6,6 +6,15 @@ const path = require('path');
 const os = require('os');
 const { lsConfig, lsInstances, platform } = require('./config');
 
+// Lazy-load to avoid circular dependency (headless-ls requires config which is loaded here)
+let _isHeadlessPid = null;
+function isHeadlessPid(pid) {
+    if (!_isHeadlessPid) {
+        try { _isHeadlessPid = require('./headless-ls').isHeadlessPid; } catch { return false; }
+    }
+    return _isHeadlessPid(pid);
+}
+
 // Auto-detect Language Server process (macOS/Linux/Windows)
 async function detectLanguageServers() {
     return new Promise((resolve) => {
@@ -267,6 +276,7 @@ async function rescanNow() {
 
         for (const inst of instances) {
             if (knownPids.has(inst.pid)) continue; // already known
+            if (isHeadlessPid(inst.pid)) continue; // managed by headless-ls module
 
             const ports = await detectPorts(inst.pid);
             if (!ports.length) continue;
@@ -323,6 +333,8 @@ async function rescanNow() {
         for (let i = lsInstances.length - 1; i >= 0; i--) {
             if (!instances.find(inst => inst.pid === lsInstances[i].pid)) {
                 const removed = lsInstances[i];
+                // Headless instances handle their own cleanup via child.on('exit')
+                if (removed.headless) continue;
                 console.log(`[-] Workspace gone: ${removed.workspaceName} (PID: ${removed.pid})`);
                 // Cleanup cascade state for this dead instance before removing
                 const { cleanupByInstance } = require('./cleanup');

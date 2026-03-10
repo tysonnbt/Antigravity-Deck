@@ -60,8 +60,10 @@ setupWebSocket(wss);
 
 // Start
 server.listen(PORT, async () => {
-  console.log(`\n  💬 Chat Mirror v2 (API) running at http://localhost:${PORT}\n`);
+  console.log(`\n  💬 Antigravity Deck (API) running at http://localhost:${PORT}\n`);
   await init(() => startPolling());
+  const { startResourceMonitor } = require('./src/resource-monitor');
+  startResourceMonitor();
   startAutoRescan();
 
   // Auto-start Agent Bridge if configured in settings.json

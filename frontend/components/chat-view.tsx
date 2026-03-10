@@ -253,7 +253,7 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
             if (activeCascadeId) {
                 await cascadeSend(activeCascadeId, text, selectedModel || undefined, mediaItems);
             } else {
-                const result = await cascadeSubmit(text, selectedModel || undefined, mediaItems);
+                const result = await cascadeSubmit(text, selectedModel || undefined, mediaItems, currentWorkspace || undefined);
                 const newId = result.cascadeId;
                 setLocalCascadeId(newId);
                 onCascadeCreated(newId);

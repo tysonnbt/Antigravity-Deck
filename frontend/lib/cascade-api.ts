@@ -10,6 +10,49 @@ export interface Workspace {
     workspaceFolderUri: string;
     category: 'workspace' | 'playground';
     port: number;
+    headless?: boolean;
+}
+
+export interface WorkspaceResources {
+    cpuPercent: number;
+    memBytes: number;
+    memMB: number;
+    name?: string;
+    headless?: boolean;
+}
+
+export interface SystemResources {
+    cpuPercent: number;
+    memUsedMB: number;
+    memTotalMB: number;
+    memPercent: number;
+    cpuCores: number;
+}
+
+export interface ResourceHistoryPoint {
+    t: number;
+    cpu: number;
+    mem: number;
+}
+
+export interface ResourceSnapshot {
+    system: SystemResources;
+    selfStats: SelfStats;
+    workspaces: Record<string, WorkspaceResources>;
+    history: ResourceHistoryPoint[];
+}
+
+export interface SelfProcessStats {
+    pid: number | null;
+    cpuPercent: number;
+    memMB: number;
+}
+
+export interface SelfStats {
+    backend: SelfProcessStats;
+    frontend: SelfProcessStats;
+    totalCpuPercent: number;
+    totalMemMB: number;
 }
 
 export interface CascadeModel {
@@ -92,6 +135,13 @@ export async function getWorkspaces(): Promise<Workspace[]> {
     return res.json();
 }
 
+// Get CPU/RAM resource stats for all workspace PIDs
+export async function getWorkspaceResources(): Promise<ResourceSnapshot> {
+    const res = await fetch(`${API_BASE}/api/workspaces/resources`, { headers: authHeaders() });
+    if (!res.ok) throw new Error(`Resources failed: ${res.status}`);
+    return res.json();
+}
+
 
 // Create/open a workspace — accepts { name } or { path }
 export async function createWorkspace(nameOrPath: string, isName = false): Promise<{ created: boolean; alreadyOpen?: boolean; workspace?: { pid: string; workspaceName: string; port: number }; message?: string }> {
@@ -101,6 +151,30 @@ export async function createWorkspace(nameOrPath: string, isName = false): Promi
         body: JSON.stringify(isName ? { name: nameOrPath } : { path: nameOrPath }),
     });
     if (!res.ok) throw new Error(`Create failed: ${res.status}`);
+    return res.json();
+}
+
+// Create a headless workspace (no IDE UI) — requires running IDE for auth
+export async function createHeadlessWorkspace(nameOrPath: string, isName = false): Promise<{ created: boolean; alreadyRunning?: boolean; workspace?: { pid: string; workspaceName: string; port: number; headless: boolean }; error?: string }> {
+    const res = await fetch(`${API_BASE}/api/workspaces/create-headless`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify(isName ? { name: nameOrPath } : { path: nameOrPath }),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(err.error || `Create headless failed: ${res.status}`);
+    }
+    return res.json();
+}
+
+// Kill a headless workspace
+export async function killHeadlessWorkspace(pid: string): Promise<{ killed: boolean; workspace: string }> {
+    const res = await fetch(`${API_BASE}/api/workspaces/headless/${pid}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+    });
+    if (!res.ok) throw new Error(`Kill headless failed: ${res.status}`);
     return res.json();
 }
 

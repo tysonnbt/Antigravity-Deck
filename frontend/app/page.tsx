@@ -25,6 +25,7 @@ import { AuthGate } from '@/components/auth-gate';
 import { AgentLogsView } from '@/components/agent-logs-view';
 import { AgentBridgeView } from '@/components/agent-bridge-view';
 import { SourceControlView } from '@/components/source-control-view';
+import { ResourceMonitorView } from '@/components/resource-monitor-view';
 
 // Lazy-load components that are hidden by default
 const AnalyticsPanel = dynamic(() => import('@/components/analytics-panel').then(m => ({ default: m.AnalyticsPanel })), { ssr: false });
@@ -41,7 +42,8 @@ function getStoredValue<T>(key: string, fallback: T): T {
 }
 
 export default function Home() {
-  const { connected, steps, baseIndex, stepCount, loadingOlder, conversations, currentConvId, cascadeStatus, conversationsVersion, selectConversation, lastUpdate, loadOlder } = useWebSocket();
+const { connected, steps, baseIndex, stepCount, loadingOlder, conversations, currentConvId, cascadeStatus, conversationsVersion, stepContentVersion, workspaceResources, selectConversation, lastUpdate, loadOlder } = useWebSocket();
+
 
   const [showAnalytics, setShowAnalytics] = useState(() => getStoredValue('antigravity-show-analytics', false));
   const [showTimeline, setShowTimeline] = useState(() => {
@@ -94,6 +96,7 @@ export default function Home() {
   const [showBridge, setShowBridge] = useState(() => getStoredValue('antigravity-show-bridge', false));
   // NEW: When true, show Source Control / IDE view in main panel
   const [showSourceControl, setShowSourceControl] = useState(false);
+  const [showResources, setShowResources] = useState(false);
   // Bumped when sidebar creates a workspace, so panels refresh their lists
   const [wsVersion, setWsVersion] = useState(0);
 
@@ -120,7 +123,7 @@ export default function Home() {
     if (storedConvId) {
       selectConversation(storedConvId);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // run once on mount
 
   // Step detail state
@@ -139,6 +142,7 @@ export default function Home() {
     setShowLogs(false);
     setShowBridge(false);
     setShowSourceControl(false);
+    setShowResources(false);
   }, []);
 
   // === Sidebar: click workspace → show conversation list ===
@@ -218,6 +222,14 @@ export default function Home() {
     setShowSourceControl(true);
   }, [selectConversation, resetPanels]);
 
+  // === Show Resources ===
+  const handleShowResources = useCallback(() => {
+    selectConversation(null);
+    resetPanels();
+    setActiveWorkspace(null);
+    setShowResources(true);
+  }, [selectConversation, resetPanels]);
+
   // === Go Home — reset all navigation state to welcome screen ===
   const handleGoHome = useCallback(() => {
     selectConversation(null);
@@ -227,6 +239,7 @@ export default function Home() {
     setShowSettings(false);
     setShowLogs(false);
     setShowBridge(false);
+    setShowResources(false);
   }, [selectConversation]);
 
   // When CascadePanel creates a new cascade, track it
@@ -347,8 +360,8 @@ export default function Home() {
 
   // === Determine what to show in main panel ===
   const showChat = currentConvId !== null || newChatMode;
-  const showConversationList = !showChat && !showAccountInfo && !showSettings && !showLogs && !showBridge && !showSourceControl && activeWorkspace !== null;
-  const showWelcome = !showChat && !showConversationList && !showAccountInfo && !showSettings && !showLogs && !showBridge && !showSourceControl;
+  const showConversationList = !showChat && !showAccountInfo && !showSettings && !showLogs && !showBridge && !showSourceControl && !showResources && activeWorkspace !== null;
+  const showWelcome = !showChat && !showConversationList && !showAccountInfo && !showSettings && !showLogs && !showBridge && !showSourceControl && !showResources;
 
   return (
     <AuthGate>
@@ -358,6 +371,7 @@ export default function Home() {
           currentConvId={currentConvId}
           conversationsVersion={conversationsVersion}
           activeWorkspace={activeWorkspace}
+          workspaceResources={workspaceResources}
           onSelectWorkspace={handleSelectWorkspace}
           onSelectConversation={handleSelectConversation}
           onShowAccountInfo={handleShowAccountInfo}
@@ -365,6 +379,7 @@ export default function Home() {
           onShowLogs={handleShowLogs}
           onShowBridge={handleShowBridge}
           onShowSourceControl={handleShowSourceControl}
+          onShowResources={handleShowResources}
           onGoHome={handleGoHome}
           onWorkspaceCreated={handleWorkspaceCreated}
           wsVersion={wsVersion}
@@ -383,7 +398,7 @@ export default function Home() {
                   <span className="font-semibold text-sm truncate max-w-[120px] sm:max-w-[200px]">{activeWorkspace}</span>
                 ) : (
                   <>
-                    <span className="font-semibold text-sm">Chat Mirror</span>
+                    <span className="font-semibold text-sm">Antigravity Deck</span>
                     <Badge variant="outline" className="text-[9px] h-4 px-1 font-mono inline-flex">v3</Badge>
                   </>
                 )}
@@ -471,7 +486,7 @@ export default function Home() {
                   {[
                     'Open Antigravity IDE',
                     'Open a project folder in Antigravity',
-                    'Chat Mirror will auto-detect it within ~10 seconds',
+                    'Antigravity Deck will auto-detect it within ~10 seconds',
                   ].map((text, i) => (
                     <li key={i} className="flex items-start gap-3 text-sm text-muted-foreground">
                       <span className="flex-shrink-0 w-5 h-5 rounded-full bg-muted/30 flex items-center justify-center text-xs font-medium text-muted-foreground/80">
@@ -542,6 +557,13 @@ export default function Home() {
             </div>
           )}
 
+          {/* Resource Monitor panel */}
+          {showResources && (
+            <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <ResourceMonitorView />
+            </div>
+          )}
+
           {showConversationList && (
             <ConversationList
               workspaceName={activeWorkspace!}
@@ -591,7 +613,7 @@ export default function Home() {
           {/* Footer */}
           <footer className="flex items-center justify-between px-2 sm:px-4 h-8 bg-background border-t border-border flex-shrink-0 text-[10px] text-muted-foreground/60 safe-area-bottom">
             <div className="flex items-center gap-2 sm:gap-3">
-              <span><FolderSync className="w-3 h-3 inline-block mr-1" />Chat Mirror v3</span>
+              <span><FolderSync className="w-3 h-3 inline-block mr-1" />Antigravity Deck v3</span>
               <span className="w-px h-3 bg-border hidden sm:block" />
               <span className="hidden sm:inline">AntigravityChat</span>
             </div>

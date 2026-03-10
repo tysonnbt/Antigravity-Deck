@@ -6,7 +6,8 @@ import { extractStepContent } from './step-utils';
 import { showNotification } from './notifications';
 import { API_BASE, getWsUrl } from './config';
 import { authHeaders, authWsUrl } from './auth';
-import { getCascadeStatus } from './cascade-api';
+import { getCascadeStatus, getWorkspaceResources } from './cascade-api';
+import type { ResourceSnapshot } from './cascade-api';
 
 interface WSState {
     connected: boolean;
@@ -20,6 +21,7 @@ interface WSState {
     lastUpdate: string;
     conversationsVersion: number; // bumped when backend discovers new conversations
     stepContentVersion: number; // bumped on step_updated (streaming content changes)
+    workspaceResources: ResourceSnapshot | null; // full resource snapshot
 }
 
 export function useWebSocket() {
@@ -40,6 +42,7 @@ export function useWebSocket() {
         lastUpdate: '',
         conversationsVersion: 0,
         stepContentVersion: 0,
+        workspaceResources: null,
     });
     const wsRef = useRef<WebSocket | null>(null);
     const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -79,6 +82,10 @@ export function useWebSocket() {
                 if (convId && ws.readyState === 1) {
                     ws.send(JSON.stringify({ type: 'set_conversation', conversationId: convId }));
                 }
+                // Fetch initial resource data immediately (don't wait for first 5s broadcast)
+                getWorkspaceResources()
+                    .then(data => setState(prev => ({ ...prev, workspaceResources: data })))
+                    .catch(() => { /* ignore — resource monitor may not be ready */ });
             };
 
             ws.onmessage = (event) => {
@@ -166,6 +173,9 @@ export function useWebSocket() {
                         // Backend discovered new conversations — bump version to trigger sidebar refresh
                         console.log('[WS] conversations_updated — refreshing sidebar');
                         setState(prev => ({ ...prev, conversationsVersion: prev.conversationsVersion + 1 }));
+                    } else if (data.type === 'workspace_resources') {
+                        // Resource monitor broadcast — update workspace CPU/RAM stats
+                        setState(prev => ({ ...prev, workspaceResources: data.data || {} }));
                     }
                 } catch (e) {
                     console.error('WS parse error:', e);
