@@ -103,9 +103,11 @@ function setAutoAccept(val) {
 
 // --- Build interaction payload from WAITING step data ---
 
-function buildInteraction(stepInfo) {
+function buildInteraction(stepInfo, options = {}) {
     const { trajectoryId, stepIndex, step } = stepInfo;
     if (!trajectoryId || stepIndex === undefined || !step) return null;
+    
+    const { autoAcceptMode = false } = options; // Flag to distinguish auto-accept vs manual
 
     const interaction = { trajectoryId, stepIndex };
     const stepType = (step.type || '').replace('CORTEX_STEP_TYPE_', '');
@@ -164,9 +166,20 @@ function buildInteraction(stepInfo) {
                     };
                     console.log(`[AutoAccept] File permission for: ${filePath}`);
                 } else {
-                    // Out-of-workspace files: skip auto-accept entirely, let LS handle it
-                    console.warn(`[AutoAccept] Skipping auto-accept (outside workspace): ${filePath}`);
-                    return null; // Signal to caller: don't send any interaction
+                    // Out-of-workspace files: behavior depends on mode
+                    if (autoAcceptMode) {
+                        // Auto-accept: skip entirely, let LS handle it
+                        console.warn(`[AutoAccept] Skipping auto-accept (outside workspace): ${filePath}`);
+                        return null; // Signal to caller: don't send any interaction
+                    } else {
+                        // Manual accept/reject: allow user to explicitly approve/deny
+                        interaction.filePermission = {
+                            allow: true,
+                            scope: 'PERMISSION_SCOPE_ONCE',
+                            absolutePathUri: filePath,
+                        };
+                        console.log(`[AutoAccept] Manual file permission for out-of-workspace: ${filePath}`);
+                    }
                 }
             } else {
                 interaction.codeAction = { confirm: true };
@@ -207,9 +220,16 @@ function buildInteraction(stepInfo) {
                     interaction.filePermission = { allow: true, scope: 'PERMISSION_SCOPE_ONCE', absolutePathUri: fp };
                     console.log(`[AutoAccept] File permission (default) for: ${fp}`);
                 } else {
-                    // Out-of-workspace files: skip auto-accept entirely, let LS handle it
-                    console.warn(`[AutoAccept] Skipping auto-accept (outside workspace, default branch): ${fp}`);
-                    return null; // Signal to caller: don't send any interaction
+                    // Out-of-workspace files: behavior depends on mode
+                    if (autoAcceptMode) {
+                        // Auto-accept: skip entirely, let LS handle it
+                        console.warn(`[AutoAccept] Skipping auto-accept (outside workspace, default branch): ${fp}`);
+                        return null; // Signal to caller: don't send any interaction
+                    } else {
+                        // Manual accept/reject: allow user to explicitly approve/deny
+                        interaction.filePermission = { allow: true, scope: 'PERMISSION_SCOPE_ONCE', absolutePathUri: fp };
+                        console.log(`[AutoAccept] Manual file permission (default) for out-of-workspace: ${fp}`);
+                    }
                 }
             } else {
                 console.log(`[AutoAccept] Unknown step type for interaction: ${stepType}, attempting generic confirm`);
@@ -236,7 +256,7 @@ async function handleAutoAcceptDirect(cascadeId, inst, stepInfo = null) {
     // — otherwise the step stays stuck for 15s with no retry.
     const body = { cascadeId };
     if (stepInfo) {
-        const interaction = buildInteraction(stepInfo);
+        const interaction = buildInteraction(stepInfo, { autoAcceptMode: true });
         if (interaction) {
             body.interaction = interaction;
             console.log(`[AutoAccept] >>> Accepting ${cascadeId.substring(0, 8)} step[${stepInfo.stepIndex}] on ${inst.workspaceName}:${inst.port} (${(stepInfo.step?.type || '').replace('CORTEX_STEP_TYPE_', '')})`);
