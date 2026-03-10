@@ -294,6 +294,9 @@ async function rescanNow() {
                 if (existingIdx >= 0) {
                     const old = lsInstances[existingIdx];
                     console.log(`[~] Replacing stale workspace: ${old.workspaceName} (PID: ${old.pid} → ${inst.pid})`);
+                    // Cleanup old instance's cascade state before replacing
+                    const { cleanupByInstance } = require('./cleanup');
+                    cleanupByInstance(old);
                     const wasActive = old.active;
                     lsInstances[existingIdx] = {
                         pid: inst.pid,
@@ -333,6 +336,9 @@ async function rescanNow() {
                 // Headless instances handle their own cleanup via child.on('exit')
                 if (removed.headless) continue;
                 console.log(`[-] Workspace gone: ${removed.workspaceName} (PID: ${removed.pid})`);
+                // Cleanup cascade state for this dead instance before removing
+                const { cleanupByInstance } = require('./cleanup');
+                cleanupByInstance(removed);
                 // If this was the active instance, switch to another
                 if (removed.active && lsInstances.length > 1) {
                     const nextIdx = i === 0 ? 1 : 0;

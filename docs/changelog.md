@@ -4,6 +4,13 @@ All notable changes made by Claude Code are documented here.
 
 ## [2026-03-10]
 
+### Added
+- **Centralized resource cleanup** (`src/cleanup.js`): Single module coordinates cascade termination, polling stop, cache clear to prevent resource leaks.
+- **Step windowing architecture**: Memory-bounded conversation history with lazy loading.
+  - **Backend**: Tail-window fetch in `step-cache.js`, window trimming in `poller.js`, new `GET /api/conversations/:id/steps/older` endpoint.
+  - **Frontend**: Windowed state in `useWebSocket()`, scroll-up trigger in `chat-view.tsx`, `loadOlderSteps()` API in `cascade-api.ts`.
+  - **Config**: New constants `STEP_WINDOW_SIZE` and `STEP_LOAD_CHUNK` in `config.js`.
+
 ### Refactored
 - **UI consistency audit & fix**: Khảo sát toàn bộ codebase và fix tất cả UI inconsistencies theo design guidelines.
   - **Text sizes** (29 chỗ, 14 files): `text-[11px]`→`text-xs`, `text-[8px]`→`text-[9px]`, `text-[14px]`→`text-sm`
@@ -14,6 +21,15 @@ All notable changes made by Claude Code are documented here.
 
 ### Changed
 - **Design guidelines updated** (`docs/design-guidelines.md`): Bổ sung tech stack table, semantic status color palette (8 loại), chat message colors, bookmark colors, data visualization colors, git/diff/role color maps, z-index scale, accessibility section, banned text sizes rule, component sizing guideline.
+- **Polling with windowing**: `poller.js` now maintains bounded tail window; baseIndex metadata broadcast with each steps_new event.
+- **Step cache windowed fetch**: `step-cache.js` loads STEP_LOAD_CHUNK at a time instead of all steps.
+- **Frontend step state**: WSState now includes baseIndex field for window offset tracking.
+- **Chat UI scroll handling**: `chat-view.tsx` detects viewport scroll-up near conversation start; triggers `loadOlder()` for pagination.
+- **Agent-bridge lifecycle**: Integrates cleanup module for graceful cascade termination.
+
+### Fixed
+- **Memory leak in long conversations**: Unbounded step accumulation caused heap bloat and GC pauses. Window management keeps memory O(STEP_WINDOW_SIZE) regardless of conversation length.
+- **Stale polling on cascade end**: Cleanup module ensures polling stops immediately; no orphaned intervals.
 
 ## [2026-03-09]
 

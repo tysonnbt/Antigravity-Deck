@@ -219,14 +219,21 @@ function ScrollControls({ containerRef, show }: { containerRef: React.RefObject<
 }
 
 // === Chat Area ===
-export function ChatArea({ steps, searchQuery, activeFilters, onStepClick, bookmarkedSteps }: {
+export function ChatArea({ steps, searchQuery, activeFilters, onStepClick, bookmarkedSteps, baseIndex, loadingOlder, onLoadOlder }: {
     steps: Step[]; searchQuery: string; activeFilters: Set<string>;
     onStepClick?: (i: number) => void; bookmarkedSteps?: Set<number>;
+    baseIndex?: number; loadingOlder?: boolean; onLoadOlder?: () => void;
 }) {
     const bottomRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [autoScroll, setAutoScroll] = useState(true);
     const [showScrollBtns, setShowScrollBtns] = useState(false);
+    const [scrollProgress, setScrollProgress] = useState(0);
+    // Track previous baseIndex to detect older-steps prepend
+    const prevBaseIndexRef = useRef(baseIndex ?? 0);
+    const prevStepsLenRef = useRef(steps.length);
+
+    const hasOlderSteps = (baseIndex ?? 0) > 0;
 
     const groups = useMemo(() => groupSteps(steps), [steps]);
 
@@ -240,11 +247,39 @@ export function ChatArea({ steps, searchQuery, activeFilters, onStepClick, bookm
         if (autoScroll) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [filteredGroups.length, steps.length, autoScroll]);
 
+    // Preserve scroll position when older steps are prepended
+    useEffect(() => {
+        const el = containerRef.current;
+        if (!el) return;
+
+        const curBase = baseIndex ?? 0;
+        const prevBase = prevBaseIndexRef.current;
+        const newLen = steps.length;
+        const prevLen = prevStepsLenRef.current;
+
+        // Detect prepend: steps grew AND baseIndex decreased
+        if (newLen > prevLen && curBase < prevBase) {
+            const addedCount = newLen - prevLen;
+            // Estimate ~80px avg height per step, adjust scrollTop to maintain position
+            el.scrollTop += addedCount * 80;
+        }
+
+        prevBaseIndexRef.current = curBase;
+        prevStepsLenRef.current = newLen;
+    }, [steps.length, baseIndex]);
+
     const handleScroll = () => {
         if (!containerRef.current) return;
         const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
         setAutoScroll(scrollHeight - scrollTop <= clientHeight + 100);
         setShowScrollBtns(scrollHeight > clientHeight + 200);
+        // Track reading progress for progress bar
+        const maxScroll = scrollHeight - clientHeight;
+        setScrollProgress(maxScroll > 0 ? Math.min(100, (scrollTop / maxScroll) * 100) : 0);
+        // Trigger load-older when user scrolls near top
+        if (scrollTop < 100 && hasOlderSteps && !loadingOlder && onLoadOlder) {
+            onLoadOlder();
+        }
     };
 
     if (steps.length === 0) {
@@ -269,16 +304,27 @@ export function ChatArea({ steps, searchQuery, activeFilters, onStepClick, bookm
                     <div className="h-[2px] bg-border/30">
                         <div
                             className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-emerald-500 transition-all duration-300"
-                            style={{
-                                width: containerRef.current
-                                    ? `${Math.min(100, (containerRef.current.scrollTop / (containerRef.current.scrollHeight - containerRef.current.clientHeight)) * 100)}%`
-                                    : '0%'
-                            }}
+                            style={{ width: `${scrollProgress}%` }}
                         />
                     </div>
                 </div>
 
                 <div className="max-w-4xl mx-auto">
+                    {/* Load older steps trigger */}
+                    {hasOlderSteps && (
+                        <div className="flex justify-center py-2 text-xs text-muted-foreground">
+                            {loadingOlder ? (
+                                <span className="animate-pulse">Loading older steps...</span>
+                            ) : (
+                                <button
+                                    onClick={onLoadOlder}
+                                    className="hover:text-foreground transition-colors cursor-pointer"
+                                >
+                                    ↑ Load older steps ({baseIndex} more above)
+                                </button>
+                            )}
+                        </div>
+                    )}
                     {filteredGroups.map((group, gIdx) => {
                         if (group.type === 'user') {
                             const { step, originalIndex } = group.steps[0];

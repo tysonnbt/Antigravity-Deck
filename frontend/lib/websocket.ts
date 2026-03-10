@@ -12,6 +12,9 @@ import type { ResourceSnapshot } from './cascade-api';
 interface WSState {
     connected: boolean;
     steps: Step[];
+    baseIndex: number;        // server index of steps[0]
+    stepCount: number;        // total steps known to server
+    loadingOlder: boolean;    // true while fetching older steps
     conversations: Record<string, TrajectorySummary>;
     currentConvId: string | null;
     cascadeStatus: string | null;
@@ -30,6 +33,9 @@ export function useWebSocket() {
     const [state, setState] = useState<WSState>({
         connected: false,
         steps: [] as Step[],
+        baseIndex: 0,
+        stepCount: 0,
+        loadingOlder: false,
         conversations: {} as Record<string, TrajectorySummary>,
         currentConvId: storedConvId,
         cascadeStatus: null,
@@ -90,13 +96,15 @@ export function useWebSocket() {
                         setState(prev => ({ ...prev, connected: data.detected }));
                         if (data.detected) loadConversationsRef.current();
                     } else if (data.type === 'steps_init') {
-                        console.log('[WS] steps_init:', data.steps?.length, 'for', data.conversationId?.substring(0, 8));
+                        console.log('[WS] steps_init:', data.steps?.length, 'for', data.conversationId?.substring(0, 8), 'baseIndex:', data.baseIndex, 'stepCount:', data.stepCount);
                         setState(prev => {
                             // Only accept init for current conversation
                             if (data.conversationId && data.conversationId !== prev.currentConvId) return prev;
                             return {
                                 ...prev,
                                 steps: data.steps || [],
+                                baseIndex: data.baseIndex ?? 0,
+                                stepCount: data.stepCount ?? (data.steps?.length || 0),
                                 lastUpdate: new Date().toLocaleTimeString(),
                             };
                         });
@@ -129,9 +137,14 @@ export function useWebSocket() {
                             const actualNew = newSteps.slice(skipCount);
                             console.log(`[WS] steps_new: ${newSteps.length} incoming, currentLen=${currentLen}, total=${data.total}, expectedStart=${expectedStart}, skipCount=${skipCount}, actualNew=${actualNew.length}`);
                             if (actualNew.length === 0) return prev;
+                            // Update stepCount from backend metadata
+                            const newStepCount = data.baseIndex !== undefined
+                                ? (data.baseIndex + (data.total || (currentLen + actualNew.length)))
+                                : prev.stepCount + actualNew.length;
                             return {
                                 ...prev,
                                 steps: [...prev.steps, ...actualNew],
+                                stepCount: newStepCount,
                                 lastUpdate: new Date().toLocaleTimeString(),
                             };
                         });
@@ -144,11 +157,12 @@ export function useWebSocket() {
                     } else if (data.type === 'step_updated') {
                         setState(prev => {
                             if (data.conversationId && data.conversationId !== prev.currentConvId) return prev;
+                            // Convert server-absolute index to local array index
+                            const localIndex = data.index - prev.baseIndex;
+                            if (localIndex < 0 || localIndex >= prev.steps.length) return prev;
                             const updated = [...prev.steps];
-                            if (data.index >= 0 && data.index < updated.length) {
-                                updated[data.index] = data.step;
-                            }
-                            return { ...prev, steps: updated, lastUpdate: new Date().toLocaleTimeString(), stepContentVersion: prev.stepContentVersion + 1 };
+                            updated[localIndex] = data.step;
+                            return { ...prev, steps: updated, lastUpdate: new Date().toLocaleTimeString() };
                         });
                     } else if (data.type === 'cascade_status') {
                         setState(prev => {
@@ -181,11 +195,53 @@ export function useWebSocket() {
 
     const selectConversation = useCallback((id: string | null) => {
         currentConvIdRef.current = id; // update ref immediately for WS handlers
-        setState(prev => ({ ...prev, currentConvId: id, steps: [], cascadeStatus: null }));
+        setState(prev => ({
+            ...prev,
+            currentConvId: id,
+            steps: [],
+            baseIndex: 0,
+            stepCount: 0,
+            loadingOlder: false,
+            cascadeStatus: null,
+        }));
         if (id && wsRef.current?.readyState === 1) {
             wsRef.current.send(JSON.stringify({ type: 'set_conversation', conversationId: id }));
         }
     }, []);
+
+    // Load older steps on scroll-up (calls backend binary protobuf endpoint)
+    const loadOlder = useCallback(async () => {
+        const convId = currentConvIdRef.current;
+        if (!convId) return;
+
+        // Guard: skip if already loading or no older steps exist
+        const currentState = state;
+        if (currentState.loadingOlder || currentState.baseIndex === 0) return;
+
+        setState(prev => {
+            if (prev.loadingOlder || prev.baseIndex === 0) return prev;
+            return { ...prev, loadingOlder: true };
+        });
+
+        try {
+            const { loadOlderSteps } = await import('./cascade-api');
+            const result = await loadOlderSteps(convId);
+
+            setState(prev => {
+                if (prev.currentConvId !== convId) return { ...prev, loadingOlder: false };
+                if (result.steps.length === 0) return { ...prev, loadingOlder: false };
+                return {
+                    ...prev,
+                    steps: [...result.steps, ...prev.steps],
+                    baseIndex: result.baseIndex,
+                    loadingOlder: false,
+                };
+            });
+        } catch (e) {
+            console.error('[WS] loadOlder failed:', e);
+            setState(prev => ({ ...prev, loadingOlder: false }));
+        }
+    }, [state.loadingOlder, state.baseIndex]);
 
     useEffect(() => {
         connect();
@@ -208,5 +264,5 @@ export function useWebSocket() {
         return () => clearInterval(fallback);
     }, []);
 
-    return { ...state, selectConversation, loadConversations };
+    return { ...state, selectConversation, loadConversations, loadOlder };
 }

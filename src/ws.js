@@ -38,7 +38,9 @@ function setupWebSocket(wss, { ensureCached, stepCache }) {
                     sendToOne(ws, {
                         type: 'steps_init',
                         conversationId: msg.conversationId,
-                        steps: cache ? cache.steps : []
+                        steps: cache ? cache.steps : [],
+                        baseIndex: cache ? (cache.baseIndex || 0) : 0,
+                        stepCount: cache ? (cache.stepCount || 0) : 0,
                     });
                 } else if (msg.type === 'subscribe_all') {
                     // Live Logs mode: receive all broadcasts regardless of conversation

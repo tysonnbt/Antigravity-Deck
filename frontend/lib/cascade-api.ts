@@ -1,6 +1,7 @@
 // === Cascade API Client ===
 import { API_BASE } from './config';
 import { authHeaders } from './auth';
+import type { Step } from './types';
 
 export interface Workspace {
     pid: string;
@@ -347,6 +348,18 @@ export async function listWorkspaceDir(workspace: string, subpath = ''): Promise
     const url = `${API_BASE}/api/workspaces/${encodeURIComponent(workspace)}/fs/list${subpath ? `?path=${encodeURIComponent(subpath)}` : ''}`;
     const res = await fetch(url, { headers: authHeaders() });
     if (!res.ok) throw new Error(`Dir list failed: ${res.status}`);
+    return res.json();
+}
+
+// Load older steps for scroll-up pagination (binary protobuf on backend)
+export async function loadOlderSteps(
+    conversationId: string
+): Promise<{ steps: Step[]; baseIndex: number; hasMore: boolean }> {
+    const res = await fetch(
+        `${API_BASE}/api/conversations/${conversationId}/steps/older`,
+        { headers: authHeaders() }
+    );
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
 }
 

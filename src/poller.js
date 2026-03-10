@@ -3,7 +3,7 @@
 // Broadcasts updates via WebSocket to connected UI clients.
 // Also subscribes to LS SSE stream for real-time status updates.
 
-const { lsConfig, lsInstances, POLL_INTERVAL, FAST_POLL_INTERVAL, SLOW_POLL_INTERVAL } = require('./config');
+const { lsConfig, lsInstances, POLL_INTERVAL, FAST_POLL_INTERVAL, SLOW_POLL_INTERVAL, STEP_WINDOW_SIZE } = require('./config');
 const { callApi, callApiOnInstance } = require('./api');
 const { countBinarySteps, decodeBinarySteps } = require('./protobuf');
 // NOTE: ws.js is NOT imported at top level to avoid circular dependency:
@@ -162,7 +162,7 @@ async function pollNow() {
             const isRunning = info.status === 'CASCADE_RUN_STATUS_RUNNING' ||
                 info.status === 'CASCADE_RUN_STATUS_WAITING_FOR_USER';
             const cached = stepCache[cascadeId];
-            const serverAhead = cached && info.stepCount > cached.steps.length;
+            const serverAhead = cached && info.stepCount > (cached.baseIndex || 0) + cached.steps.length;
 
             if (isRunning || serverAhead) {
                 await pollConversation(cascadeId, info);
@@ -203,7 +203,7 @@ async function pollConversation(activeConvId, info) {
             trajectoryId = result.trajectoryId;
         }
 
-        const cachedLen = cache.steps.length;
+        const cachedLen = (cache.baseIndex || 0) + cache.steps.length; // server-absolute end of cached window
         if (!quietPoll && newStepCount !== cachedLen) console.log(`[poll] ${activeConvId.substring(0, 8)}: cached=${cachedLen} server=${newStepCount} status=${cascadeStatus}`);
 
         // Status changes are now detected at pollNow() level (before isRunning/isUIViewed filter)
@@ -243,24 +243,28 @@ async function pollConversation(activeConvId, info) {
         let updatedCount = 0;
         let newCount = 0;
         const newStepsToAdd = [];
+        const baseIdx = cache.baseIndex || 0; // server index of cache.steps[0]
 
         for (let i = 0; i < freshSteps.length; i++) {
             const serverIdx = apiStartedAt + i; // what server index this step represents
             if (serverIdx < 0 || serverIdx >= newStepCount) continue; // out of bounds
 
             if (serverIdx < cachedLen) {
-                // Existing step — check if changed
-                const oldJson = JSON.stringify(cache.steps[serverIdx]);
-                const newJson = JSON.stringify(freshSteps[i]);
-                if (oldJson !== newJson) {
-                    cache.steps[serverIdx] = freshSteps[i];
-                    _broadcast({
-                        type: 'step_updated',
-                        conversationId: activeConvId,
-                        index: serverIdx,
-                        step: freshSteps[i]
-                    }, activeConvId);
-                    updatedCount++;
+                // Existing step — check if changed (convert to local index)
+                const localIdx = serverIdx - baseIdx;
+                if (localIdx >= 0 && localIdx < cache.steps.length) {
+                    const oldJson = JSON.stringify(cache.steps[localIdx]);
+                    const newJson = JSON.stringify(freshSteps[i]);
+                    if (oldJson !== newJson) {
+                        cache.steps[localIdx] = freshSteps[i];
+                        _broadcast({
+                            type: 'step_updated',
+                            conversationId: activeConvId,
+                            index: serverIdx,
+                            step: freshSteps[i]
+                        }, activeConvId);
+                        updatedCount++;
+                    }
                 }
             } else if (serverIdx >= cachedLen) {
                 // New step beyond cache — only add if index matches cache end
@@ -301,15 +305,17 @@ async function pollConversation(activeConvId, info) {
                 if (binCount > 0) {
                     const decoded = decodeBinarySteps(binBuf);
                     for (let j = 0; j < decoded.length && (binRefreshFrom + j) < cachedLen; j++) {
-                        const idx = binRefreshFrom + j;
-                        const oldJson = JSON.stringify(cache.steps[idx]);
+                        const sIdx = binRefreshFrom + j;
+                        const localIdx = sIdx - baseIdx;
+                        if (localIdx < 0 || localIdx >= cache.steps.length) continue;
+                        const oldJson = JSON.stringify(cache.steps[localIdx]);
                         const newJson = JSON.stringify(decoded[j]);
                         if (oldJson !== newJson) {
-                            cache.steps[idx] = decoded[j];
+                            cache.steps[localIdx] = decoded[j];
                             _broadcast({
                                 type: 'step_updated',
                                 conversationId: activeConvId,
-                                index: idx,
+                                index: sIdx,
                                 step: decoded[j]
                             }, activeConvId);
                             updatedCount++;
@@ -322,11 +328,18 @@ async function pollConversation(activeConvId, info) {
         // Broadcast new steps
         if (newStepsToAdd.length > 0) {
             cache.steps.push(...newStepsToAdd);
+            // Trim window to keep memory bounded
+            if (cache.steps.length > STEP_WINDOW_SIZE) {
+                const excess = cache.steps.length - STEP_WINDOW_SIZE;
+                cache.steps.splice(0, excess);
+                cache.baseIndex = (cache.baseIndex || 0) + excess;
+            }
             _broadcast({
                 type: 'steps_new',
                 conversationId: activeConvId,
                 steps: newStepsToAdd,
-                total: cache.steps.length
+                total: cache.steps.length,
+                baseIndex: cache.baseIndex || 0,
             }, activeConvId);
             console.log(`[WS] broadcast steps_new: ${newStepsToAdd.length} steps for ${activeConvId.substring(0, 8)} (total: ${cache.steps.length})`);
         }
@@ -472,4 +485,10 @@ function startSSE() {
     startCascadeSSE();
 }
 
-module.exports = { startPolling, startSSE, getInstanceForCascade, registerCascadeInstance };
+module.exports = {
+    startPolling, startSSE, getInstanceForCascade, registerCascadeInstance,
+    // Exposed for cleanup.js — not for general use
+    _knownConvIds: knownConvIds,
+    _lastCascadeStatusMap: lastCascadeStatusMap,
+    _cascadeInstanceMap: cascadeInstanceMap,
+};

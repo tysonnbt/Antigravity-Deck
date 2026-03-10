@@ -27,10 +27,13 @@ import { Switch } from '@/components/ui/switch';
 // === Props ===
 interface ChatViewProps {
     steps: Step[];
+    baseIndex?: number;
+    stepCount?: number;
+    loadingOlder?: boolean;
+    onLoadOlder?: () => void;
     currentConvId: string | null;
     currentWorkspace: string | null;
     wsVersion: number;
-    stepContentVersion: number;
     cascadeStatus?: string;
     onCascadeCreated: (cascadeId: string) => void;
     onNewConversation: () => void;
@@ -75,7 +78,7 @@ function generateThumbnail(base64: string, mimeType: string, maxSize = 128): Pro
 }
 
 // === Main Chat View ===
-export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, stepContentVersion, cascadeStatus, onCascadeCreated, onNewConversation, showTimeline, onSetShowTimeline, showAnalytics, onToggleAnalytics, onExport, notificationsEnabled, onToggleNotifications }: ChatViewProps) {
+export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = false, onLoadOlder, currentConvId, currentWorkspace, wsVersion, cascadeStatus, onCascadeCreated, onNewConversation, showTimeline, onSetShowTimeline, showAnalytics, onToggleAnalytics, onExport, notificationsEnabled, onToggleNotifications }: ChatViewProps) {
     const [input, setInput] = useState('');
     const [sending, setSending] = useState(false);
     // activeCascadeId: derived from currentConvId, with local override for new chats
@@ -84,6 +87,7 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, st
     const activeCascadeId = localCascadeId ?? currentConvId;
     const [showScrollBtn, setShowScrollBtn] = useState(false);
     const prevStepsLenRef = useRef(0);
+    const prevBaseIndexRef = useRef(baseIndex);
 
     // Auto-accept: synced with backend for instant server-side reaction
     const [autoAccept, setAutoAccept] = useState<boolean>(false);
@@ -126,7 +130,7 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, st
         }
     }, [input]);
 
-    // Auto-scroll: triggers on new steps (length change) AND streaming content updates (stepContentVersion)
+    // Auto-scroll: triggers on new steps (length change) AND streaming content updates (wsVersion)
     useEffect(() => {
         if (autoScrollRef.current) {
             bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -135,7 +139,21 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, st
             setShowScrollBtn(true);
         }
         prevStepsLenRef.current = steps.length;
-    }, [steps.length, stepContentVersion]);
+    }, [steps.length, wsVersion]);
+
+    // Preserve scroll position when older steps are prepended (baseIndex decreased)
+    useEffect(() => {
+        const el = containerRef.current;
+        if (el && baseIndex < prevBaseIndexRef.current && steps.length > prevStepsLenRef.current) {
+            // Older steps were prepended — estimate added height and adjust scroll
+            const addedCount = steps.length - prevStepsLenRef.current;
+            // ~80px per step is a reasonable estimate; requestAnimationFrame ensures DOM is updated
+            requestAnimationFrame(() => {
+                el.scrollTop += addedCount * 80;
+            });
+        }
+        prevBaseIndexRef.current = baseIndex;
+    }, [baseIndex, steps.length]);
 
     const handleScroll = useCallback(() => {
         if (!containerRef.current) return;
@@ -143,7 +161,11 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, st
         const atBottom = scrollHeight - scrollTop <= clientHeight + 100;
         autoScrollRef.current = atBottom;
         if (atBottom) setShowScrollBtn(false);
-    }, []);
+        // Scroll-up: trigger load older steps when near top
+        if (scrollTop < 100 && baseIndex > 0 && !loadingOlder && onLoadOlder) {
+            onLoadOlder();
+        }
+    }, [baseIndex, loadingOlder, onLoadOlder]);
 
     const scrollToBottom = useCallback(() => {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -376,7 +398,7 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, st
             if (lastText === pendingMessage) return steps;
         }
         // Append optimistic user step with image data
-        const optimisticStep: any = {
+        const optimisticStep: Step & { _media?: typeof pendingMediaRef.current } = {
             type: 'CORTEX_STEP_TYPE_USER_INPUT',
             status: 'CORTEX_STEP_STATUS_DONE',
             userInput: { items: [{ text: pendingMessage }] },
@@ -437,6 +459,21 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, st
                             </div>
                         ) : (
                             <div className="max-w-4xl mx-auto">
+                                {/* Load older steps trigger */}
+                                {baseIndex > 0 && (
+                                    <div className="flex justify-center py-3 mb-2">
+                                        {loadingOlder ? (
+                                            <span className="text-xs text-muted-foreground animate-pulse">Loading older steps...</span>
+                                        ) : (
+                                            <button
+                                                onClick={onLoadOlder}
+                                                className="text-xs text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-md hover:bg-muted/40"
+                                            >
+                                                ↑ Load older steps ({baseIndex} more above)
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
                                 {groups.map((group, gIdx) => {
                                     const isRecent = gIdx >= groups.length - 3;
                                     const animClass = isRecent ? 'message-animate' : '';
