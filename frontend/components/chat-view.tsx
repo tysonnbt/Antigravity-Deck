@@ -3,8 +3,8 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { Step } from '@/lib/types';
 import { extractStepContent, getStepConfig } from '@/lib/step-utils';
-import { cascadeSend, cascadeSubmit, cascadeCancel, cascadeInteract, getWorkspaces, getModels, getAutoAcceptState, setAutoAcceptState, saveMedia, clearConversationCache } from '@/lib/cascade-api';
-import type { Workspace, CascadeModel, MediaItem } from '@/lib/cascade-api';
+import { cascadeSend, cascadeSubmit, cascadeCancel, cascadeInteract, getWorkspaces, getModels, getAutoAcceptState, setAutoAcceptState, saveMedia, clearConversationCache, fetchWorkflows } from '@/lib/cascade-api';
+import type { Workspace, CascadeModel, MediaItem, WorkflowItem } from '@/lib/cascade-api';
 import { API_BASE } from '@/lib/config';
 import { authHeaders } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,7 @@ interface ChatViewProps {
     currentConvId: string | null;
     currentWorkspace: string | null;
     wsVersion: number;
+    stepContentVersion: number;
     cascadeStatus?: string;
     onCascadeCreated: (cascadeId: string) => void;
     onNewConversation: () => void;
@@ -49,6 +50,8 @@ import { UserMessage } from './chat/user-message';
 import { AgentResponse } from './chat/agent-response';
 import { ProcessingGroup } from './chat/processing-group';
 import { StreamingIndicator } from './chat/streaming-indicator';
+import { WorkflowAutocomplete } from './workflow-autocomplete';
+import type { WorkflowAutocompleteHandle } from './workflow-autocomplete';
 
 // Helper: generate a small thumbnail (base64) from a full-size base64 image
 function generateThumbnail(base64: string, mimeType: string, maxSize = 128): Promise<string> {
@@ -71,7 +74,7 @@ function generateThumbnail(base64: string, mimeType: string, maxSize = 128): Pro
 }
 
 // === Main Chat View ===
-export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, cascadeStatus, onCascadeCreated, onNewConversation, showTimeline, onSetShowTimeline, showAnalytics, onToggleAnalytics, onExport, notificationsEnabled, onToggleNotifications }: ChatViewProps) {
+export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, stepContentVersion, cascadeStatus, onCascadeCreated, onNewConversation, showTimeline, onSetShowTimeline, showAnalytics, onToggleAnalytics, onExport, notificationsEnabled, onToggleNotifications }: ChatViewProps) {
     const [input, setInput] = useState('');
     const [sending, setSending] = useState(false);
     // activeCascadeId: derived from currentConvId, with local override for new chats
@@ -99,6 +102,10 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, ca
     const [pendingImages, setPendingImages] = useState<{ id: string; name: string; mimeType: string; base64: string; dataUrl: string }[]>([]);
     const [pendingMessage, setPendingMessage] = useState<string | null>(null);
     const [isDragOver, setIsDragOver] = useState(false);
+    // Workflow autocomplete state
+    const [workflows, setWorkflows] = useState<WorkflowItem[]>([]);
+    const [showWorkflows, setShowWorkflows] = useState(false);
+    const [workflowQuery, setWorkflowQuery] = useState('');
     const wsPickerRef = useRef<HTMLDivElement>(null);
     const modelPickerRef = useRef<HTMLDivElement>(null);
 
@@ -118,7 +125,7 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, ca
         }
     }, [input]);
 
-    // Auto-scroll
+    // Auto-scroll: triggers on new steps (length change) AND streaming content updates (stepContentVersion)
     useEffect(() => {
         if (autoScrollRef.current) {
             bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -127,7 +134,7 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, ca
             setShowScrollBtn(true);
         }
         prevStepsLenRef.current = steps.length;
-    }, [steps.length]);
+    }, [steps.length, stepContentVersion]);
 
     const handleScroll = useCallback(() => {
         if (!containerRef.current) return;
@@ -168,6 +175,8 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, ca
             .catch(() => { });
         // Load auto-accept state from backend
         getAutoAcceptState().then(s => setAutoAccept(s.enabled)).catch(() => { });
+        // Load workflows
+        fetchWorkflows(currentWorkspace || undefined).then(setWorkflows).catch(() => { });
     }, [wsVersion, currentWorkspace]);
 
     // Reset localCascadeId when currentConvId changes
@@ -331,10 +340,30 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, ca
         onNewConversation();
     }, [onNewConversation]);
 
-    // Key handling
+    // Workflow autocomplete: detect "/" at start of input
+    const handleInputChange = useCallback((val: string) => {
+        setInput(val);
+        if (val.startsWith('/')) {
+            setShowWorkflows(true);
+            setWorkflowQuery(val.slice(1)); // text after "/"
+        } else {
+            setShowWorkflows(false);
+        }
+    }, []);
+
+    // Workflow selection: insert slash command into input (user sends manually)
+    const handleWorkflowSelect = useCallback((workflow: WorkflowItem) => {
+        setShowWorkflows(false);
+        setInput(workflow.slash + ' ');
+        inputRef.current?.focus();
+    }, []);
+
+    // Key handling — workflow autocomplete intercepts arrow/enter/escape first
+    const autocompleteRef = useRef<WorkflowAutocompleteHandle | null>(null);
     const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+        if (showWorkflows && autocompleteRef.current?.handleKeyDown(e)) return;
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
-    }, [handleSend]);
+    }, [handleSend, showWorkflows]);
 
     // Merge optimistic pending message into displayed steps
     const displaySteps = useMemo(() => {
@@ -627,7 +656,16 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, ca
                             <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImagePick} />
 
                             {/* Input area */}
-                            <div className="flex items-end gap-2">
+                            <div className="relative flex items-end gap-2">
+                                {/* Workflow autocomplete popup */}
+                                <WorkflowAutocomplete
+                                    query={workflowQuery}
+                                    workflows={workflows}
+                                    visible={showWorkflows}
+                                    onSelect={handleWorkflowSelect}
+                                    onClose={() => setShowWorkflows(false)}
+                                    ref={autocompleteRef}
+                                />
                                 <Button
                                     variant="ghost"
                                     size="icon"
@@ -652,7 +690,7 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, ca
                                 <Textarea
                                     ref={inputRef}
                                     value={input}
-                                    onChange={e => setInput(e.target.value)}
+                                    onChange={e => handleInputChange(e.target.value)}
                                     onKeyDown={handleKeyDown}
                                     onPaste={handlePaste}
                                     placeholder={currentConvId ? "Continue conversation..." : "Start a new conversation..."}

@@ -43,8 +43,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-
-import { Settings, User, Plug, Book, Globe, Moon, Sun, Plus, FolderOpen, FolderPlus, EllipsisVertical, Activity, Bot, FolderSync, Loader2, Circle } from "lucide-react"
+import { Settings, User, Plug, Book, Globe, Moon, Sun, Plus, FolderOpen, ChevronsUpDown, Activity, Bot, GitBranch, FolderPlus, EllipsisVertical, Activity, Bot, FolderSync, Loader2, Circle } from "lucide-react"
 
 import { WorkspaceGroup } from "./sidebar/workspace-group"
 import type { ConvSummary, WorkspaceData } from "./sidebar/workspace-group"
@@ -58,6 +57,7 @@ interface AppSidebarProps {
     onShowSettings: () => void
     onShowLogs: () => void
     onShowBridge: () => void
+    onShowSourceControl: () => void
     onGoHome: () => void
     activeWorkspace: string | null
     wsVersion?: number
@@ -73,6 +73,7 @@ export function AppSidebar({
     onShowSettings,
     onShowLogs,
     onShowBridge,
+    onShowSourceControl,
     onGoHome,
     activeWorkspace,
     wsVersion,
@@ -428,6 +429,10 @@ export function AppSidebar({
                                 <DropdownMenuItem onClick={onShowBridge}>
                                     <Bot className="mr-2 h-4 w-4" />
                                     <span>Agent Bridge</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={onShowSourceControl}>
+                                    <GitBranch className="mr-2 h-4 w-4" />
+                                    <span>Source Control</span>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={toggleTheme}>
                                     {isDark ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}

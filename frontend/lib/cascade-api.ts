@@ -235,6 +235,32 @@ export async function getWorkspaceFile(workspace: string, file: string): Promise
     return res.json();
 }
 
+// === Workflows (slash commands from Antigravity IDE) ===
+export interface WorkflowItem {
+    slash: string;
+    label: string;
+    description: string;
+    source: 'global' | 'workspace';
+}
+
+export async function fetchWorkflows(workspace?: string): Promise<WorkflowItem[]> {
+    const url = workspace
+        ? `${API_BASE}/api/workflows?workspace=${encodeURIComponent(workspace)}`
+        : `${API_BASE}/api/workflows`;
+    const res = await fetch(url, { headers: authHeaders() });
+    if (!res.ok) throw new Error(`Workflows failed: ${res.status}`);
+    return res.json();
+}
+
+export async function fetchWorkflowContent(name: string, workspace?: string): Promise<{ name: string; content: string; source: string }> {
+    const url = workspace
+        ? `${API_BASE}/api/workflows/${encodeURIComponent(name)}?workspace=${encodeURIComponent(workspace)}`
+        : `${API_BASE}/api/workflows/${encodeURIComponent(name)}`;
+    const res = await fetch(url, { headers: authHeaders() });
+    if (!res.ok) throw new Error(`Workflow content failed: ${res.status}`);
+    return res.json();
+}
+
 // === File Explorer ===
 export interface FsEntry {
     name: string;

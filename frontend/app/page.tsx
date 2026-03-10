@@ -24,6 +24,7 @@ import { SettingsView } from '@/components/settings-view';
 import { AuthGate } from '@/components/auth-gate';
 import { AgentLogsView } from '@/components/agent-logs-view';
 import { AgentBridgeView } from '@/components/agent-bridge-view';
+import { SourceControlView } from '@/components/source-control-view';
 
 // Lazy-load components that are hidden by default
 const AnalyticsPanel = dynamic(() => import('@/components/analytics-panel').then(m => ({ default: m.AnalyticsPanel })), { ssr: false });
@@ -40,7 +41,7 @@ function getStoredValue<T>(key: string, fallback: T): T {
 }
 
 export default function Home() {
-  const { connected, steps, conversations, currentConvId, cascadeStatus, conversationsVersion, selectConversation, lastUpdate } = useWebSocket();
+  const { connected, steps, conversations, currentConvId, cascadeStatus, conversationsVersion, stepContentVersion, selectConversation, lastUpdate } = useWebSocket();
 
   const [showAnalytics, setShowAnalytics] = useState(() => getStoredValue('antigravity-show-analytics', false));
   const [showTimeline, setShowTimeline] = useState(() => {
@@ -91,6 +92,8 @@ export default function Home() {
   const [showLogs, setShowLogs] = useState(() => getStoredValue('antigravity-show-logs', false));
   // NEW: When true, show Agent Bridge in main panel
   const [showBridge, setShowBridge] = useState(() => getStoredValue('antigravity-show-bridge', false));
+  // NEW: When true, show Source Control / IDE view in main panel
+  const [showSourceControl, setShowSourceControl] = useState(false);
   // Bumped when sidebar creates a workspace, so panels refresh their lists
   const [wsVersion, setWsVersion] = useState(0);
 
@@ -128,109 +131,92 @@ export default function Home() {
   const [bookmarkedSteps, setBookmarkedSteps] = useState<Set<number>>(new Set());
 
 
-  // === Sidebar: click workspace → show conversation list ===
-  const handleSelectWorkspace = useCallback((wsName: string) => {
-    setActiveWorkspace(wsName);
+  // Helper to reset all panel states
+  const resetPanels = useCallback(() => {
     setNewChatMode(false);
     setShowAccountInfo(false);
     setShowSettings(false);
     setShowLogs(false);
     setShowBridge(false);
+    setShowSourceControl(false);
+  }, []);
+
+  // === Sidebar: click workspace → show conversation list ===
+  const handleSelectWorkspace = useCallback((wsName: string) => {
+    setActiveWorkspace(wsName);
+    resetPanels();
     selectConversation(null);
-  }, [selectConversation]);
+  }, [selectConversation, resetPanels]);
 
   // === Sidebar or ConversationList: click conversation → open chat ===
   const handleSelectConversation = useCallback((convId: string | null, wsName: string) => {
     setActiveWorkspace(wsName);
-    setNewChatMode(false);
-    setShowAccountInfo(false);
-    setShowSettings(false);
-    setShowLogs(false);
-    setShowBridge(false);
+    resetPanels();
     selectConversation(convId);
-  }, [selectConversation]);
+  }, [selectConversation, resetPanels]);
 
   // === ConversationList: click conversation (workspace already set) ===
   const handleConvListSelect = useCallback((convId: string) => {
-    setNewChatMode(false);
-    setShowLogs(false);
-    setShowBridge(false);
+    resetPanels();
     selectConversation(convId);
-  }, [selectConversation]);
+  }, [selectConversation, resetPanels]);
 
   // === New Chat from ConversationList — show ChatView in new chat mode ===
   const handleNewChat = useCallback(() => {
     selectConversation(null);
+    resetPanels();
     setNewChatMode(true);
-    setShowAccountInfo(false);
-    setShowSettings(false);
-    setShowLogs(false);
-    setShowBridge(false);
-  }, [selectConversation]);
+  }, [selectConversation, resetPanels]);
 
   // === Start conversation from sidebar (new chat button) ===
   const handleStartConversation = useCallback(() => {
+    selectConversation(null);
+    resetPanels();
     if (activeWorkspace !== null) {
-      selectConversation(null);
       setNewChatMode(true);
-      setShowAccountInfo(false);
-      setShowSettings(false);
-      setShowLogs(false);
-      setShowBridge(false);
     } else {
-      selectConversation(null);
       setActiveWorkspace(null);
-      setNewChatMode(false);
-      setShowAccountInfo(false);
-      setShowSettings(false);
-      setShowLogs(false);
-      setShowBridge(false);
     }
-  }, [selectConversation, activeWorkspace]);
+  }, [selectConversation, activeWorkspace, resetPanels]);
 
   // === Show account info in main panel ===
   const handleShowAccountInfo = useCallback(() => {
     selectConversation(null);
-    setNewChatMode(false);
+    resetPanels();
     setActiveWorkspace(null);
     setShowAccountInfo(true);
-    setShowSettings(false);
-    setShowLogs(false);
-    setShowBridge(false);
-  }, [selectConversation]);
+  }, [selectConversation, resetPanels]);
 
   // === Show settings in main panel ===
   const handleShowSettings = useCallback(() => {
     selectConversation(null);
-    setNewChatMode(false);
+    resetPanels();
     setActiveWorkspace(null);
-    setShowAccountInfo(false);
-    setShowLogs(false);
-    setShowBridge(false);
     setShowSettings(true);
-  }, [selectConversation]);
+  }, [selectConversation, resetPanels]);
 
   // === Show Live Logs ===
   const handleShowLogs = useCallback(() => {
     selectConversation(null);
-    setNewChatMode(false);
+    resetPanels();
     setActiveWorkspace(null);
-    setShowAccountInfo(false);
-    setShowSettings(false);
-    setShowBridge(false);
     setShowLogs(true);
-  }, [selectConversation]);
+  }, [selectConversation, resetPanels]);
 
   // === Show Agent Bridge ===
   const handleShowBridge = useCallback(() => {
     selectConversation(null);
-    setNewChatMode(false);
+    resetPanels();
     setActiveWorkspace(null);
-    setShowAccountInfo(false);
-    setShowSettings(false);
-    setShowLogs(false);
     setShowBridge(true);
-  }, [selectConversation]);
+  }, [selectConversation, resetPanels]);
+
+  // === Show Source Control / IDE ===
+  const handleShowSourceControl = useCallback(() => {
+    selectConversation(null);
+    resetPanels();
+    setShowSourceControl(true);
+  }, [selectConversation, resetPanels]);
 
   // === Go Home — reset all navigation state to welcome screen ===
   const handleGoHome = useCallback(() => {
@@ -361,8 +347,8 @@ export default function Home() {
 
   // === Determine what to show in main panel ===
   const showChat = currentConvId !== null || newChatMode;
-  const showConversationList = !showChat && !showAccountInfo && !showSettings && !showLogs && !showBridge && activeWorkspace !== null;
-  const showWelcome = !showChat && !showConversationList && !showAccountInfo && !showSettings && !showLogs && !showBridge;
+  const showConversationList = !showChat && !showAccountInfo && !showSettings && !showLogs && !showBridge && !showSourceControl && activeWorkspace !== null;
+  const showWelcome = !showChat && !showConversationList && !showAccountInfo && !showSettings && !showLogs && !showBridge && !showSourceControl;
 
   return (
     <AuthGate>
@@ -378,6 +364,7 @@ export default function Home() {
           onShowSettings={handleShowSettings}
           onShowLogs={handleShowLogs}
           onShowBridge={handleShowBridge}
+          onShowSourceControl={handleShowSourceControl}
           onGoHome={handleGoHome}
           onWorkspaceCreated={handleWorkspaceCreated}
           wsVersion={wsVersion}
@@ -533,6 +520,28 @@ export default function Home() {
             <AgentBridgeView />
           </div>
 
+          {/* Source Control / IDE panel */}
+          {showSourceControl && (
+            <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              {activeWorkspace ? (
+                <SourceControlView
+                  workspace={activeWorkspace}
+                  onClose={() => setShowSourceControl(false)}
+                />
+              ) : (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="text-center space-y-3">
+                    <div className="text-4xl">📂</div>
+                    <h3 className="text-lg font-semibold text-foreground/70">No workspace selected</h3>
+                    <p className="text-sm text-muted-foreground max-w-sm">
+                      Select a workspace from the sidebar first, then open Source Control.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {showConversationList && (
             <ConversationList
               workspaceName={activeWorkspace!}
@@ -549,6 +558,7 @@ export default function Home() {
                 currentConvId={currentConvId}
                 currentWorkspace={activeWorkspace}
                 wsVersion={wsVersion}
+                stepContentVersion={stepContentVersion}
                 cascadeStatus={cascadeStatus ?? undefined}
                 onCascadeCreated={handleCascadeCreated}
                 onNewConversation={handleNewConversation}
