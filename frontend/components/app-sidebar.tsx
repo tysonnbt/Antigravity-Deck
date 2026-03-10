@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react"
-import { getWorkspaces, createWorkspace, getWorkspaceFolders } from "@/lib/cascade-api"
+import { getWorkspaces, createWorkspace, createHeadlessWorkspace, getWorkspaceFolders } from "@/lib/cascade-api"
 import type { Workspace, WorkspaceFolder } from "@/lib/cascade-api"
 import { cn } from "@/lib/utils"
 import { useTheme } from "@/lib/theme"
@@ -43,7 +43,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Settings, User, Plug, Book, Globe, Moon, Sun, Plus, FolderOpen, FolderPlus, EllipsisVertical, Activity, Bot, FolderSync, Loader2, Circle, GitBranch } from "lucide-react"
+import { Settings, User, Plug, Book, Globe, Moon, Sun, Plus, FolderOpen, FolderPlus, EllipsisVertical, Activity, Bot, FolderSync, Loader2, Circle, GitBranch, Terminal } from "lucide-react"
 
 import { WorkspaceGroup } from "./sidebar/workspace-group"
 import type { ConvSummary, WorkspaceData } from "./sidebar/workspace-group"
@@ -92,6 +92,7 @@ export function AppSidebar({
     const [showPlugins, setShowPlugins] = useState(false)
     const [showCreateDialog, setShowCreateDialog] = useState(false)
     const [showAllMap, setShowAllMap] = useState<Record<string, boolean>>({})
+    const [headlessMode, setHeadlessMode] = useState(false)
 
     // User profile state
     const [userProfile, setUserProfile] = useState<{ name: string; tier: string; avatar: string | null } | null>(null)
@@ -241,18 +242,23 @@ export function AppSidebar({
         setCreating(true)
         setCreateError("")
         try {
-            await createWorkspace(name, true)
+            if (headlessMode) {
+                await createHeadlessWorkspace(name, true)
+            } else {
+                await createWorkspace(name, true)
+            }
             setNewWsName("")
             await loadAll()
             onWorkspaceCreated?.()
             setShowCreateDialog(false)
+            setHeadlessMode(false)
         } catch (e) {
             const msg = e instanceof Error ? e.message : "Failed to create workspace"
             setCreateError(msg)
         } finally {
             setCreating(false)
         }
-    }, [newWsName, creating, nameValidationError, loadAll, onWorkspaceCreated])
+    }, [newWsName, creating, nameValidationError, headlessMode, loadAll, onWorkspaceCreated])
 
     const handleOpenFolder = useCallback(
         async (folder: WorkspaceFolder) => {
@@ -467,7 +473,7 @@ export function AppSidebar({
 
             <Dialog open={showCreateDialog} onOpenChange={(open) => {
                 setShowCreateDialog(open)
-                if (!open) { setNewWsName(""); setCreateError("") }
+                if (!open) { setNewWsName(""); setCreateError(""); setHeadlessMode(false) }
             }}>
                 <DialogContent className="sm:max-w-[420px]">
                     <DialogHeader>
@@ -499,6 +505,31 @@ export function AppSidebar({
                                 This will create a folder in your workspace root directory.
                             </p>
                         </div>
+
+                        <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
+                            <div className="flex items-center gap-2">
+                                <Terminal className="h-4 w-4 text-muted-foreground" />
+                                <div>
+                                    <p className="text-xs font-medium">Headless Mode</p>
+                                    <p className="text-[10px] text-muted-foreground">No IDE UI — requires running IDE for auth</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                role="switch"
+                                aria-checked={headlessMode}
+                                onClick={() => setHeadlessMode(!headlessMode)}
+                                className={cn(
+                                    "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
+                                    headlessMode ? "bg-primary" : "bg-muted"
+                                )}
+                            >
+                                <span className={cn(
+                                    "pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform",
+                                    headlessMode ? "translate-x-4" : "translate-x-0"
+                                )} />
+                            </button>
+                        </div>
                     </div>
 
                     <DialogFooter>
@@ -515,8 +546,8 @@ export function AppSidebar({
                             onClick={async () => { await handleCreateByName() }}
                             disabled={creating || !newWsName.trim() || !!nameValidationError}
                         >
-                            {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Plus className="h-3.5 w-3.5 mr-1.5" />}
-                            Create Workspace
+                            {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : headlessMode ? <Terminal className="h-3.5 w-3.5 mr-1.5" /> : <Plus className="h-3.5 w-3.5 mr-1.5" />}
+                            {headlessMode ? 'Create Headless' : 'Create Workspace'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

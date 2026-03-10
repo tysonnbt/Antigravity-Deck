@@ -181,6 +181,7 @@ function setupRoutes(app) {
             workspaceFolderUri: inst.workspaceFolderUri || '',
             category: inst.category || 'workspace',
             port: inst.port,
+            headless: !!inst.headless,
         })));
     });
 
@@ -438,6 +439,61 @@ function setupRoutes(app) {
             });
         } else {
             res.json({ created: false, message: `LS not detected after ${MAX_WAIT / 1000}s. Auto-rescan will pick it up later.` });
+        }
+    });
+
+    // === Headless LS Management ===
+    // Create a headless LS instance (no IDE UI) — requires running IDE for auth
+    app.post('/api/workspaces/create-headless', async (req, res) => {
+        const fs = require('fs');
+        const path = require('path');
+        const { getSettings } = require('./config');
+        const { launchHeadlessLS } = require('./headless-ls');
+
+        let folderPath = req.body.path;
+        const name = req.body.name;
+
+        // Same path/name resolution as /api/workspaces/create
+        if (!folderPath && name) {
+            const settings = getSettings();
+            const root = settings.defaultWorkspaceRoot;
+            if (!fs.existsSync(root)) {
+                fs.mkdirSync(root, { recursive: true });
+            }
+            folderPath = path.join(root, name);
+        }
+
+        if (!folderPath) return res.status(400).json({ error: 'path or name is required' });
+
+        try {
+            folderPath = validateWorkspacePath(folderPath);
+        } catch (error) {
+            return res.status(400).json({ error: error.message });
+        }
+
+        try {
+            const result = await launchHeadlessLS(folderPath);
+            res.json(result);
+        } catch (e) {
+            console.error(`[Headless] Launch failed: ${e.message}`);
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    // List headless LS instances
+    app.get('/api/workspaces/headless', (req, res) => {
+        const { getHeadlessInstances } = require('./headless-ls');
+        res.json(getHeadlessInstances());
+    });
+
+    // Kill a headless LS instance
+    app.delete('/api/workspaces/headless/:pid', (req, res) => {
+        const { killHeadlessLS } = require('./headless-ls');
+        try {
+            const result = killHeadlessLS(req.params.pid);
+            res.json(result);
+        } catch (e) {
+            res.status(400).json({ error: e.message });
         }
     });
 

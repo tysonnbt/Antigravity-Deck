@@ -9,6 +9,7 @@ export interface Workspace {
     workspaceFolderUri: string;
     category: 'workspace' | 'playground';
     port: number;
+    headless?: boolean;
 }
 
 export interface CascadeModel {
@@ -100,6 +101,30 @@ export async function createWorkspace(nameOrPath: string, isName = false): Promi
         body: JSON.stringify(isName ? { name: nameOrPath } : { path: nameOrPath }),
     });
     if (!res.ok) throw new Error(`Create failed: ${res.status}`);
+    return res.json();
+}
+
+// Create a headless workspace (no IDE UI) — requires running IDE for auth
+export async function createHeadlessWorkspace(nameOrPath: string, isName = false): Promise<{ created: boolean; alreadyRunning?: boolean; workspace?: { pid: string; workspaceName: string; port: number; headless: boolean }; error?: string }> {
+    const res = await fetch(`${API_BASE}/api/workspaces/create-headless`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify(isName ? { name: nameOrPath } : { path: nameOrPath }),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(err.error || `Create headless failed: ${res.status}`);
+    }
+    return res.json();
+}
+
+// Kill a headless workspace
+export async function killHeadlessWorkspace(pid: string): Promise<{ killed: boolean; workspace: string }> {
+    const res = await fetch(`${API_BASE}/api/workspaces/headless/${pid}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+    });
+    if (!res.ok) throw new Error(`Kill headless failed: ${res.status}`);
     return res.json();
 }
 

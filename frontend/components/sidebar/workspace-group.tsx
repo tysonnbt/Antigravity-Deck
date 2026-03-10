@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from 'react'
-import { Trash2, ChevronRight, FolderIcon, MessageSquare } from 'lucide-react'
+import { Trash2, ChevronRight, FolderIcon, MessageSquare, Terminal } from 'lucide-react'
 import { API_BASE } from '@/lib/config'
 import { authHeaders } from '@/lib/auth'
 import {
@@ -96,8 +96,13 @@ export function WorkspaceGroup({
                     >
                         <CollapsibleTrigger asChild>
                             <SidebarMenuButton tooltip={data.workspace.workspaceName} className="text-xs !pr-2">
-                                <FolderIcon className="shrink-0" />
+                                {data.workspace.headless
+                                    ? <Terminal className="shrink-0 text-emerald-500" />
+                                    : <FolderIcon className="shrink-0" />}
                                 <span className="flex-1 truncate min-w-0">{data.workspace.workspaceName}</span>
+                                {data.workspace.headless && (
+                                    <span className="shrink-0 text-[8px] font-medium text-emerald-500/70 bg-emerald-500/10 px-1 py-0.5 rounded">HL</span>
+                                )}
                                 <span className="ml-auto flex h-4 w-4 shrink-0 items-center justify-center">
                                     <ChevronRight className="h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                                 </span>
