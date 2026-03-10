@@ -201,7 +201,8 @@ async function runTests() {
   await test('Token refresh returns new tokens', async () => {
     const res = await request('POST', '/api/auth/refresh', {
       headers: {
-        'Cookie': buildCookieHeader(cookies)
+        'Cookie': buildCookieHeader(cookies),
+        'X-CSRF-Token': csrfToken
       }
     });
     
@@ -218,7 +219,8 @@ async function runTests() {
   await test('Logout clears cookies and revokes tokens', async () => {
     const res = await request('POST', '/api/auth/logout', {
       headers: {
-        'Cookie': buildCookieHeader(cookies)
+        'Cookie': buildCookieHeader(cookies),
+        'X-CSRF-Token': csrfToken
       }
     });
     
@@ -243,7 +245,8 @@ async function runTests() {
     // But refresh token should be revoked
     const refreshRes = await request('POST', '/api/auth/refresh', {
       headers: {
-        'Cookie': buildCookieHeader(cookies)
+        'Cookie': buildCookieHeader(cookies),
+        'X-CSRF-Token': csrfToken
       }
     });
     

@@ -32,7 +32,7 @@ function csrfProtection(req, res, next) {
   }
   
   // Skip for auth endpoints (login doesn't have CSRF token yet)
-  if (req.path.startsWith('/api/auth/login')) {
+  if (req.path === '/auth/login' || req.path.startsWith('/auth/login')) {
     return next();
   }
   

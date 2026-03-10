@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const { generateTokens, verifyRefreshToken, generateCsrfToken } = require('./jwt-utils');
 const { 
   storeRefreshToken, 
-  isRefreshTokenValid, 
+  consumeRefreshToken,
   getRefreshToken,
   revokeRefreshToken, 
   revokeAllUserTokens 
@@ -161,29 +161,36 @@ router.post('/refresh', (req, res) => {
     });
   }
   
-  // Check if token is valid (not revoked)
-  if (!isRefreshTokenValid(decoded.jti)) {
-    // Token reuse detected - potential security incident
-    console.warn(`[Auth] Refresh token reuse detected for user: ${decoded.sub}`);
+  // Atomically consume the refresh token (validates and revokes in one operation)
+  const consumeResult = consumeRefreshToken(decoded.jti);
+  
+  if (!consumeResult.valid) {
+    if (consumeResult.reason === 'TOKEN_ALREADY_REVOKED') {
+      // Token reuse detected - potential security incident
+      console.warn(`[Auth] Refresh token reuse detected for user: ${consumeResult.userId || decoded.sub}`);
+      
+      // Revoke all user tokens
+      const revokedCount = revokeAllUserTokens(consumeResult.userId || decoded.sub);
+      console.warn(`[Auth] Revoked ${revokedCount} tokens for user: ${consumeResult.userId || decoded.sub}`);
+      
+      // Clear cookies
+      clearAuthCookies(res);
+      
+      return res.status(401).json({ 
+        error: 'Token reuse detected - all sessions revoked',
+        code: 'TOKEN_REUSE'
+      });
+    }
     
-    // Revoke all user tokens
-    const revokedCount = revokeAllUserTokens(decoded.sub);
-    console.warn(`[Auth] Revoked ${revokedCount} tokens for user: ${decoded.sub}`);
-    
-    // Clear cookies
-    clearAuthCookies(res);
-    
+    // Other validation failures (expired, not found)
     return res.status(401).json({ 
-      error: 'Token reuse detected - all sessions revoked',
-      code: 'TOKEN_REUSE'
+      error: `Refresh token ${consumeResult.reason.toLowerCase().replace(/_/g, ' ')}`,
+      code: consumeResult.reason
     });
   }
   
-  // Generate new token pair
+  // Token consumed successfully - generate new token pair
   const { accessToken, refreshToken, accessTokenExpiry, refreshTokenExpiry } = generateTokens(decoded.sub);
-  
-  // Revoke old refresh token (rotation)
-  revokeRefreshToken(decoded.jti);
   
   // Store new refresh token
   const newDecoded = verifyRefreshToken(refreshToken);
@@ -236,15 +243,23 @@ router.post('/logout', (req, res) => {
 
 /**
  * GET /api/auth/status
- * Check authentication status (for debugging)
+ * Check authentication status (requires JWT)
  * 
  * Response: { authenticated: boolean, user?: object }
  */
 router.get('/status', (req, res) => {
-  // This endpoint will use the JWT middleware, so if we reach here, user is authenticated
+  // This endpoint requires JWT authentication
+  // req.user is set by JWT middleware in server.js
+  if (!req.user) {
+    return res.status(401).json({
+      authenticated: false,
+      error: 'Not authenticated'
+    });
+  }
+  
   res.json({
     authenticated: true,
-    user: req.user || null
+    user: req.user
   });
 });
 

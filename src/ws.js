@@ -25,7 +25,7 @@ function setupWebSocket(wss, { ensureCached, stepCache }) {
                 const url = new URL(req.url, 'http://localhost');
                 let authenticated = false;
                 
-                // Try JWT authentication first
+                // JWT mode: only accept JWT tokens
                 if (jwtSecret) {
                     // Extract JWT from query param or cookie
                     const token = url.searchParams.get('token') || 
@@ -37,13 +37,13 @@ function setupWebSocket(wss, { ensureCached, stepCache }) {
                             req.user = { id: decoded.sub };
                             authenticated = true;
                         } catch (err) {
-                            // JWT invalid - will try legacy auth or reject
+                            // JWT invalid - reject connection
+                            console.warn('[WS] Invalid JWT token:', err.message);
                         }
                     }
                 }
-                
-                // Fall back to legacy auth_key if JWT failed
-                if (!authenticated && authKey) {
+                // Legacy mode: only accept auth_key when JWT_SECRET is not set
+                else if (authKey) {
                     const key = url.searchParams.get('auth_key');
                     if (key === authKey) {
                         authenticated = true;

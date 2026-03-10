@@ -200,9 +200,6 @@ app.get('/api/ws-url', (req, res) => {
   res.json({ wsPort: Number(process.env.PORT || 3500) });
 });
 
-// Mount auth routes (login, refresh, logout) - public endpoints
-app.use('/api/auth', authRoutes);
-
 // JWT Authentication Middleware
 const JWT_SECRET = process.env.JWT_SECRET || '';
 const AUTH_KEY = process.env.AUTH_KEY || '';
@@ -210,9 +207,14 @@ const AUTH_KEY = process.env.AUTH_KEY || '';
 if (JWT_SECRET) {
   console.log(`  🔒 JWT Auth enabled`);
   
+  // Apply strict rate limiter to auth endpoints BEFORE mounting routes
+  app.use('/api/auth/login', strictLimiter);
+  app.use('/api/auth/refresh', strictLimiter);
+  
+  // Apply JWT authentication to all API routes except public endpoints
   app.use('/api', (req, res, next) => {
     // Skip auth for public endpoints
-    if (req.path === '/ws-url' || req.path.startsWith('/auth/')) {
+    if (req.path === '/ws-url' || req.path === '/auth/login') {
       return next();
     }
     
@@ -259,12 +261,11 @@ if (JWT_SECRET) {
     }
   });
   
-  // Apply CSRF protection to all API routes (after auth)
+  // Apply CSRF protection to all API routes (after auth, before routes)
   app.use('/api', csrfProtection);
   
-  // Apply strict rate limiter to auth endpoints
-  app.use('/api/auth/login', strictLimiter);
-  app.use('/api/auth/refresh', strictLimiter);
+  // Mount auth routes (login is public, others are protected by middleware above)
+  app.use('/api/auth', authRoutes);
   
   // Apply strict rate limiter to settings endpoint (sensitive operations)
   app.use('/api/settings', strictLimiter);
