@@ -16,6 +16,7 @@ interface WSState {
     cascadeStatus: string | null;
     lastUpdate: string;
     conversationsVersion: number; // bumped when backend discovers new conversations
+    stepContentVersion: number; // bumped on step_updated (streaming content changes)
 }
 
 export function useWebSocket() {
@@ -32,6 +33,7 @@ export function useWebSocket() {
         cascadeStatus: null,
         lastUpdate: '',
         conversationsVersion: 0,
+        stepContentVersion: 0,
     });
     const wsRef = useRef<WebSocket | null>(null);
     const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -139,7 +141,7 @@ export function useWebSocket() {
                             if (data.index >= 0 && data.index < updated.length) {
                                 updated[data.index] = data.step;
                             }
-                            return { ...prev, steps: updated, lastUpdate: new Date().toLocaleTimeString() };
+                            return { ...prev, steps: updated, lastUpdate: new Date().toLocaleTimeString(), stepContentVersion: prev.stepContentVersion + 1 };
                         });
                     } else if (data.type === 'cascade_status') {
                         setState(prev => {

@@ -15,7 +15,9 @@ async function detectLanguageServers() {
             fs.writeFileSync(tmpScript,
                 "Get-CimInstance Win32_Process | Where-Object { $_.Name -like '*language_server*' } | Select-Object ProcessId, CommandLine | Format-List\n"
             );
-            cmd = `powershell -ExecutionPolicy Bypass -NoProfile -File "${tmpScript}"`;
+            // Use full path — powershell may not be in PATH (e.g. Git Bash, some RDP sessions)
+            const ps = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+            cmd = `"${ps}" -ExecutionPolicy Bypass -NoProfile -File "${tmpScript}"`;
         } else {
             cmd = `ps aux | grep 'language_server' | grep -v grep`;
         }
