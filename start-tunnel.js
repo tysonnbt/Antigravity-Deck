@@ -181,7 +181,6 @@ async function main() {
     const info = [
         `Frontend: ${feUrl || 'FAILED'}`,
         `Backend:  ${beUrl || 'FAILED'}`,
-        `Auth Key: ${authKey}`,
         `Local FE: http://localhost:${FE_PORT}`,
         `Local BE: http://localhost:${BE_PORT}`,
         `Started:  ${new Date().toISOString()}`,
