@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { Trash2, ChevronRight, FolderIcon, MessageSquare, Terminal } from 'lucide-react'
 import { API_BASE } from '@/lib/config'
 import { authHeaders } from '@/lib/auth'
+import { ResourceBar } from './resource-bar'
+import type { WorkspaceResources } from '@/lib/cascade-api'
 import {
     Collapsible,
     CollapsibleContent,
@@ -53,6 +55,7 @@ export function WorkspaceGroup({
     showAll,
     currentConvId,
     showActiveIndicator = true,
+    resources,
     onToggleExpand,
     onSelectConv,
     onToggleShowAll,
@@ -62,6 +65,7 @@ export function WorkspaceGroup({
     showAll: boolean
     currentConvId: string | null
     showActiveIndicator?: boolean
+    resources?: WorkspaceResources
     onToggleExpand: () => void
     onSelectConv: (convId: string) => void
     onToggleShowAll: () => void
@@ -103,6 +107,7 @@ export function WorkspaceGroup({
                                 {data.workspace.headless && (
                                     <span className="shrink-0 text-[8px] font-medium text-emerald-500/70 bg-emerald-500/10 px-1 py-0.5 rounded">HL</span>
                                 )}
+                                {resources && <ResourceBar cpuPercent={resources.cpuPercent} memMB={resources.memMB} />}
                                 <span className="ml-auto flex h-4 w-4 shrink-0 items-center justify-center">
                                     <ChevronRight className="h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                                 </span>

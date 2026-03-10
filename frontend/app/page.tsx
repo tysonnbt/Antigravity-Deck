@@ -25,6 +25,7 @@ import { AuthGate } from '@/components/auth-gate';
 import { AgentLogsView } from '@/components/agent-logs-view';
 import { AgentBridgeView } from '@/components/agent-bridge-view';
 import { SourceControlView } from '@/components/source-control-view';
+import { ResourceMonitorView } from '@/components/resource-monitor-view';
 
 // Lazy-load components that are hidden by default
 const AnalyticsPanel = dynamic(() => import('@/components/analytics-panel').then(m => ({ default: m.AnalyticsPanel })), { ssr: false });
@@ -41,7 +42,7 @@ function getStoredValue<T>(key: string, fallback: T): T {
 }
 
 export default function Home() {
-  const { connected, steps, conversations, currentConvId, cascadeStatus, conversationsVersion, stepContentVersion, selectConversation, lastUpdate } = useWebSocket();
+  const { connected, steps, conversations, currentConvId, cascadeStatus, conversationsVersion, stepContentVersion, workspaceResources, selectConversation, lastUpdate } = useWebSocket();
 
   const [showAnalytics, setShowAnalytics] = useState(() => getStoredValue('antigravity-show-analytics', false));
   const [showTimeline, setShowTimeline] = useState(() => {
@@ -94,6 +95,7 @@ export default function Home() {
   const [showBridge, setShowBridge] = useState(() => getStoredValue('antigravity-show-bridge', false));
   // NEW: When true, show Source Control / IDE view in main panel
   const [showSourceControl, setShowSourceControl] = useState(false);
+  const [showResources, setShowResources] = useState(false);
   // Bumped when sidebar creates a workspace, so panels refresh their lists
   const [wsVersion, setWsVersion] = useState(0);
 
@@ -120,7 +122,7 @@ export default function Home() {
     if (storedConvId) {
       selectConversation(storedConvId);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // run once on mount
 
   // Step detail state
@@ -139,6 +141,7 @@ export default function Home() {
     setShowLogs(false);
     setShowBridge(false);
     setShowSourceControl(false);
+    setShowResources(false);
   }, []);
 
   // === Sidebar: click workspace → show conversation list ===
@@ -218,6 +221,14 @@ export default function Home() {
     setShowSourceControl(true);
   }, [selectConversation, resetPanels]);
 
+  // === Show Resources ===
+  const handleShowResources = useCallback(() => {
+    selectConversation(null);
+    resetPanels();
+    setActiveWorkspace(null);
+    setShowResources(true);
+  }, [selectConversation, resetPanels]);
+
   // === Go Home — reset all navigation state to welcome screen ===
   const handleGoHome = useCallback(() => {
     selectConversation(null);
@@ -227,6 +238,7 @@ export default function Home() {
     setShowSettings(false);
     setShowLogs(false);
     setShowBridge(false);
+    setShowResources(false);
   }, [selectConversation]);
 
   // When CascadePanel creates a new cascade, track it
@@ -347,8 +359,8 @@ export default function Home() {
 
   // === Determine what to show in main panel ===
   const showChat = currentConvId !== null || newChatMode;
-  const showConversationList = !showChat && !showAccountInfo && !showSettings && !showLogs && !showBridge && !showSourceControl && activeWorkspace !== null;
-  const showWelcome = !showChat && !showConversationList && !showAccountInfo && !showSettings && !showLogs && !showBridge && !showSourceControl;
+  const showConversationList = !showChat && !showAccountInfo && !showSettings && !showLogs && !showBridge && !showSourceControl && !showResources && activeWorkspace !== null;
+  const showWelcome = !showChat && !showConversationList && !showAccountInfo && !showSettings && !showLogs && !showBridge && !showSourceControl && !showResources;
 
   return (
     <AuthGate>
@@ -358,6 +370,7 @@ export default function Home() {
           currentConvId={currentConvId}
           conversationsVersion={conversationsVersion}
           activeWorkspace={activeWorkspace}
+          workspaceResources={workspaceResources}
           onSelectWorkspace={handleSelectWorkspace}
           onSelectConversation={handleSelectConversation}
           onShowAccountInfo={handleShowAccountInfo}
@@ -365,6 +378,7 @@ export default function Home() {
           onShowLogs={handleShowLogs}
           onShowBridge={handleShowBridge}
           onShowSourceControl={handleShowSourceControl}
+          onShowResources={handleShowResources}
           onGoHome={handleGoHome}
           onWorkspaceCreated={handleWorkspaceCreated}
           wsVersion={wsVersion}
@@ -539,6 +553,13 @@ export default function Home() {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Resource Monitor panel */}
+          {showResources && (
+            <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <ResourceMonitorView />
             </div>
           )}
 

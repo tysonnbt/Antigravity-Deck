@@ -9,6 +9,16 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   devIndicators: false, // hide the floating Next.js "N" logo
 
+  // Allow long-running backend responses (e.g. workspace create waits up to 30s for LS detection)
+  experimental: {
+    proxyTimeout: 60_000, // 60s proxy timeout (default is ~30s)
+  },
+
+  // Keep backend connections alive for efficiency
+  httpAgentOptions: {
+    keepAlive: true,
+  },
+
   // Proxy /api/* and /ws/* to Express backend — works on any OS, no CORS ever
   async rewrites() {
     return [

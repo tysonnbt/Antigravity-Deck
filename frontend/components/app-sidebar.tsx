@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { getWorkspaces, createWorkspace, createHeadlessWorkspace, getWorkspaceFolders } from "@/lib/cascade-api"
-import type { Workspace, WorkspaceFolder } from "@/lib/cascade-api"
+import type { Workspace, WorkspaceFolder, WorkspaceResources, ResourceSnapshot } from "@/lib/cascade-api"
 import { cn } from "@/lib/utils"
 import { useTheme } from "@/lib/theme"
 import { PluginManager } from "./plugin-manager"
@@ -43,10 +43,11 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Settings, User, Plug, Book, Globe, Moon, Sun, Plus, FolderOpen, FolderPlus, EllipsisVertical, Activity, Bot, FolderSync, Loader2, Circle, GitBranch, Terminal } from "lucide-react"
+import { Settings, User, Plug, Book, Globe, Moon, Sun, Plus, FolderOpen, FolderPlus, EllipsisVertical, Activity, Bot, FolderSync, Loader2, Circle, GitBranch, Terminal, Monitor } from "lucide-react"
 
 import { WorkspaceGroup } from "./sidebar/workspace-group"
 import type { ConvSummary, WorkspaceData } from "./sidebar/workspace-group"
+import { SystemResourceSummary } from "./sidebar/system-resource-summary"
 
 interface AppSidebarProps {
     currentConvId: string | null
@@ -58,8 +59,10 @@ interface AppSidebarProps {
     onShowLogs: () => void
     onShowBridge: () => void
     onShowSourceControl: () => void
+    onShowResources: () => void
     onGoHome: () => void
     activeWorkspace: string | null
+    workspaceResources?: ResourceSnapshot | null
     wsVersion?: number
     onWorkspaceCreated?: () => void
 }
@@ -74,8 +77,10 @@ export function AppSidebar({
     onShowLogs,
     onShowBridge,
     onShowSourceControl,
+    onShowResources,
     onGoHome,
     activeWorkspace,
+    workspaceResources,
     wsVersion,
     onWorkspaceCreated,
 }: AppSidebarProps) {
@@ -296,6 +301,14 @@ export function AppSidebar({
                     </button>
                 </SidebarHeader>
 
+                {/* System Resource Summary — compact CPU/RAM bars */}
+                <div className="px-3 pb-1">
+                    <SystemResourceSummary
+                        system={workspaceResources?.system}
+                        onClick={onShowResources}
+                    />
+                </div>
+
                 <SidebarContent>
                     <SidebarSeparator className="mx-0" />
                     <SidebarGroup>
@@ -311,6 +324,7 @@ export function AppSidebar({
                                         arrayIdx={arrayIdx}
                                         showAll={!!showAllMap[arrayIdx]}
                                         currentConvId={currentConvId}
+                                        resources={workspaceResources?.workspaces?.[wd.workspace.pid]}
                                         onToggleExpand={() => handleWorkspaceClick(arrayIdx)}
                                         onSelectConv={(convId) => handleSelectConv(convId, arrayIdx)}
                                         onToggleShowAll={() => setShowAllMap((prev) => ({ ...prev, [arrayIdx]: true }))}
@@ -382,6 +396,7 @@ export function AppSidebar({
                                                 showAll={!!showAllMap[arrayIdx]}
                                                 currentConvId={currentConvId}
                                                 showActiveIndicator={false}
+                                                resources={workspaceResources?.workspaces?.[wd.workspace.pid]}
                                                 onToggleExpand={() => handleWorkspaceClick(arrayIdx)}
                                                 onSelectConv={(convId) => handleSelectConv(convId, arrayIdx)}
                                                 onToggleShowAll={() => setShowAllMap((prev) => ({ ...prev, [arrayIdx]: true }))}
@@ -439,6 +454,10 @@ export function AppSidebar({
                                     <DropdownMenuItem onClick={onShowSourceControl}>
                                         <GitBranch className="mr-2 h-4 w-4" />
                                         <span>Source Control</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={onShowResources}>
+                                        <Monitor className="mr-2 h-4 w-4" />
+                                        <span>Resources</span>
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={toggleTheme}>
                                         {isDark ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
