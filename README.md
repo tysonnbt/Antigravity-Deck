@@ -91,6 +91,22 @@ Connect external AI agents (e.g., Pi, OpenClaw) to Antigravity via Discord.
 
 ## 🚀 Quick Start
 
+### ⚡ One-Command Setup (Recommended)
+
+**No git or npm knowledge needed.** Just paste one line — the app will clone, install, and go online with a shareable URL + QR code.
+
+**Windows (PowerShell):**
+```powershell
+irm https://raw.githubusercontent.com/tysonnbt/Antigravity-Deck/main/scripts/setup.ps1 | iex
+```
+
+**macOS / Linux:**
+```bash
+curl -sL https://raw.githubusercontent.com/tysonnbt/Antigravity-Deck/main/scripts/setup.sh | bash
+```
+
+> **Prerequisites:** [Node.js 18+](https://nodejs.org/), [Git](https://git-scm.com/), and [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/). The setup script will check and guide you if anything is missing.
+
 ### Local Development
 
 ```bash
@@ -109,7 +125,7 @@ Open **http://localhost:3000** in your browser.
 npm run online
 ```
 
-> **Prerequisite:** [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) must be installed.
+This auto-generates an auth key, creates tunnels, and **prints a QR code** with the auto-login URL embedded. Scan the QR on any device to open the app — no key entry needed.
 
 ### With Authentication
 

@@ -162,6 +162,9 @@ async function main() {
         tunFe.stderr?.on('data', handler);
     });
 
+    // Build the auto-auth URL with key embedded
+    const qrUrl = feUrl ? `${feUrl}?key=${authKey}` : null;
+
     if (feUrl) {
         console.log('\n' + '='.repeat(60));
         console.log('\x1b[1m\x1b[32m  🌐 READY! Open this URL on any device:\x1b[0m');
@@ -170,7 +173,21 @@ async function main() {
         console.log('='.repeat(60));
         console.log(`  Backend API: ${beUrl}`);
         console.log(`  Local:       http://localhost:${FE_PORT}`);
-        console.log('='.repeat(60) + '\n');
+        console.log('='.repeat(60));
+
+        // Print QR code — scan to open with auto-auth
+        console.log('\n\x1b[1m  📱 Scan this QR code to open (auto-login):\x1b[0m\n');
+        try {
+            const qrcode = require('qrcode-terminal');
+            qrcode.generate(qrUrl, { small: true }, (qr) => {
+                // Indent each line for nicer display
+                console.log(qr.split('\n').map(l => '    ' + l).join('\n'));
+                console.log(`\n  🔗 ${qrUrl}\n`);
+            });
+        } catch {
+            console.log(`  (qrcode-terminal not installed — scan URL manually)`);
+            console.log(`  🔗 ${qrUrl}\n`);
+        }
     } else {
         log('*', '⚠️  Frontend tunnel failed, but local access still works');
         console.log(`  Local: http://localhost:${FE_PORT}`);
@@ -182,6 +199,7 @@ async function main() {
         `Frontend: ${feUrl || 'FAILED'}`,
         `Backend:  ${beUrl || 'FAILED'}`,
         `Auth Key: ${authKey}`,
+        `QR URL:   ${qrUrl || 'N/A'}`,
         `Local FE: http://localhost:${FE_PORT}`,
         `Local BE: http://localhost:${BE_PORT}`,
         `Started:  ${new Date().toISOString()}`,
