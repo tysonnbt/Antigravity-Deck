@@ -1,6 +1,6 @@
 // === Cascade API Client ===
 import { API_BASE } from './config';
-import { authHeaders } from './auth';
+import { apiClient } from './api-client';
 
 export interface Workspace {
     pid: string;
@@ -94,9 +94,8 @@ export interface MediaItem {
 
 // Save a media file via SaveMediaAsArtifact (returns uri for later reference)
 export async function saveMedia(mimeType: string, inlineData: string, thumbnail?: string): Promise<{ uri?: string }> {
-    const res = await fetch(`${API_BASE}/api/media/save`, {
+    const res = await apiClient(`${API_BASE}/api/media/save`, {
         method: 'POST',
-        headers: authHeaders(),
         body: JSON.stringify({ mimeType, inlineData, thumbnail: thumbnail || '' }),
     });
     if (!res.ok) throw new Error(`SaveMedia failed: ${res.status}`);
@@ -105,9 +104,8 @@ export async function saveMedia(mimeType: string, inlineData: string, thumbnail?
 
 // Send a message to an existing cascade (supports optional multi-image)
 export async function cascadeSend(cascadeId: string, message: string, modelId?: string, images?: MediaItem[]): Promise<CascadeSendResponse> {
-    const res = await fetch(`${API_BASE}/api/cascade/send`, {
+    const res = await apiClient(`${API_BASE}/api/cascade/send`, {
         method: 'POST',
-        headers: authHeaders(),
         body: JSON.stringify({ cascadeId, message, modelId, images }),
     });
     if (!res.ok) throw new Error(`Send failed: ${res.status}`);
@@ -116,9 +114,8 @@ export async function cascadeSend(cascadeId: string, message: string, modelId?: 
 
 // Start a new cascade and send a message in one call
 export async function cascadeSubmit(message: string, modelId?: string, images?: MediaItem[], workspace?: string): Promise<CascadeSubmitResponse> {
-    const res = await fetch(`${API_BASE}/api/cascade/submit`, {
+    const res = await apiClient(`${API_BASE}/api/cascade/submit`, {
         method: 'POST',
-        headers: authHeaders(),
         body: JSON.stringify({ message, modelId, images, workspace }),
     });
     if (!res.ok) throw new Error(`Submit failed: ${res.status}`);
@@ -127,14 +124,14 @@ export async function cascadeSubmit(message: string, modelId?: string, images?: 
 
 // List all detected workspaces
 export async function getWorkspaces(): Promise<Workspace[]> {
-    const res = await fetch(`${API_BASE}/api/workspaces`, { headers: authHeaders() });
+    const res = await apiClient(`${API_BASE}/api/workspaces`);
     if (!res.ok) throw new Error(`Workspaces failed: ${res.status}`);
     return res.json();
 }
 
 // Get CPU/RAM resource stats for all workspace PIDs
 export async function getWorkspaceResources(): Promise<ResourceSnapshot> {
-    const res = await fetch(`${API_BASE}/api/workspaces/resources`, { headers: authHeaders() });
+    const res = await apiClient(`${API_BASE}/api/workspaces/resources`);
     if (!res.ok) throw new Error(`Resources failed: ${res.status}`);
     return res.json();
 }
@@ -142,9 +139,8 @@ export async function getWorkspaceResources(): Promise<ResourceSnapshot> {
 
 // Create/open a workspace — accepts { name } or { path }
 export async function createWorkspace(nameOrPath: string, isName = false): Promise<{ created: boolean; alreadyOpen?: boolean; workspace?: { pid: string; workspaceName: string; port: number }; message?: string }> {
-    const res = await fetch(`${API_BASE}/api/workspaces/create`, {
+    const res = await apiClient(`${API_BASE}/api/workspaces/create`, {
         method: 'POST',
-        headers: authHeaders(),
         body: JSON.stringify(isName ? { name: nameOrPath } : { path: nameOrPath }),
     });
     if (!res.ok) throw new Error(`Create failed: ${res.status}`);
@@ -153,22 +149,21 @@ export async function createWorkspace(nameOrPath: string, isName = false): Promi
 
 // List folders in default workspace root
 export async function getWorkspaceFolders(): Promise<{ root: string; folders: WorkspaceFolder[] }> {
-    const res = await fetch(`${API_BASE}/api/workspaces/folders`, { headers: authHeaders() });
+    const res = await apiClient(`${API_BASE}/api/workspaces/folders`);
     if (!res.ok) throw new Error(`Folders failed: ${res.status}`);
     return res.json();
 }
 
 // Settings
 export async function getSettings(): Promise<AppSettings> {
-    const res = await fetch(`${API_BASE}/api/settings`, { headers: authHeaders() });
+    const res = await apiClient(`${API_BASE}/api/settings`);
     if (!res.ok) throw new Error(`Settings failed: ${res.status}`);
     return res.json();
 }
 
 export async function updateSettings(settings: Partial<AppSettings>): Promise<AppSettings> {
-    const res = await fetch(`${API_BASE}/api/settings`, {
+    const res = await apiClient(`${API_BASE}/api/settings`, {
         method: 'POST',
-        headers: authHeaders(),
         body: JSON.stringify(settings),
     });
     if (!res.ok) throw new Error(`Settings update failed: ${res.status}`);
@@ -177,23 +172,22 @@ export async function updateSettings(settings: Partial<AppSettings>): Promise<Ap
 
 // Get available cascade models
 export async function getModels(): Promise<{ models: CascadeModel[]; defaultModel: string }> {
-    const res = await fetch(`${API_BASE}/api/models`, { headers: authHeaders() });
+    const res = await apiClient(`${API_BASE}/api/models`);
     if (!res.ok) throw new Error(`Models failed: ${res.status}`);
     return res.json();
 }
 
 // Cancel an active cascade invocation
 export async function cascadeCancel(cascadeId: string): Promise<object> {
-    const res = await fetch(`${API_BASE}/api/cascade/${cascadeId}/cancel`, { method: 'POST', headers: authHeaders() });
+    const res = await apiClient(`${API_BASE}/api/cascade/${cascadeId}/cancel`, { method: 'POST' });
     if (!res.ok) throw new Error(`Cancel failed: ${res.status}`);
     return res.json();
 }
 
 // Accept or reject pending code changes
 export async function cascadeInteract(cascadeId: string, action: 'accept' | 'reject' = 'accept'): Promise<object> {
-    const res = await fetch(`${API_BASE}/api/cascade/${cascadeId}/accept`, {
+    const res = await apiClient(`${API_BASE}/api/cascade/${cascadeId}/accept`, {
         method: 'POST',
-        headers: authHeaders(),
         body: JSON.stringify({ action })
     });
     if (!res.ok) throw new Error(`Interact failed: ${res.status}`);
@@ -210,21 +204,20 @@ export interface CascadeStatus {
 }
 
 export async function getCascadeStatus(cascadeId: string): Promise<CascadeStatus> {
-    const res = await fetch(`${API_BASE}/api/cascade/${cascadeId}/status`, { headers: authHeaders() });
+    const res = await apiClient(`${API_BASE}/api/cascade/${cascadeId}/status`);
     if (!res.ok) throw new Error(`Status failed: ${res.status}`);
     return res.json();
 }
 
 // Auto-accept (server-side toggle for instant reaction)
 export async function getAutoAcceptState(): Promise<{ enabled: boolean }> {
-    const res = await fetch(`${API_BASE}/api/auto-accept`, { headers: authHeaders() });
+    const res = await apiClient(`${API_BASE}/api/auto-accept`);
     return res.json();
 }
 
 export async function setAutoAcceptState(enabled: boolean): Promise<{ enabled: boolean }> {
-    const res = await fetch(`${API_BASE}/api/auto-accept`, {
+    const res = await apiClient(`${API_BASE}/api/auto-accept`, {
         method: 'POST',
-        headers: authHeaders(),
         body: JSON.stringify({ enabled }),
     });
     return res.json();
@@ -232,15 +225,14 @@ export async function setAutoAcceptState(enabled: boolean): Promise<{ enabled: b
 
 // Clear cache for a specific conversation (forces full re-fetch)
 export async function clearConversationCache(cascadeId: string): Promise<{ cleared: boolean }> {
-    const res = await fetch(`${API_BASE}/api/cache/${cascadeId}`, { method: 'DELETE', headers: authHeaders() });
+    const res = await apiClient(`${API_BASE}/api/cache/${cascadeId}`, { method: 'DELETE' });
     return res.json();
 }
 
 // Read file content from disk (for code change viewer)
 export async function readFile(filePath: string): Promise<{ content: string; path: string }> {
-    const res = await fetch(`${API_BASE}/api/file/read`, {
+    const res = await apiClient(`${API_BASE}/api/file/read`, {
         method: 'POST',
-        headers: authHeaders(),
         body: JSON.stringify({ path: filePath }),
     });
     if (!res.ok) throw new Error(`Read failed: ${res.status}`);
@@ -257,7 +249,7 @@ export interface GitFileStatus {
 }
 
 export async function getGitStatus(workspace: string): Promise<{ files: GitFileStatus[]; error?: string }> {
-    const res = await fetch(`${API_BASE}/api/workspaces/${encodeURIComponent(workspace)}/git/status`, { headers: authHeaders() });
+    const res = await apiClient(`${API_BASE}/api/workspaces/${encodeURIComponent(workspace)}/git/status`);
     if (!res.ok) throw new Error(`Git status failed: ${res.status}`);
     return res.json();
 }
@@ -266,19 +258,19 @@ export async function getGitDiff(workspace: string, file?: string): Promise<{ di
     const url = file
         ? `${API_BASE}/api/workspaces/${encodeURIComponent(workspace)}/git/diff?file=${encodeURIComponent(file)}`
         : `${API_BASE}/api/workspaces/${encodeURIComponent(workspace)}/git/diff`;
-    const res = await fetch(url, { headers: authHeaders() });
+    const res = await apiClient(url);
     if (!res.ok) throw new Error(`Git diff failed: ${res.status}`);
     return res.json();
 }
 
 export async function getGitShow(workspace: string, file: string): Promise<{ content: string | null; error?: string }> {
-    const res = await fetch(`${API_BASE}/api/workspaces/${encodeURIComponent(workspace)}/git/show?file=${encodeURIComponent(file)}`, { headers: authHeaders() });
+    const res = await apiClient(`${API_BASE}/api/workspaces/${encodeURIComponent(workspace)}/git/show?file=${encodeURIComponent(file)}`);
     if (!res.ok) throw new Error(`Git show failed: ${res.status}`);
     return res.json();
 }
 
 export async function getWorkspaceFile(workspace: string, file: string): Promise<{ content: string | null; path: string; error?: string }> {
-    const res = await fetch(`${API_BASE}/api/workspaces/${encodeURIComponent(workspace)}/file/read?file=${encodeURIComponent(file)}`, { headers: authHeaders() });
+    const res = await apiClient(`${API_BASE}/api/workspaces/${encodeURIComponent(workspace)}/file/read?file=${encodeURIComponent(file)}`);
     if (!res.ok) throw new Error(`File read failed: ${res.status}`);
     return res.json();
 }
@@ -295,7 +287,7 @@ export async function fetchWorkflows(workspace?: string): Promise<WorkflowItem[]
     const url = workspace
         ? `${API_BASE}/api/workflows?workspace=${encodeURIComponent(workspace)}`
         : `${API_BASE}/api/workflows`;
-    const res = await fetch(url, { headers: authHeaders() });
+    const res = await apiClient(url);
     if (!res.ok) throw new Error(`Workflows failed: ${res.status}`);
     return res.json();
 }
@@ -304,7 +296,7 @@ export async function fetchWorkflowContent(name: string, workspace?: string): Pr
     const url = workspace
         ? `${API_BASE}/api/workflows/${encodeURIComponent(name)}?workspace=${encodeURIComponent(workspace)}`
         : `${API_BASE}/api/workflows/${encodeURIComponent(name)}`;
-    const res = await fetch(url, { headers: authHeaders() });
+    const res = await apiClient(url);
     if (!res.ok) throw new Error(`Workflow content failed: ${res.status}`);
     return res.json();
 }
@@ -319,7 +311,7 @@ export interface FsEntry {
 
 export async function listWorkspaceDir(workspace: string, subpath = ''): Promise<{ entries: FsEntry[]; path: string }> {
     const url = `${API_BASE}/api/workspaces/${encodeURIComponent(workspace)}/fs/list${subpath ? `?path=${encodeURIComponent(subpath)}` : ''}`;
-    const res = await fetch(url, { headers: authHeaders() });
+    const res = await apiClient(url);
     if (!res.ok) throw new Error(`Dir list failed: ${res.status}`);
     return res.json();
 }
