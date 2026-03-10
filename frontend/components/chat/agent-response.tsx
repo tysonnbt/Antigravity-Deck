@@ -10,7 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Copy, Check, FileText, Bot, AlertTriangle } from 'lucide-react';
 import { API_BASE } from '@/lib/config';
-import { authHeaders } from '@/lib/auth';
+import { apiClient } from '@/lib/api-client';
 
 // View an MD artifact file in a Sheet (side panel)
 function ArtifactPreview({ uri }: { uri: string }) {
@@ -23,9 +23,8 @@ function ArtifactPreview({ uri }: { uri: string }) {
         if (content || loading) return; // already loaded or loading
         setLoading(true);
         setError(null);
-        fetch(`${API_BASE}/api/file/read`, {
+        apiClient(`${API_BASE}/api/file/read`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...authHeaders() },
             body: JSON.stringify({ path: uri })
         })
             .then(r => {

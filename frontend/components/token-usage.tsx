@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { API_BASE } from '@/lib/config';
-import { authHeaders } from '@/lib/auth';
+import { apiClient } from '@/lib/api-client';
 import { BarChart2, Zap } from 'lucide-react';
 
 interface TokenData {
@@ -16,7 +16,7 @@ export function TokenUsage({ cascadeId }: { cascadeId: string | null }) {
 
     useEffect(() => {
         if (!cascadeId) { setData(null); return; }
-        fetch(`${API_BASE}/api/cascade/${cascadeId}/metadata`, { headers: authHeaders() })
+        apiClient(`${API_BASE}/api/cascade/${cascadeId}/metadata`)
             .then(r => r.json())
             .then(raw => {
                 let totalInput = 0, totalOutput = 0, totalCache = 0;

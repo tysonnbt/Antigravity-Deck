@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { API_BASE } from '@/lib/config';
-import { authHeaders } from '@/lib/auth';
+import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,7 +16,7 @@ export function UserProfile() {
     const [profilePic, setProfilePic] = useState<string | null>(null);
 
     useEffect(() => {
-        fetch(`${API_BASE}/api/user/profile`, { headers: authHeaders() })
+        apiClient(`${API_BASE}/api/user/profile`)
             .then(r => r.json())
             .then(d => {
                 setUser(d.user);
@@ -78,9 +78,9 @@ export function AccountInfoView() {
         setLoading(true);
         try {
             const [profileRes, userRes, modelsRes] = await Promise.all([
-                fetch(`${API_BASE}/api/user/profile`, { headers: authHeaders() }),
-                fetch(`${API_BASE}/api/user`, { headers: authHeaders() }),
-                fetch(`${API_BASE}/api/models`, { headers: authHeaders() }),
+                apiClient(`${API_BASE}/api/user/profile`),
+                apiClient(`${API_BASE}/api/user`),
+                apiClient(`${API_BASE}/api/models`),
             ]);
             const profileData = await profileRes.json();
             const userData = await userRes.json();

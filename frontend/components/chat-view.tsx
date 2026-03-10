@@ -6,7 +6,7 @@ import { extractStepContent, getStepConfig } from '@/lib/step-utils';
 import { cascadeSend, cascadeSubmit, cascadeCancel, cascadeInteract, getWorkspaces, getModels, getAutoAcceptState, setAutoAcceptState, saveMedia, clearConversationCache, fetchWorkflows } from '@/lib/cascade-api';
 import type { Workspace, CascadeModel, MediaItem, WorkflowItem } from '@/lib/cascade-api';
 import { API_BASE } from '@/lib/config';
-import { authHeaders } from '@/lib/auth';
+import { apiClient } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -156,7 +156,7 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, st
     const modelInitRef = useRef(false);
     useEffect(() => {
         const fetchModels = modelInitRef.current ? Promise.resolve(null) : getModels();
-        Promise.all([getWorkspaces(), fetchModels, fetch(`${API_BASE}/api/settings`, { headers: authHeaders() }).then(r => r.json()).catch(() => null)])
+        Promise.all([getWorkspaces(), fetchModels, apiClient(`${API_BASE}/api/settings`).then(r => r.json()).catch(() => null)])
             .then(([ws, modelsResp, settingsResp]) => {
                 setWorkspaces(ws);
                 if (currentWorkspace !== null) {
