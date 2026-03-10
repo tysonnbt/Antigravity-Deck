@@ -214,7 +214,7 @@ if (JWT_SECRET) {
   // Apply JWT authentication to all API routes except public endpoints
   app.use('/api', (req, res, next) => {
     // Skip auth for public endpoints
-    if (req.path === '/ws-url' || req.path === '/auth/login') {
+    if (req.path === '/ws-url' || req.path === '/auth/login' || req.path === '/auth/refresh') {
       return next();
     }
     
