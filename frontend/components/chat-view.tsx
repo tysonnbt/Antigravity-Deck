@@ -49,6 +49,7 @@ import { groupSteps } from './chat/chat-helpers';
 import { UserMessage } from './chat/user-message';
 import { AgentResponse } from './chat/agent-response';
 import { ProcessingGroup } from './chat/processing-group';
+import { GeneratedImageStep } from './chat/generated-image-step';
 import { StreamingIndicator } from './chat/streaming-indicator';
 import { WorkflowAutocomplete } from './workflow-autocomplete';
 import type { WorkflowAutocompleteHandle } from './workflow-autocomplete';
@@ -446,6 +447,10 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, st
                                     if (group.type === 'response') {
                                         const { step, originalIndex } = group.steps[0];
                                         return <div key={`r-${gIdx}`} className={animClass}><AgentResponse step={step} index={originalIndex} /></div>;
+                                    }
+                                    if (group.type === 'image') {
+                                        const { step, originalIndex } = group.steps[0];
+                                        return <div key={`img-${gIdx}`} className={animClass}><GeneratedImageStep step={step} originalIndex={originalIndex} /></div>;
                                     }
                                     return <div key={`p-${gIdx}`} className={animClass}><ProcessingGroup steps={group.steps} cascadeId={activeCascadeId} totalStepCount={displaySteps.length} /></div>;
                                 })}

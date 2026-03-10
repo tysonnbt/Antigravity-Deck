@@ -16,9 +16,13 @@ export function isAgentResponse(step: Step): boolean {
     return false;
 }
 
+export function isGenerateImage(step: Step): boolean {
+    return step.type === 'CORTEX_STEP_TYPE_GENERATE_IMAGE' || !!step.generateImage;
+}
+
 // === Types ===
 export interface StepGroup {
-    type: 'user' | 'response' | 'processing';
+    type: 'user' | 'response' | 'processing' | 'image';
     steps: { step: Step; originalIndex: number }[];
 }
 
@@ -32,6 +36,7 @@ export function groupSteps(steps: Step[]): StepGroup[] {
     steps.forEach((step, idx) => {
         if (isUserInput(step)) { flush(); groups.push({ type: 'user', steps: [{ step, originalIndex: idx }] }); }
         else if (isAgentResponse(step)) { flush(); groups.push({ type: 'response', steps: [{ step, originalIndex: idx }] }); }
+        else if (isGenerateImage(step)) { flush(); groups.push({ type: 'image', steps: [{ step, originalIndex: idx }] }); }
         else { proc.push({ step, originalIndex: idx }); }
     });
     flush();
