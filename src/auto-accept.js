@@ -164,11 +164,9 @@ function buildInteraction(stepInfo) {
                     };
                     console.log(`[AutoAccept] File permission for: ${filePath}`);
                 } else {
-                    console.warn(`[AutoAccept] REJECTED file permission (outside workspace): ${filePath}`);
-                    interaction.filePermission = {
-                        allow: false,
-                        scope: 'PERMISSION_SCOPE_ONCE',
-                    };
+                    // Out-of-workspace files: skip auto-accept, let LS handle it
+                    console.warn(`[AutoAccept] Skipping file permission (outside workspace): ${filePath}`);
+                    // Don't set filePermission - let LS prompt user
                 }
             } else {
                 interaction.codeAction = { confirm: true };

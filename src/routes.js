@@ -1208,25 +1208,19 @@ function setupRoutes(app) {
 
     // === Generic LS Proxy — call any method ===
     // Security: Method whitelist to prevent arbitrary LS method invocation
+    // Only allow read-only and safe cancellation methods (least-privilege principle)
     const ALLOWED_LS_METHODS = new Set([
         'GetCascadeModelConfigData',
         'GetAllCascadeTrajectories',
         'GetCascadeTrajectory',
         'GetCascadeTrajectorySteps',
         'GetCascadeTrajectoryGeneratorMetadata',
-        'HandleCascadeUserInteraction',
         'CancelCascadeInvocation',
-        'DeleteCascadeTrajectory',
         'GetUserStatus',
         'GetProfileData',
         'GetWorkspaceFolders',
         'GetSettings',
-        'UpdateSettings',
         'GetAvailableCascadePlugins',
-        'InstallCascadePlugin',
-        'UninstallCascadePlugin',
-        'StartCascadeInvocation',
-        'SendCascadeMessage',
     ]);
     
     app.post('/api/ls/:method', async (req, res) => {

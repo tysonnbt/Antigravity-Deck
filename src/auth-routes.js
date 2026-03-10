@@ -88,13 +88,7 @@ router.post('/login', (req, res) => {
   }
   
   // Timing-safe comparison to prevent timing attacks
-  if (authKey.length !== AUTH_KEY.length) {
-    return res.status(401).json({ 
-      error: 'Invalid auth key',
-      code: 'INVALID_AUTH_KEY'
-    });
-  }
-  
+  // Note: timingSafeEqual will throw if lengths differ, which we catch below
   try {
     const keyBuffer = Buffer.from(authKey);
     const authBuffer = Buffer.from(AUTH_KEY);
