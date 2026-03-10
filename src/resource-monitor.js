@@ -289,7 +289,7 @@ async function sampleAll() {
     const workspaces = {};
     for (const [pid, stats] of resourceData) {
         const inst = lsInstances.find(i => String(i.pid) === pid);
-        workspaces[pid] = { ...stats, name: inst?.workspaceName || pid };
+        workspaces[pid] = { ...stats, name: inst?.workspaceName || pid, headless: inst?.headless || false };
     }
 
     history.push({
@@ -313,7 +313,7 @@ function getResourceSnapshot() {
     const workspaces = {};
     for (const [pid, stats] of resourceData) {
         const inst = lsInstances.find(i => String(i.pid) === pid);
-        workspaces[pid] = { ...stats, name: inst?.workspaceName || pid };
+        workspaces[pid] = { ...stats, name: inst?.workspaceName || pid, headless: inst?.headless || false };
     }
 
     return {
