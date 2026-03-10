@@ -5,7 +5,7 @@ import rehypeHighlight from 'rehype-highlight';
 import { useState, useCallback, memo, useEffect, useRef } from 'react';
 import { X, FileCode2, ExternalLink, Loader2, Copy, Check } from 'lucide-react';
 import { API_BASE } from '@/lib/config';
-import { authHeaders } from '@/lib/auth';
+import { apiClient } from '@/lib/api-client';
 import dynamic from 'next/dynamic';
 import vscDarkPlus from 'react-syntax-highlighter/dist/esm/styles/prism/vsc-dark-plus';
 
@@ -62,9 +62,8 @@ function FileViewerModal({ target, onClose }: { target: CciTarget; onClose: () =
     useEffect(() => {
         setContent(null);
         setError(null);
-        fetch(`${API_BASE}/api/file/read`, {
+        apiClient(`${API_BASE}/api/file/read`, {
             method: 'POST',
-            headers: { ...authHeaders(), 'Content-Type': 'application/json' },
             body: JSON.stringify({ path: target.path }),
         })
             .then(r => r.json())

@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { API_BASE } from '@/lib/config';
-import { authHeaders } from '@/lib/auth';
+import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import type { Workspace } from '@/lib/cascade-api';
 import { getWorkspaces } from '@/lib/cascade-api';
@@ -37,7 +37,7 @@ export function ConversationList({ workspaceName, wsVersion, onSelectConversatio
             const ws = workspaces.find(w => w.workspaceName === workspaceName);
             if (ws) setWorkspace(ws);
 
-            const res = await fetch(`${API_BASE}/api/workspaces/${encodeURIComponent(workspaceName)}/conversations`, { headers: authHeaders() });
+            const res = await apiClient(`${API_BASE}/api/workspaces/${encodeURIComponent(workspaceName)}/conversations`);
             const json = await res.json();
             const convs: ConvSummary[] = Object.entries(json.trajectorySummaries || {}).map(
                 ([id, info]: [string, any]) => ({

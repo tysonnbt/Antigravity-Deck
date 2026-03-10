@@ -36,16 +36,23 @@ export async function login(authKey: string): Promise<{ success: boolean; error?
 }
 
 // Logout - clears JWT cookies on server
-export async function logout(): Promise<void> {
+export async function logout(): Promise<{ success: boolean; error?: string }> {
     try {
         // Use apiClient to handle token refresh if access token expired
-        await apiClient(`${API_BASE}/api/auth/logout`, {
+        const res = await apiClient(`${API_BASE}/api/auth/logout`, {
             method: 'POST',
         });
-    } catch {
-        // Ignore errors - cookies will expire anyway
-    } finally {
-        stopTokenRefreshTimer();
+        
+        if (res.ok) {
+            stopTokenRefreshTimer();
+            return { success: true };
+        }
+        
+        // Logout failed - don't stop timer, session still active
+        return { success: false, error: 'Logout failed on server' };
+    } catch (err) {
+        // Network error - session state unknown
+        return { success: false, error: 'Cannot reach server' };
     }
 }
 

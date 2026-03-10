@@ -478,8 +478,13 @@ export function AppSidebar({
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem onClick={async () => {
-                                        await logout();
-                                        window.location.reload();
+                                        const result = await logout();
+                                        if (result.success) {
+                                            window.location.reload();
+                                        } else {
+                                            // Show error, don't reload - user still logged in
+                                            alert(`Logout failed: ${result.error || 'Unknown error'}`);
+                                        }
                                     }}>
                                         <LogOut className="mr-2 h-4 w-4" />
                                         <span>Logout</span>

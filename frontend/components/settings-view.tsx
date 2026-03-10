@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { API_BASE } from '@/lib/config';
-import { authHeaders } from '@/lib/auth';
+import { apiClient } from '@/lib/api-client';
 import { getSettings, updateSettings } from '@/lib/cascade-api';
 import type { AppSettings } from '@/lib/cascade-api';
 import { cn } from '@/lib/utils';
@@ -46,7 +46,7 @@ export function SettingsView() {
         try {
             const [settingsData, modelsRes] = await Promise.all([
                 getSettings(),
-                fetch(`${API_BASE}/api/models`, { headers: authHeaders() }).then(r => r.json()),
+                apiClient(`${API_BASE}/api/models`).then(r => r.json()),
             ]);
             setSettings(settingsData);
             setWorkspaceRoot(settingsData.defaultWorkspaceRoot || '');
