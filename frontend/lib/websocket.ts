@@ -20,11 +20,16 @@ interface WSState {
 }
 
 export function useWebSocket() {
+    // Restore conversation ID from localStorage for seamless refresh
+    const storedConvId = typeof window !== 'undefined'
+        ? (() => { try { const v = localStorage.getItem('antigravity-current-conv-id'); return v ? JSON.parse(v) : null; } catch { return null; } })()
+        : null;
+
     const [state, setState] = useState<WSState>({
         connected: false,
         steps: [] as Step[],
         conversations: {} as Record<string, TrajectorySummary>,
-        currentConvId: null,
+        currentConvId: storedConvId,
         cascadeStatus: null,
         lastUpdate: '',
         conversationsVersion: 0,
@@ -33,7 +38,7 @@ export function useWebSocket() {
     const wsRef = useRef<WebSocket | null>(null);
     const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     // Use refs for values needed in WS handlers to avoid stale closures
-    const currentConvIdRef = useRef<string | null>(null);
+    const currentConvIdRef = useRef<string | null>(storedConvId);
 
     // Keep ref in sync with state
     useEffect(() => { currentConvIdRef.current = state.currentConvId; }, [state.currentConvId]);

@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils';
+import { Check, X } from 'lucide-react';
 
 export function FeatureBadge({ label, enabled, value }: { label: string; enabled?: boolean; value?: string }) {
     if (value !== undefined) {
@@ -16,7 +17,7 @@ export function FeatureBadge({ label, enabled, value }: { label: string; enabled
                 ? "bg-green-500/5 border-green-500/20 text-green-500"
                 : "bg-muted/10 border-border/30 text-muted-foreground/50"
         )}>
-            <span className="text-[10px]">{enabled ? '✅' : '❌'}</span>
+            <span className="text-[10px]">{enabled ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}</span>
             <span className="text-xs">{label}</span>
         </div>
     );

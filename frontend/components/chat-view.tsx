@@ -21,7 +21,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Settings, Folder, Zap, BarChart2, RefreshCcw, SendHorizontal, Square, Paperclip, GitBranch, Plus, X, ChevronDown, Activity, Download, Bell, BellOff } from 'lucide-react';
+import { Settings, Folder, Zap, BarChart2, RefreshCcw, SendHorizontal, Square, Paperclip, GitBranch, Plus, X, ChevronDown, Activity, Download, Bell, BellOff, Rocket, ArrowDown as ArrowDownIcon, Camera, Brain, Image as ImageIcon } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 
 // === Props ===
@@ -94,7 +94,10 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, st
     const [selectedModel, setSelectedModel] = useState<string>('');
     const [showWsPicker, setShowWsPicker] = useState(false);
     const [showModelPicker, setShowModelPicker] = useState(false);
-    const [showTokens, setShowTokens] = useState(false);
+    const [showTokens, setShowTokens] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        try { const v = localStorage.getItem('antigravity-show-tokens'); return v ? JSON.parse(v) : false; } catch { return false; }
+    });
     // Multi-image state: array of pending images
     const [pendingImages, setPendingImages] = useState<{ id: string; name: string; mimeType: string; base64: string; dataUrl: string }[]>([]);
     const [pendingMessage, setPendingMessage] = useState<string | null>(null);
@@ -148,6 +151,7 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, st
     }, []);
 
     // Load workspaces + models + settings in parallel
+    useEffect(() => { localStorage.setItem('antigravity-show-tokens', JSON.stringify(showTokens)); }, [showTokens]);
     const modelInitRef = useRef(false);
     useEffect(() => {
         const fetchModels = modelInitRef.current ? Promise.resolve(null) : getModels();
@@ -421,8 +425,10 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, st
                         {displaySteps.length === 0 ? (
                             <div className="flex items-center justify-center h-full">
                                 <div className="text-center space-y-4">
-                                    <div className="text-5xl">🚀</div>
-                                    <h2 className="text-xl font-semibold text-foreground/80">AntigravityChat</h2>
+                                    <div className="flex items-center justify-center gap-3">
+                                        <Rocket className="h-8 w-8 text-muted-foreground/40" />
+                                        <h2 className="text-xl font-semibold text-foreground/80">AntigravityChat</h2>
+                                    </div>
                                     <p className="text-sm text-muted-foreground max-w-md">
                                         {currentConvId ? 'Loading conversation...' : 'Select a conversation from the sidebar or start a new one'}
                                     </p>
@@ -455,7 +461,7 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, st
                                 size="sm"
                                 className="scroll-bottom-btn"
                             >
-                                ⬇ New messages
+                                <ArrowDownIcon className="h-3 w-3 mr-1 inline" /> New messages
                             </Button>
                         )}
                     </div>
@@ -470,8 +476,10 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, st
                         {isDragOver && (
                             <div className="absolute inset-0 z-50 flex items-center justify-center bg-primary/5 border-2 border-dashed border-primary/40 rounded-lg backdrop-blur-sm pointer-events-none">
                                 <div className="text-center space-y-2">
-                                    <div className="text-3xl">📸</div>
-                                    <p className="text-sm font-medium text-primary/80">Drop images here</p>
+                                    <div className="flex items-center justify-center gap-2">
+                                        <Camera className="h-6 w-6 text-primary/60" />
+                                        <p className="text-sm font-medium text-primary/80">Drop images here</p>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -482,8 +490,8 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, st
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                         <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground h-7 px-2 font-normal">
-                                            <span>🧠</span>
-                                            <span className="truncate max-w-[80px] sm:max-w-[140px]">{selectedModelLabel}</span>
+                                            <span><Brain className="h-3.5 w-3.5" /></span>
+                                            <span className="truncate max-w-[200px] sm:max-w-[240px]">{selectedModelLabel}</span>
                                             <ChevronDown className="h-3 w-3 opacity-50" />
                                         </Button>
                                     </DropdownMenuTrigger>
@@ -500,7 +508,7 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, st
                                                     {m.isRecommended && <Badge variant="secondary" className="text-[8px] h-3.5 px-1 shrink-0">★</Badge>}
                                                 </div>
                                                 <div className="flex items-center gap-1.5 shrink-0">
-                                                    {m.supportsImages && <span className="text-[9px]">🖼️</span>}
+                                                    {m.supportsImages && <span className="text-[9px]"><ImageIcon className="h-3 w-3" /></span>}
                                                     <div className="w-12 h-1.5 rounded-full bg-muted overflow-hidden">
                                                         <div className="h-full rounded-full bg-green-500/70" style={{ width: `${Math.round(m.quota * 100)}%` }} />
                                                     </div>
@@ -686,7 +694,7 @@ export function ChatView({ steps, currentConvId, currentWorkspace, wsVersion, st
                                     onKeyDown={handleKeyDown}
                                     onPaste={handlePaste}
                                     placeholder={currentConvId ? "Continue conversation..." : "Start a new conversation..."}
-                                    className="flex-1 resize-none min-h-[36px] sm:min-h-[44px] max-h-[200px] text-sm"
+                                    className="flex-1 resize-none min-h-[36px] sm:min-h-[44px] max-h-[200px] text-sm !py-[8px] sm:!py-[12px]"
                                     rows={1}
                                     onInput={(e) => {
                                         const target = e.target as HTMLTextAreaElement;

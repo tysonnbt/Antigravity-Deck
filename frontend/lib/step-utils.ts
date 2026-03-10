@@ -2,31 +2,31 @@ import { Step, StepDisplayConfig, StepStats } from './types';
 
 // === Step type display config ===
 export const STEP_DISPLAY: Record<string, StepDisplayConfig> = {
-    'CORTEX_STEP_TYPE_USER_INPUT': { role: 'user', icon: '👤', label: 'User', show: true },
-    'CORTEX_STEP_TYPE_PLANNER_RESPONSE': { role: 'thinking', icon: '💭', label: 'Agent Thinking', show: true, collapsible: true },
-    'CORTEX_STEP_TYPE_NOTIFY_USER': { role: 'response', icon: '📢', label: 'Agent Response', show: true },
-    'CORTEX_STEP_TYPE_CODE_ACTION': { role: 'tool', icon: '📝', label: 'Code Edit', show: true },
-    'CORTEX_STEP_TYPE_CODE_ACKNOWLEDGEMENT': { role: 'tool', icon: '✅', label: 'Code Applied', show: true },
-    'CORTEX_STEP_TYPE_RUN_COMMAND': { role: 'tool', icon: '⚡', label: 'Terminal', show: true },
-    'CORTEX_STEP_TYPE_COMMAND_STATUS': { role: 'tool', icon: '📊', label: 'Command Status', show: true },
-    'CORTEX_STEP_TYPE_SEND_COMMAND_INPUT': { role: 'tool', icon: '⌨️', label: 'Command Input', show: true },
-    'CORTEX_STEP_TYPE_VIEW_FILE': { role: 'tool', icon: '📄', label: 'View File', show: true },
-    'CORTEX_STEP_TYPE_LIST_DIRECTORY': { role: 'tool', icon: '📁', label: 'List Dir', show: true },
-    'CORTEX_STEP_TYPE_BROWSER_SUBAGENT': { role: 'tool', icon: '🌐', label: 'Browser', show: true },
-    'CORTEX_STEP_TYPE_TASK_BOUNDARY': { role: 'system', icon: '📋', label: 'Task', show: true },
-    'CORTEX_STEP_TYPE_FIND': { role: 'tool', icon: '🔍', label: 'Search', show: true },
-    'CORTEX_STEP_TYPE_GREP_SEARCH': { role: 'tool', icon: '🔍', label: 'Grep', show: true },
-    'CORTEX_STEP_TYPE_ERROR_MESSAGE': { role: 'error', icon: '❌', label: 'Error', show: true },
-    'CORTEX_STEP_TYPE_CHECKPOINT': { role: 'system', icon: '💾', label: 'Checkpoint', show: true },
-    'CORTEX_STEP_TYPE_EPHEMERAL_MESSAGE': { role: 'system', icon: '💬', label: 'System', show: true },
-    'CORTEX_STEP_TYPE_CONVERSATION_HISTORY': { role: 'system', icon: '📜', label: 'History', show: true },
-    'CORTEX_STEP_TYPE_KNOWLEDGE_ARTIFACTS': { role: 'system', icon: '📚', label: 'Knowledge', show: true },
-    'CORTEX_STEP_TYPE_READ_URL_CONTENT': { role: 'tool', icon: '🌐', label: 'Read URL', show: true },
-    'CORTEX_STEP_TYPE_VIEW_CONTENT_CHUNK': { role: 'tool', icon: '📑', label: 'View Chunk', show: true },
+    'CORTEX_STEP_TYPE_USER_INPUT': { role: 'user', icon: 'User', label: 'User', show: true },
+    'CORTEX_STEP_TYPE_PLANNER_RESPONSE': { role: 'thinking', icon: 'MessageCircle', label: 'Agent Thinking', show: true, collapsible: true },
+    'CORTEX_STEP_TYPE_NOTIFY_USER': { role: 'response', icon: 'Megaphone', label: 'Agent Response', show: true },
+    'CORTEX_STEP_TYPE_CODE_ACTION': { role: 'tool', icon: 'FileEdit', label: 'Code Edit', show: true },
+    'CORTEX_STEP_TYPE_CODE_ACKNOWLEDGEMENT': { role: 'tool', icon: 'CheckCircle', label: 'Code Applied', show: true },
+    'CORTEX_STEP_TYPE_RUN_COMMAND': { role: 'tool', icon: 'Zap', label: 'Terminal', show: true },
+    'CORTEX_STEP_TYPE_COMMAND_STATUS': { role: 'tool', icon: 'BarChart2', label: 'Command Status', show: true },
+    'CORTEX_STEP_TYPE_SEND_COMMAND_INPUT': { role: 'tool', icon: 'Keyboard', label: 'Command Input', show: true },
+    'CORTEX_STEP_TYPE_VIEW_FILE': { role: 'tool', icon: 'FileText', label: 'View File', show: true },
+    'CORTEX_STEP_TYPE_LIST_DIRECTORY': { role: 'tool', icon: 'FolderOpen', label: 'List Dir', show: true },
+    'CORTEX_STEP_TYPE_BROWSER_SUBAGENT': { role: 'tool', icon: 'Globe', label: 'Browser', show: true },
+    'CORTEX_STEP_TYPE_TASK_BOUNDARY': { role: 'system', icon: 'ClipboardList', label: 'Task', show: true },
+    'CORTEX_STEP_TYPE_FIND': { role: 'tool', icon: 'Search', label: 'Search', show: true },
+    'CORTEX_STEP_TYPE_GREP_SEARCH': { role: 'tool', icon: 'Search', label: 'Grep', show: true },
+    'CORTEX_STEP_TYPE_ERROR_MESSAGE': { role: 'error', icon: 'XCircle', label: 'Error', show: true },
+    'CORTEX_STEP_TYPE_CHECKPOINT': { role: 'system', icon: 'Save', label: 'Checkpoint', show: true },
+    'CORTEX_STEP_TYPE_EPHEMERAL_MESSAGE': { role: 'system', icon: 'MessageSquare', label: 'System', show: true },
+    'CORTEX_STEP_TYPE_CONVERSATION_HISTORY': { role: 'system', icon: 'ScrollText', label: 'History', show: true },
+    'CORTEX_STEP_TYPE_KNOWLEDGE_ARTIFACTS': { role: 'system', icon: 'BookOpen', label: 'Knowledge', show: true },
+    'CORTEX_STEP_TYPE_READ_URL_CONTENT': { role: 'tool', icon: 'Globe', label: 'Read URL', show: true },
+    'CORTEX_STEP_TYPE_VIEW_CONTENT_CHUNK': { role: 'tool', icon: 'FileSearch', label: 'View Chunk', show: true },
 };
 
 export function getStepConfig(type: string): StepDisplayConfig {
-    return STEP_DISPLAY[type] || { role: 'system', icon: '⚙️', label: type.replace('CORTEX_STEP_TYPE_', ''), show: true };
+    return STEP_DISPLAY[type] || { role: 'system', icon: 'Settings', label: type.replace('CORTEX_STEP_TYPE_', ''), show: true };
 }
 
 // === Extract displayable content from a step ===
