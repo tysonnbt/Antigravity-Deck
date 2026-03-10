@@ -5,12 +5,13 @@ import { authHeaders } from '@/lib/auth';
 import { getSettings, updateSettings } from '@/lib/cascade-api';
 import type { AppSettings } from '@/lib/cascade-api';
 import { cn } from '@/lib/utils';
-import { Check, X, Sparkles, CircleDot, Bot, Settings, Globe, Camera, Star } from 'lucide-react';
+import { Check, X, Sparkles, CircleDot, Bot, Settings, Globe, Camera, Star, MessageSquare, Eye, EyeOff } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
 import {
     Select,
     SelectContent,
@@ -30,6 +31,24 @@ interface Model {
     quota: number;
 }
 
+interface AgentBridgeSettings {
+    discordBotToken: string;
+    discordChannelId: string;
+    discordGuildId: string;
+    stepSoftLimit: number;
+    allowedBotIds: string[];
+    autoStart: boolean;
+}
+
+const DEFAULT_BRIDGE: AgentBridgeSettings = {
+    discordBotToken: '',
+    discordChannelId: '',
+    discordGuildId: '',
+    stepSoftLimit: 500,
+    allowedBotIds: [],
+    autoStart: false,
+};
+
 export function SettingsView() {
     const [settings, setSettings] = useState<AppSettings | null>(null);
     const [models, setModels] = useState<Model[]>([]);
@@ -39,6 +58,11 @@ export function SettingsView() {
     const [saving, setSaving] = useState(false);
     const [saveMsg, setSaveMsg] = useState('');
     const [loading, setLoading] = useState(true);
+
+    // Agent Bridge state
+    const [bridge, setBridge] = useState<AgentBridgeSettings>(DEFAULT_BRIDGE);
+    const [bridgeOriginal, setBridgeOriginal] = useState<AgentBridgeSettings>(DEFAULT_BRIDGE);
+    const [showToken, setShowToken] = useState(false);
 
 
     const loadAll = useCallback(async () => {
@@ -53,6 +77,12 @@ export function SettingsView() {
             setDefaultModel(settingsData.defaultModel || '__api_default__');
             setModels(modelsRes.models || []);
             setApiDefaultModel(modelsRes.defaultModel || '');
+
+            // Load bridge settings
+            const b = (settingsData as Record<string, unknown>).agentBridge as Partial<AgentBridgeSettings> | undefined;
+            const bridgeData: AgentBridgeSettings = { ...DEFAULT_BRIDGE, ...b };
+            setBridge(bridgeData);
+            setBridgeOriginal(bridgeData);
         } catch (e) {
             console.error('Failed to load settings:', e);
         } finally {
@@ -66,11 +96,32 @@ export function SettingsView() {
         setSaving(true);
         setSaveMsg('');
         try {
-            const updated = await updateSettings({
+            const payload: Record<string, unknown> = {
                 defaultWorkspaceRoot: workspaceRoot.trim(),
                 defaultModel: defaultModel === '__api_default__' ? '' : defaultModel,
-            });
+            };
+
+            // Include bridge settings if changed
+            if (hasBridgeChanges) {
+                payload.agentBridge = {
+                    discordBotToken: bridge.discordBotToken,
+                    discordChannelId: bridge.discordChannelId,
+                    discordGuildId: bridge.discordGuildId,
+                    stepSoftLimit: bridge.stepSoftLimit,
+                    allowedBotIds: bridge.allowedBotIds,
+                    autoStart: bridge.autoStart,
+                };
+            }
+
+            const updated = await updateSettings(payload as Partial<AppSettings>);
             setSettings(updated);
+
+            // Sync bridge original
+            const b = (updated as Record<string, unknown>).agentBridge as Partial<AgentBridgeSettings> | undefined;
+            const bridgeData: AgentBridgeSettings = { ...DEFAULT_BRIDGE, ...b };
+            setBridge(bridgeData);
+            setBridgeOriginal(bridgeData);
+
             setSaveMsg('saved');
             setTimeout(() => setSaveMsg(''), 2500);
         } catch {
@@ -81,10 +132,18 @@ export function SettingsView() {
     };
 
     const realDefault = defaultModel === '__api_default__' ? '' : defaultModel;
-    const hasChanges = settings && (
+    const hasBridgeChanges =
+        bridge.discordBotToken !== bridgeOriginal.discordBotToken ||
+        bridge.discordChannelId !== bridgeOriginal.discordChannelId ||
+        bridge.discordGuildId !== bridgeOriginal.discordGuildId ||
+        bridge.stepSoftLimit !== bridgeOriginal.stepSoftLimit ||
+        bridge.autoStart !== bridgeOriginal.autoStart ||
+        JSON.stringify(bridge.allowedBotIds) !== JSON.stringify(bridgeOriginal.allowedBotIds);
+
+    const hasChanges = (settings && (
         workspaceRoot.trim() !== (settings.defaultWorkspaceRoot || '') ||
         realDefault !== (settings.defaultModel || '')
-    );
+    )) || hasBridgeChanges;
 
     const geminiModels = models.filter(m => m.label.toLowerCase().includes('gemini'));
     const claudeModels = models.filter(m => m.label.toLowerCase().includes('claude'));
@@ -232,6 +291,102 @@ export function SettingsView() {
                     </CardContent>
                 </Card>
 
+                {/* Agent Bridge */}
+                <Card>
+                    <CardHeader className="pb-3">
+                        <CardTitle className="text-xs font-semibold flex items-center gap-1.5">
+                            <MessageSquare className="h-3.5 w-3.5 text-indigo-400" />
+                            Agent Bridge
+                        </CardTitle>
+                        <CardDescription className="text-[10px]">
+                            Connect external AI agents to Antigravity via Discord. Configure bot credentials and relay behavior.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        {/* Discord Bot Token */}
+                        <div className="space-y-1.5">
+                            <Label className="text-[11px] text-muted-foreground">Discord Bot Token</Label>
+                            <div className="relative">
+                                <Input
+                                    type={showToken ? 'text' : 'password'}
+                                    value={bridge.discordBotToken}
+                                    onChange={e => setBridge(b => ({ ...b, discordBotToken: e.target.value }))}
+                                    placeholder="MTQ3OTUw..."
+                                    className="font-mono text-xs pr-9"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowToken(!showToken)}
+                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                                >
+                                    {showToken ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Channel & Guild IDs — side by side */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <Label className="text-[11px] text-muted-foreground">Channel ID</Label>
+                                <Input
+                                    value={bridge.discordChannelId}
+                                    onChange={e => setBridge(b => ({ ...b, discordChannelId: e.target.value }))}
+                                    placeholder="1479500166..."
+                                    className="font-mono text-xs"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-[11px] text-muted-foreground">Guild ID</Label>
+                                <Input
+                                    value={bridge.discordGuildId}
+                                    onChange={e => setBridge(b => ({ ...b, discordGuildId: e.target.value }))}
+                                    placeholder="1479500111..."
+                                    className="font-mono text-xs"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Step Limit & Allowed Bot IDs */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <Label className="text-[11px] text-muted-foreground">Step Soft Limit</Label>
+                                <Input
+                                    type="number"
+                                    value={bridge.stepSoftLimit}
+                                    onChange={e => setBridge(b => ({ ...b, stepSoftLimit: parseInt(e.target.value) || 0 }))}
+                                    min={0}
+                                    max={10000}
+                                    className="font-mono text-xs"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-[11px] text-muted-foreground">Allowed Bot IDs</Label>
+                                <Input
+                                    value={bridge.allowedBotIds.join(', ')}
+                                    onChange={e => setBridge(b => ({
+                                        ...b,
+                                        allowedBotIds: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+                                    }))}
+                                    placeholder="bot_id_1, bot_id_2"
+                                    className="font-mono text-xs"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Auto-start toggle */}
+                        <div className="flex items-center justify-between rounded-lg border border-border/50 px-3 py-2.5">
+                            <div>
+                                <Label className="text-[11px] font-medium">Auto-Start Bridge</Label>
+                                <p className="text-[10px] text-muted-foreground">Automatically start the Agent Bridge when the server starts</p>
+                            </div>
+                            <Switch
+                                checked={bridge.autoStart}
+                                onCheckedChange={v => setBridge(b => ({ ...b, autoStart: v }))}
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
+
                 {/* Save */}
                 <div className="flex items-center gap-3">
                     <Button
@@ -257,3 +412,4 @@ export function SettingsView() {
         </div>
     );
 }
+
