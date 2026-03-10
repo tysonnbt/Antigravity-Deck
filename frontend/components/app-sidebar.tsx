@@ -282,6 +282,23 @@ export function AppSidebar({
         [openingFolder, loadAll, onWorkspaceCreated]
     )
 
+    const handleOpenFolderHeadless = useCallback(
+        async (folder: WorkspaceFolder) => {
+            if (openingFolder === folder.name) return
+            setOpeningFolder(folder.name)
+            try {
+                await createHeadlessWorkspace(folder.path)
+                await loadAll()
+                onWorkspaceCreated?.()
+            } catch (e) {
+                console.error("Open headless failed:", e)
+            } finally {
+                setOpeningFolder(null)
+            }
+        },
+        [openingFolder, loadAll, onWorkspaceCreated]
+    )
+
     const regularWs = wsData.filter((d) => d.workspace.category !== "playground")
     const playgroundWs = wsData.filter((d) => d.workspace.category === "playground")
 
@@ -342,7 +359,7 @@ export function AppSidebar({
                                 <SidebarGroupContent>
                                     <SidebarMenu>
                                         {closedFolders.map((folder) => (
-                                            <SidebarMenuItem key={folder.name}>
+                                            <SidebarMenuItem key={folder.name} className="group/avail">
                                                 <SidebarMenuButton
                                                     onClick={() => handleOpenFolder(folder)}
                                                     disabled={openingFolder === folder.name}
@@ -351,10 +368,19 @@ export function AppSidebar({
                                                 >
                                                     <FolderOpen className="shrink-0" />
                                                     <span className="flex-1 truncate min-w-0">{folder.name}</span>
-                                                    <span className="ml-auto opacity-0 group-hover/menu-item:opacity-100 text-[9px] text-muted-foreground/50 transition-opacity shrink-0">
+                                                    <span className="ml-auto opacity-0 group-hover/avail:opacity-100 text-[9px] text-muted-foreground/50 transition-opacity shrink-0">
                                                         {openingFolder === folder.name ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Open'}
                                                     </span>
                                                 </SidebarMenuButton>
+                                                {openingFolder !== folder.name && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleOpenFolderHeadless(folder) }}
+                                                        title="Open Headless (no IDE)"
+                                                        className="absolute right-7 top-1/2 -translate-y-1/2 opacity-0 group-hover/avail:opacity-100 transition-opacity w-6 h-6 rounded-md flex items-center justify-center text-muted-foreground/40 hover:text-emerald-400 hover:bg-emerald-400/10"
+                                                    >
+                                                        <Terminal className="h-3.5 w-3.5" />
+                                                    </button>
+                                                )}
                                             </SidebarMenuItem>
                                         ))}
                                     </SidebarMenu>
