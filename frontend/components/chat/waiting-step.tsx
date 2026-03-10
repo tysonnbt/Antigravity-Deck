@@ -4,7 +4,7 @@ import { Step } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { API_BASE } from '@/lib/config';
-import { authHeaders } from '@/lib/auth';
+import { apiClient } from '@/lib/api-client';
 import { Play, Check, X, Loader2, Zap, FolderOpen, Keyboard, Bell, FileText, AlertTriangle } from 'lucide-react';
 
 interface WaitingStepProps {
@@ -86,9 +86,8 @@ export const WaitingStep = memo(function WaitingStep({ step, originalIndex, casc
         if (!cascadeId || acting) return;
         setActing(true);
         try {
-            const res = await fetch(`${API_BASE}/api/cascade/${cascadeId}/accept`, {
+            const res = await apiClient(`${API_BASE}/api/cascade/${cascadeId}/accept`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...authHeaders() },
                 body: JSON.stringify(action === 'reject' ? { reject: true } : {}),
             });
             console.log(`[WaitingStep] ${action} response:`, res.status);

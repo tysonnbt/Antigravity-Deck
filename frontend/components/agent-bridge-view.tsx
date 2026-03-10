@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { API_BASE } from '@/lib/config';
+import { apiClient } from '@/lib/api-client';
 import {
     Bot, Play, Square, RefreshCw, Wifi, WifiOff,
     MessageSquare, ArrowRight, ArrowLeft, RotateCcw, AlertCircle,
@@ -95,9 +96,8 @@ export function AgentBridgeView() {
             if (config.cascadeId) body.cascadeId = config.cascadeId;
             if (config.stepSoftLimit) body.stepSoftLimit = Number(config.stepSoftLimit);
 
-            const res = await fetch(`${API_BASE}/api/agent-bridge/start`, {
+            const res = await apiClient(`${API_BASE}/api/agent-bridge/start`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
             });
             const data = await res.json();
@@ -114,7 +114,7 @@ export function AgentBridgeView() {
     const handleStop = async () => {
         setLoading(true);
         try {
-            await fetch(`${API_BASE}/api/agent-bridge/stop`, { method: 'POST' });
+            await apiClient(`${API_BASE}/api/agent-bridge/stop`, { method: 'POST' });
             await fetchStatus();
         } finally { setLoading(false); }
     };

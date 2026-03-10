@@ -3,6 +3,7 @@
 
 const { lsInstances } = require('./config');
 const { getInstanceForCascade } = require('./poller');
+const { verifyAccessToken } = require('./jwt-utils');
 
 const viewers = new Set();
 const globalViewers = new Set(); // clients that want ALL events (Live Logs)
@@ -10,15 +11,45 @@ const clientConvMap = new Map(); // Map<ws, convId> — per-client conversation 
 
 function setupWebSocket(wss, { ensureCached, stepCache }) {
     wss.on('connection', (ws, req) => {
-        // Auth check for WebSocket (skip for localhost connections — same policy as HTTP)
+        // WebSocket Authentication
+        const jwtSecret = process.env.JWT_SECRET || '';
         const authKey = process.env.AUTH_KEY || '';
-        if (authKey) {
+        
+        if (jwtSecret || authKey) {
             const ip = req.socket.remoteAddress || '';
             const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
-            if (!isLocal) {
+            const allowLocalBypass = process.env.ALLOW_LOCALHOST_BYPASS === 'true';
+            
+            // Check auth (no localhost bypass unless explicitly enabled)
+            if (!(isLocal && allowLocalBypass)) {
                 const url = new URL(req.url, 'http://localhost');
-                const key = url.searchParams.get('auth_key');
-                if (key !== authKey) {
+                let authenticated = false;
+                
+                // JWT mode: only accept JWT tokens from HttpOnly cookies (no query params for security)
+                if (jwtSecret) {
+                    // Extract JWT from cookie only (query param tokens are insecure - logged in URLs/history)
+                    const token = req.headers.cookie?.match(/access_token=([^;]+)/)?.[1];
+                    
+                    if (token) {
+                        try {
+                            const decoded = verifyAccessToken(token);
+                            req.user = { id: decoded.sub };
+                            authenticated = true;
+                        } catch (err) {
+                            // JWT invalid - reject connection
+                            console.warn('[WS] Invalid JWT token:', err.message);
+                        }
+                    }
+                }
+                // Legacy mode: only accept auth_key when JWT_SECRET is not set
+                else if (authKey) {
+                    const key = url.searchParams.get('auth_key');
+                    if (key === authKey) {
+                        authenticated = true;
+                    }
+                }
+                
+                if (!authenticated) {
                     ws.close(4401, 'Unauthorized');
                     return;
                 }
@@ -46,6 +77,10 @@ function setupWebSocket(wss, { ensureCached, stepCache }) {
                     // Live Logs mode: receive all broadcasts regardless of conversation
                     globalViewers.add(ws);
                     console.log(`[WS] subscribe_all — global viewers: ${globalViewers.size}`);
+                } else if (msg.type === 'unsubscribe_all') {
+                    // Stop receiving global broadcasts (Live Logs closed)
+                    globalViewers.delete(ws);
+                    console.log(`[WS] unsubscribe_all — global viewers: ${globalViewers.size}`);
                 }
             } catch (e) { }
         });

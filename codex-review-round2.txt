@@ -1,0 +1,31 @@
+## Issues Fixed
+
+### ISSUE-1: Auth route protections are bypassed by middleware ordering
+**Status:** FIXED
+**Changes:** 
+- Moved auth routes mount AFTER JWT auth and CSRF middleware (server.js:263)
+- Rate limiters now applied BEFORE route mounting (server.js:213-214)
+- CSRF path check fixed to match Express routing (src/csrf-middleware.js:35)
+- Login remains public, refresh/logout/status now protected by JWT+CSRF
+**Evidence:** Commit 2e1c7b8, tests passing 10/10
+
+### ISSUE-2: Refresh-token rotation is race-prone and can be bypassed with concurrent reuse
+**Status:** FIXED
+**Changes:**
+- Replaced isRefreshTokenValid() with atomic consumeRefreshToken() (src/token-store.js:34-53)
+- Single operation validates and revokes token before returning success
+- Prevents concurrent requests from both passing validation
+- Reuse detection triggers immediate revocation of all user tokens
+**Evidence:** Commit 2e1c7b8, src/auth-routes.js:157-180
+
+### ISSUE-3: WebSocket auth still accepts legacy `auth_key` in JWT mode
+**Status:** FIXED
+**Changes:**
+- Removed auth_key fallback when JWT_SECRET is set (src/ws.js:28-42)
+- JWT mode only accepts JWT tokens (query param or cookie)
+- Legacy mode only accepts auth_key when JWT_SECRET is absent
+- Prevents credential downgrade attack via URL parameters
+**Evidence:** Commit 2e1c7b8, src/ws.js:28-42
+
+## Your Turn
+Re-review the latest diff using same output format. Keep already-fixed issues closed.

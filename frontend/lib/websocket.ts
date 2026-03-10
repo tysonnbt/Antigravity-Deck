@@ -5,8 +5,8 @@ import { Step, ConversationsResponse, TrajectorySummary } from './types';
 import { extractStepContent } from './step-utils';
 import { showNotification } from './notifications';
 import { API_BASE } from './config';
-import { authHeaders } from './auth';
 import { getCascadeStatus, getWorkspaceResources } from './cascade-api';
+import { apiClient } from './api-client';
 import type { ResourceSnapshot } from './cascade-api';
 import { wsService } from './ws-service';
 
@@ -55,7 +55,7 @@ export function useWebSocket() {
 
     const loadConversations = useCallback(async () => {
         try {
-            const res = await fetch(`${API_BASE}/api/conversations`, { headers: authHeaders() });
+            const res = await apiClient(`${API_BASE}/api/conversations`);
             const data: ConversationsResponse = await res.json();
             if (data.trajectorySummaries) {
                 setState(prev => ({ ...prev, conversations: data.trajectorySummaries! }));

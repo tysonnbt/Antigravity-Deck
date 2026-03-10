@@ -6,7 +6,6 @@
 'use client';
 
 import { getWsUrl } from './config';
-import { authWsUrl } from './auth';
 
 type WSListener = (data: Record<string, unknown>) => void;
 
@@ -46,15 +45,15 @@ class WebSocketService {
         }
         try {
             const wsBase = await getWsUrl();
-            const ws = new WebSocket(authWsUrl(wsBase));
+            // WebSocket authenticates via HttpOnly cookies automatically
+            const ws = new WebSocket(wsBase);
             this.ws = ws;
 
             ws.onopen = () => {
                 console.log('[WS-Service] connected');
                 this._connected = true;
-                // Subscribe to all events so backend sends messages for ALL conversations
-                // (needed for Live Logs which monitors all cascades)
-                ws.send(JSON.stringify({ type: 'subscribe_all' }));
+                // Note: Do NOT send subscribe_all here - it causes duplicate events
+                // Only specific components (Live Logs) should subscribe to all events
                 this.emit('__ws_open', {});
             };
 

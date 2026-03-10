@@ -275,10 +275,19 @@ export function AgentLogsView() {
         if (!wsService) return;
 
         // Track connection status via shared service events
-        const offOpen = wsService.on('__ws_open', () => setWsStatus('connected'));
+        const offOpen = wsService.on('__ws_open', () => {
+            setWsStatus('connected');
+            // Live Logs needs ALL events from ALL conversations
+            wsService.send({ type: 'subscribe_all' });
+        });
         const offClose = wsService.on('__ws_close', () => setWsStatus('disconnected'));
         // Set initial status
         setWsStatus(wsService.connected ? 'connected' : 'connecting');
+        
+        // If already connected, subscribe now
+        if (wsService.connected) {
+            wsService.send({ type: 'subscribe_all' });
+        }
 
         // Listen to ALL messages for live logging
         const offAll = wsService.onAll((data) => {
@@ -328,6 +337,10 @@ export function AgentLogsView() {
             offOpen();
             offClose();
             offAll();
+            // Unsubscribe from global events when Live Logs closes
+            if (wsService?.connected) {
+                wsService.send({ type: 'unsubscribe_all' });
+            }
         };
     }, [addEvent]);
 

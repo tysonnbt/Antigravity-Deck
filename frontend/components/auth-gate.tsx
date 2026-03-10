@@ -1,7 +1,6 @@
 'use client';
 import { useState, useCallback, useEffect } from 'react';
-import { setAuthKey, getAuthKey } from '@/lib/auth';
-import { API_BASE } from '@/lib/config';
+import { login, checkAuth } from '@/lib/auth';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -19,11 +18,12 @@ export function AuthGate({ children }: AuthGateProps) {
 
     // Client-side auth check after hydration (avoids SSR mismatch)
     useEffect(() => {
-        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-            setAuthenticated(true);
-        } else if (getAuthKey()) {
-            setAuthenticated(true);
-        }
+        // Check if user has valid JWT token
+        // Note: This PR implements JWT authentication as the primary auth mode
+        // Backend must have JWT_SECRET set. For local dev without auth, set ALLOW_LOCALHOST_BYPASS=true
+        checkAuth().then(isAuth => {
+            if (isAuth) setAuthenticated(true);
+        });
     }, []);
 
     const handleSubmit = useCallback(async (e: React.FormEvent) => {
@@ -32,21 +32,13 @@ export function AuthGate({ children }: AuthGateProps) {
         setChecking(true);
         setError('');
 
-        try {
-            const res = await fetch(`${API_BASE}/api/settings`, {
-                headers: { 'X-Auth-Key': key.trim() }
-            });
-            if (res.ok) {
-                setAuthKey(key.trim());
-                setAuthenticated(true);
-            } else {
-                setError('Invalid key');
-            }
-        } catch {
-            setError('Cannot reach server');
-        } finally {
-            setChecking(false);
+        const result = await login(key.trim());
+        if (result.success) {
+            setAuthenticated(true);
+        } else {
+            setError(result.error || 'Invalid key');
         }
+        setChecking(false);
     }, [key]);
 
     if (authenticated) return <>{children}</>;
