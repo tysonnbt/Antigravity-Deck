@@ -1,6 +1,6 @@
-# 🔮 Antigravity Chat Mirror
+# 🔮 Antigravity Deck
 
-Real-time chat mirror for [Windsurf (Antigravity)](https://codeium.com/windsurf) conversations. Extracts and displays **all** conversation steps from the Language Server API — including steps beyond the JSON API's 598-step cap — with a full-featured chat UI that lets you **view, send messages, manage workspaces, and control cascades**.
+Full-featured workspace dashboard for [Windsurf (Antigravity)](https://codeium.com/windsurf) conversations. Extracts and displays **all** conversation steps from the Language Server API — including steps beyond the JSON API's 598-step cap — with a full-featured chat UI that lets you **view, send messages, manage workspaces, and control cascades**.
 
 ## ✨ Features
 

@@ -224,7 +224,7 @@ export function exportToMarkdown(steps: Step[], convId: string): void {
     steps.forEach(s => { const c = getStepConfig(s.type); typeCounts[c.label] = (typeCounts[c.label] || 0) + 1; });
     const countStr = Object.entries(typeCounts).map(([l, c]) => `${l}: ${c}`).join(' · ');
 
-    let md = `# Chat Mirror Export\n\n**Conversation ID:** \`${convId}\`\n**Steps:** ${steps.length} (${countStr})\n**Exported:** ${new Date().toLocaleString()}\n\n---\n\n`;
+    let md = `# Antigravity Deck Export\n\n**Conversation ID:** \`${convId}\`\n**Steps:** ${steps.length} (${countStr})\n**Exported:** ${new Date().toLocaleString()}\n\n---\n\n`;
 
     steps.forEach((step, idx) => {
         const config = getStepConfig(step.type);

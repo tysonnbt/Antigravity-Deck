@@ -1,4 +1,4 @@
-// === Chat Mirror Types ===
+// === Antigravity Deck Types ===
 
 export interface StepMetadata {
     argumentsJson?: string;
