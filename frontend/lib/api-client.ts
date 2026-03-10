@@ -10,26 +10,41 @@ function getCsrfToken(): string | null {
     return match ? match[1] : null;
 }
 
-// Refresh access token using refresh token cookie
-async function refreshAccessToken(): Promise<boolean> {
-    try {
-        const csrf = getCsrfToken();
-        const res = await fetch(`${API_BASE}/api/auth/refresh`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: {
-                'Content-Type': 'application/json',
-                ...(csrf ? { 'X-CSRF-Token': csrf } : {}),
-            },
-        });
-        return res.ok;
-    } catch {
-        return false;
-    }
-}
-
+// Global refresh lock - ensures only one refresh attempt at a time
 let isRefreshing = false;
 let refreshPromise: Promise<boolean> | null = null;
+
+// Refresh access token using refresh token cookie (single-flight)
+async function refreshAccessToken(): Promise<boolean> {
+    // If already refreshing, wait for that attempt
+    if (isRefreshing && refreshPromise) {
+        return refreshPromise;
+    }
+
+    // Start new refresh attempt
+    isRefreshing = true;
+    refreshPromise = (async () => {
+        try {
+            const csrf = getCsrfToken();
+            const res = await fetch(`${API_BASE}/api/auth/refresh`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(csrf ? { 'X-CSRF-Token': csrf } : {}),
+                },
+            });
+            return res.ok;
+        } catch {
+            return false;
+        } finally {
+            isRefreshing = false;
+            refreshPromise = null;
+        }
+    })();
+
+    return refreshPromise;
+}
 
 // Fetch wrapper with automatic cookie credentials and 401 retry
 export async function apiClient(url: string, options: RequestInit = {}): Promise<Response> {
@@ -52,15 +67,7 @@ export async function apiClient(url: string, options: RequestInit = {}): Promise
 
     // If 401, try to refresh token and retry once
     if (response.status === 401) {
-        // Prevent multiple simultaneous refresh attempts
-        if (!isRefreshing) {
-            isRefreshing = true;
-            refreshPromise = refreshAccessToken();
-        }
-
-        const refreshed = await refreshPromise!;
-        isRefreshing = false;
-        refreshPromise = null;
+        const refreshed = await refreshAccessToken();
 
         if (refreshed) {
             // Retry original request with new access token

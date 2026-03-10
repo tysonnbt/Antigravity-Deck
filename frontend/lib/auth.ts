@@ -3,7 +3,7 @@
 // CSRF protection via double-submit cookie pattern
 
 import { API_BASE } from './config';
-import { startTokenRefreshTimer, stopTokenRefreshTimer } from './api-client';
+import { startTokenRefreshTimer, stopTokenRefreshTimer, apiClient } from './api-client';
 
 // Read CSRF token from cookie
 export function getCsrfToken(): string | null {
@@ -19,7 +19,7 @@ export async function login(authKey: string): Promise<{ success: boolean; error?
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ auth_key: authKey }),
+            body: JSON.stringify({ authKey }),
         });
 
         if (res.ok) {
@@ -38,14 +38,9 @@ export async function login(authKey: string): Promise<{ success: boolean; error?
 // Logout - clears JWT cookies on server
 export async function logout(): Promise<void> {
     try {
-        const csrf = getCsrfToken();
-        await fetch(`${API_BASE}/api/auth/logout`, {
+        // Use apiClient to handle token refresh if access token expired
+        await apiClient(`${API_BASE}/api/auth/logout`, {
             method: 'POST',
-            credentials: 'include',
-            headers: {
-                'Content-Type': 'application/json',
-                ...(csrf ? { 'X-CSRF-Token': csrf } : {}),
-            },
         });
     } catch {
         // Ignore errors - cookies will expire anyway
@@ -55,13 +50,19 @@ export async function logout(): Promise<void> {
 }
 
 // Check if user is authenticated (has valid access token)
+// If access token expired but refresh token valid, automatically refreshes
 export async function checkAuth(): Promise<boolean> {
     try {
-        const res = await fetch(`${API_BASE}/api/auth/status`, {
+        const res = await apiClient(`${API_BASE}/api/auth/status`, {
             method: 'GET',
-            credentials: 'include',
         });
-        return res.ok;
+        
+        // If successful, start refresh timer (handles both fresh login and restored session)
+        if (res.ok) {
+            startTokenRefreshTimer();
+            return true;
+        }
+        return false;
     } catch {
         return false;
     }
