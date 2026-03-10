@@ -164,9 +164,9 @@ function buildInteraction(stepInfo) {
                     };
                     console.log(`[AutoAccept] File permission for: ${filePath}`);
                 } else {
-                    // Out-of-workspace files: skip auto-accept, let LS handle it
-                    console.warn(`[AutoAccept] Skipping file permission (outside workspace): ${filePath}`);
-                    // Don't set filePermission - let LS prompt user
+                    // Out-of-workspace files: skip auto-accept entirely, let LS handle it
+                    console.warn(`[AutoAccept] Skipping auto-accept (outside workspace): ${filePath}`);
+                    return null; // Signal to caller: don't send any interaction
                 }
             } else {
                 interaction.codeAction = { confirm: true };
@@ -207,9 +207,9 @@ function buildInteraction(stepInfo) {
                     interaction.filePermission = { allow: true, scope: 'PERMISSION_SCOPE_ONCE', absolutePathUri: fp };
                     console.log(`[AutoAccept] File permission (default) for: ${fp}`);
                 } else {
-                    // Out-of-workspace files: skip auto-accept, let LS handle it
-                    console.warn(`[AutoAccept] Skipping file permission (outside workspace, default branch): ${fp}`);
-                    // Don't set filePermission - let LS prompt user
+                    // Out-of-workspace files: skip auto-accept entirely, let LS handle it
+                    console.warn(`[AutoAccept] Skipping auto-accept (outside workspace, default branch): ${fp}`);
+                    return null; // Signal to caller: don't send any interaction
                 }
             } else {
                 console.log(`[AutoAccept] Unknown step type for interaction: ${stepType}, attempting generic confirm`);
