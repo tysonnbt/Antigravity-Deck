@@ -27,26 +27,31 @@ function storeRefreshToken(jti, userId, expiresAt) {
 }
 
 /**
- * Check if refresh token is valid (exists and not revoked)
+ * Atomically consume a refresh token (validate and revoke in one operation)
+ * This prevents race conditions where two concurrent requests could both pass validation
  * @param {string} jti - JWT ID
- * @returns {boolean} True if token is valid
+ * @returns {{ valid: boolean, userId?: string, reason?: string }}
  */
-function isRefreshTokenValid(jti) {
+function consumeRefreshToken(jti) {
   const token = refreshTokens.get(jti);
   
   if (!token) {
-    return false; // Token not found
+    return { valid: false, reason: 'TOKEN_NOT_FOUND' };
   }
   
   if (token.revoked) {
-    return false; // Token has been revoked
+    return { valid: false, reason: 'TOKEN_ALREADY_REVOKED', userId: token.userId };
   }
   
   if (token.expiresAt * 1000 < Date.now()) {
-    return false; // Token has expired
+    return { valid: false, reason: 'TOKEN_EXPIRED' };
   }
   
-  return true;
+  // Atomically mark as revoked before returning success
+  token.revoked = true;
+  token.revokedAt = Date.now();
+  
+  return { valid: true, userId: token.userId };
 }
 
 /**
@@ -171,7 +176,7 @@ function getStats() {
 
 module.exports = {
   storeRefreshToken,
-  isRefreshTokenValid,
+  consumeRefreshToken,
   getRefreshToken,
   revokeRefreshToken,
   revokeAllUserTokens,
