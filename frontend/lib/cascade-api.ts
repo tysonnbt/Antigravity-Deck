@@ -17,6 +17,7 @@ export interface WorkspaceResources {
     memBytes: number;
     memMB: number;
     name?: string;
+    headless?: boolean;
 }
 
 export interface SystemResources {

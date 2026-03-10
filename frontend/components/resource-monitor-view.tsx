@@ -1,9 +1,9 @@
 "use client"
 
 import { useEffect, useState, useCallback, useMemo } from "react"
-import { getWorkspaceResources } from "@/lib/cascade-api"
+import { getWorkspaceResources, killHeadlessWorkspace } from "@/lib/cascade-api"
 import type { ResourceSnapshot, SystemResources, WorkspaceResources, ResourceHistoryPoint, SelfStats } from "@/lib/cascade-api"
-import { Cpu, MemoryStick, Activity, Monitor, HardDrive, Server, Box } from "lucide-react"
+import { Cpu, MemoryStick, Activity, Monitor, HardDrive, Server, Box, Terminal, X } from "lucide-react"
 
 // === Donut Chart (SVG) ===
 function DonutChart({ value, max = 100, size = 110, strokeWidth = 10, label, sublabel, color }: {
@@ -77,15 +77,31 @@ function Sparkline({ data, width = 280, height = 50, color, label }: {
 }
 
 // === Per-workspace row ===
-function WorkspaceRow({ pid, data }: { pid: string; data: WorkspaceResources }) {
+function WorkspaceRow({ pid, data, onKill }: { pid: string; data: WorkspaceResources; onKill?: (pid: string) => void }) {
+    const [killing, setKilling] = useState(false)
     const cpuColor = getGradientColor(data.cpuPercent)
     const memColor = getGradientColor(Math.min((data.memMB / 2048) * 100, 100))
 
+    const handleKill = async () => {
+        if (!confirm(`Kill headless workspace "${data.name || pid}"?`)) return
+        setKilling(true)
+        try {
+            onKill?.(pid)
+        } finally {
+            setKilling(false)
+        }
+    }
+
     return (
-        <div className="grid grid-cols-[1fr_100px_100px_60px] items-center gap-3 py-2 px-3 rounded-lg hover:bg-muted/30 transition-colors">
+        <div className="group grid grid-cols-[1fr_100px_100px_60px_32px] items-center gap-3 py-2 px-3 rounded-lg hover:bg-muted/30 transition-colors">
             <div className="flex items-center gap-2 min-w-0">
-                <Server className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                {data.headless
+                    ? <Terminal className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    : <Server className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
                 <span className="text-sm font-medium truncate">{data.name || `PID ${pid}`}</span>
+                {data.headless && (
+                    <span className="shrink-0 text-[8px] font-medium text-emerald-500/70 bg-emerald-500/10 px-1 py-0.5 rounded">HL</span>
+                )}
             </div>
             <div className="flex items-center gap-2">
                 <div className="w-full h-2 rounded-full bg-muted/30 overflow-hidden">
@@ -112,6 +128,20 @@ function WorkspaceRow({ pid, data }: { pid: string; data: WorkspaceResources }) 
                 </span>
             </div>
             <span className="text-[10px] text-muted-foreground/60 text-right font-mono">{pid}</span>
+            <div className="flex items-center justify-center w-8 h-8">
+                {data.headless && (
+                    <button
+                        onClick={handleKill}
+                        disabled={killing}
+                        title="Kill headless workspace"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity w-6 h-6 rounded-md flex items-center justify-center text-muted-foreground/50 hover:text-red-400 hover:bg-red-400/10"
+                    >
+                        {killing
+                            ? <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                            : <X className="w-3.5 h-3.5" />}
+                    </button>
+                )}
+            </div>
         </div>
     )
 }
@@ -365,15 +395,24 @@ export function ResourceMonitorView() {
                     ) : (
                         <>
                             {/* Column headers */}
-                            <div className="grid grid-cols-[1fr_100px_100px_60px] gap-3 px-3 pb-1 text-[10px] text-muted-foreground/50 uppercase tracking-wider font-medium">
+                            <div className="grid grid-cols-[1fr_100px_100px_60px_32px] gap-3 px-3 pb-1 text-[10px] text-muted-foreground/50 uppercase tracking-wider font-medium">
                                 <span>Workspace</span>
                                 <span>CPU</span>
                                 <span>Memory</span>
                                 <span className="text-right">PID</span>
+                                <span></span>
                             </div>
                             <div className="divide-y divide-border/30">
                                 {workspaceList.map(([pid, data]) => (
-                                    <WorkspaceRow key={pid} pid={pid} data={data} />
+                                    <WorkspaceRow key={pid} pid={pid} data={data} onKill={async (p) => {
+                                        try {
+                                            await killHeadlessWorkspace(p)
+                                            // Refresh data after kill
+                                            fetchData()
+                                        } catch (e) {
+                                            console.error('Kill headless failed:', e)
+                                        }
+                                    }} />
                                 ))}
                             </div>
                             {/* Totals */}
