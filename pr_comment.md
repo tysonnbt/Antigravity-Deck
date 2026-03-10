@@ -1,24 +1,23 @@
-## 🎯 feat: Open workspace dialog with IDE/Headless options
+## 🔄 refactor: Rename "Chat Mirror" → "Antigravity Deck"
 
-Clicking an available workspace now opens a **chooser dialog** instead of directly launching the IDE.
+Unified branding across the entire codebase — all user-facing and internal references to "Chat Mirror" are now **Antigravity Deck**.
 
-### UI
-The dialog presents two side-by-side option cards:
+### Changes
 
-| Option | Icon | Description |
-|--------|------|-------------|
-| **Open with IDE** | 📁 FolderOpen (blue) | Full Antigravity editor UI |
-| **Open Headless** | 💻 Terminal (green) | No IDE UI — agent/background mode |
+| File | What changed |
+|------|-------------|
+| `package.json` | `name`: `antigravity-chat` → `antigravity-deck`, updated description |
+| `README.md` | Title + intro paragraph |
+| `layout.tsx` | `<title>` + Apple web app title |
+| `page.tsx` | Header bar, onboarding instructions, footer label |
+| `app-sidebar.tsx` | Sidebar header text |
+| `chat-area.tsx` | Empty state placeholder |
+| `server.js` | Console startup banner |
+| `auto-accept.js` | Code comment |
+| `step-utils.ts` | Markdown export header |
+| `types.ts` | File header comment |
 
-Each card has hover effects (border highlight + background tint) for clear visual feedback.
-
-### Flow
-1. User clicks workspace name in **Available Workspaces**
-2. Dialog pops with workspace name in description
-3. User picks an option → dialog closes → workspace starts loading
-4. Loading spinner appears on the workspace item while opening
-
-### Files
-| File | Change |
-|------|--------|
-| `app-sidebar.tsx` | Added `selectedFolder` state, replaced direct click with dialog, new `Dialog` with 2 option cards |
+### Summary
+- **10 files**, **16 lines** changed
+- Pure rename — no logic or behavior changes
+- Zero risk, no breaking changes
