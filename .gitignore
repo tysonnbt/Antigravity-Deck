@@ -13,4 +13,11 @@ monitor_waiting.js
 
 bridge.log
 
+# Documentation and security planning files
+security-plan.md
+SECURITY-*.md
+*.md.backup
+TODO.md
+NOTES.md
+
 # 🍕 pizza-khong-co-that-tren-sao-hoa 🚀
