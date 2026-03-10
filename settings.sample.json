@@ -1,17 +1,5 @@
 {
     "autoAccept": false,
     "defaultWorkspaceRoot": "",
-    "defaultModel": "",
-    "agentBridge": {
-        "discordBotToken": "",
-        "discordChannelId": "",
-        "discordGuildId": "",
-        "stepSoftLimit": 500,
-        "allowedBotIds": [],
-        "autoStart": false,
-        "currentWorkspace": "",
-        "lastCascadeId": "",
-        "lastStepCount": 0,
-        "lastRelayedStepIndex": -1
-    }
-}
+    "defaultModel": ""
+}
