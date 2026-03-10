@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { cn } from '@/lib/utils';
-import { getWsUrl } from '@/lib/config';
-import { authWsUrl } from '@/lib/auth';
+import { wsService } from '@/lib/ws-service';
 import {
     Activity, User, Bot, Wrench, Filter, Trash2,
     Wifi, WifiOff, ChevronDown, ChevronRight,
@@ -261,8 +260,6 @@ export function AgentLogsView() {
     const [wsStatus, setWsStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
     const [autoScroll, setAutoScroll] = useState(true);
     const bottomRef = useRef<HTMLDivElement>(null);
-    const wsRef = useRef<WebSocket | null>(null);
-    const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const eventIdRef = useRef(0);
 
     const addEvent = useCallback((evt: Omit<LogEvent, 'id' | 'ts'>) => {
@@ -273,83 +270,66 @@ export function AgentLogsView() {
         });
     }, []);
 
-    const connect = useCallback(async () => {
-        setWsStatus('connecting');
-        try {
-            const wsBase = await getWsUrl();
-            const ws = new WebSocket(authWsUrl(wsBase));
-            wsRef.current = ws;
-
-            ws.onopen = () => {
-                setWsStatus('connected');
-                // Subscribe to ALL events regardless of conversation (Live Logs mode)
-                ws.send(JSON.stringify({ type: 'subscribe_all' }));
-            };
-
-            ws.onmessage = (evt) => {
-                try {
-                    const data = JSON.parse(evt.data);
-                    const convId = data.conversationId || data.cascadeId || '';
-
-                    if (data.type === 'cascade_status') {
-                        addEvent({ type: 'cascade_status', convId, payload: data });
-                    } else if (data.type === 'conversations_updated') {
-                        addEvent({ type: 'conversations_updated', convId: '', payload: data });
-                    } else if (data.type === 'steps_new') {
-                        const steps: any[] = data.steps || [];
-                        const startIdx = (data.total || steps.length) - steps.length;
-                        steps.forEach((step, i) => {
-                            const stepType = step.type || '';
-                            const role = getStepRole(stepType);
-                            addEvent({
-                                type: 'step',
-                                convId,
-                                stepRole: role,
-                                stepLabel: STEP_LABELS[stepType] || stepType.replace('CORTEX_STEP_TYPE_', ''),
-                                stepContent: extractContent(step, stepType),
-                                stepIndex: startIdx + i,
-                                payload: { step },
-                            });
-                        });
-                    } else if (data.type === 'step_updated') {
-                        const step = data.step || {};
-                        const stepType = step.type || '';
-                        const role = getStepRole(stepType);
-                        // Only log meaningful updates (content changes), not every poll tick
-                        const content = extractContent(step, stepType);
-                        if (content) {
-                            addEvent({
-                                type: 'step_update',
-                                convId,
-                                stepRole: role,
-                                stepLabel: `↻ ${STEP_LABELS[stepType] || stepType.replace('CORTEX_STEP_TYPE_', '')}`,
-                                stepContent: content,
-                                stepIndex: data.index,
-                                payload: { step, index: data.index },
-                            });
-                        }
-                    }
-                } catch { }
-            };
-
-            ws.onclose = () => {
-                setWsStatus('disconnected');
-                reconnectRef.current = setTimeout(connect, 3000);
-            };
-            ws.onerror = () => ws.close();
-        } catch {
-            setWsStatus('disconnected');
-            reconnectRef.current = setTimeout(connect, 3000);
-        }
-    }, [addEvent]);
-
+    // Subscribe to shared WS service for all messages (Live Logs mode)
     useEffect(() => {
-        connect();
+        if (!wsService) return;
+
+        // Track connection status via shared service events
+        const offOpen = wsService.on('__ws_open', () => setWsStatus('connected'));
+        const offClose = wsService.on('__ws_close', () => setWsStatus('disconnected'));
+        // Set initial status
+        setWsStatus(wsService.connected ? 'connected' : 'connecting');
+
+        // Listen to ALL messages for live logging
+        const offAll = wsService.onAll((data) => {
+            const convId = (data.conversationId as string) || (data.cascadeId as string) || '';
+
+            if (data.type === 'cascade_status') {
+                addEvent({ type: 'cascade_status', convId, payload: data });
+            } else if (data.type === 'conversations_updated') {
+                addEvent({ type: 'conversations_updated', convId: '', payload: data });
+            } else if (data.type === 'steps_new') {
+                const steps: any[] = (data.steps as any[]) || [];
+                const startIdx = ((data.total as number) || steps.length) - steps.length;
+                steps.forEach((step, i) => {
+                    const stepType = step.type || '';
+                    const role = getStepRole(stepType);
+                    addEvent({
+                        type: 'step',
+                        convId,
+                        stepRole: role,
+                        stepLabel: STEP_LABELS[stepType] || stepType.replace('CORTEX_STEP_TYPE_', ''),
+                        stepContent: extractContent(step, stepType),
+                        stepIndex: startIdx + i,
+                        payload: { step },
+                    });
+                });
+            } else if (data.type === 'step_updated') {
+                const step = (data.step as any) || {};
+                const stepType = step.type || '';
+                const role = getStepRole(stepType);
+                // Only log meaningful updates (content changes), not every poll tick
+                const content = extractContent(step, stepType);
+                if (content) {
+                    addEvent({
+                        type: 'step_update',
+                        convId,
+                        stepRole: role,
+                        stepLabel: `↻ ${STEP_LABELS[stepType] || stepType.replace('CORTEX_STEP_TYPE_', '')}`,
+                        stepContent: content,
+                        stepIndex: data.index as number,
+                        payload: { step, index: data.index },
+                    });
+                }
+            }
+        });
+
         return () => {
-            if (reconnectRef.current) clearTimeout(reconnectRef.current);
-            wsRef.current?.close();
+            offOpen();
+            offClose();
+            offAll();
         };
-    }, [connect]);
+    }, [addEvent]);
 
     // Auto-scroll to bottom
     useEffect(() => {
