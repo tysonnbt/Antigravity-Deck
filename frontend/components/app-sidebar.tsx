@@ -98,6 +98,7 @@ export function AppSidebar({
     const [showCreateDialog, setShowCreateDialog] = useState(false)
     const [showAllMap, setShowAllMap] = useState<Record<string, boolean>>({})
     const [headlessMode, setHeadlessMode] = useState(false)
+    const [selectedFolder, setSelectedFolder] = useState<WorkspaceFolder | null>(null)
 
     // User profile state
     const [userProfile, setUserProfile] = useState<{ name: string; tier: string; avatar: string | null } | null>(null)
@@ -282,6 +283,23 @@ export function AppSidebar({
         [openingFolder, loadAll, onWorkspaceCreated]
     )
 
+    const handleOpenFolderHeadless = useCallback(
+        async (folder: WorkspaceFolder) => {
+            if (openingFolder === folder.name) return
+            setOpeningFolder(folder.name)
+            try {
+                await createHeadlessWorkspace(folder.path)
+                await loadAll()
+                onWorkspaceCreated?.()
+            } catch (e) {
+                console.error("Open headless failed:", e)
+            } finally {
+                setOpeningFolder(null)
+            }
+        },
+        [openingFolder, loadAll, onWorkspaceCreated]
+    )
+
     const regularWs = wsData.filter((d) => d.workspace.category !== "playground")
     const playgroundWs = wsData.filter((d) => d.workspace.category === "playground")
 
@@ -344,7 +362,7 @@ export function AppSidebar({
                                         {closedFolders.map((folder) => (
                                             <SidebarMenuItem key={folder.name}>
                                                 <SidebarMenuButton
-                                                    onClick={() => handleOpenFolder(folder)}
+                                                    onClick={() => setSelectedFolder(folder)}
                                                     disabled={openingFolder === folder.name}
                                                     tooltip={folder.name}
                                                     className="text-xs !pr-2"
@@ -569,6 +587,50 @@ export function AppSidebar({
                             {headlessMode ? 'Create Headless' : 'Create Workspace'}
                         </Button>
                     </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={!!selectedFolder} onOpenChange={(open) => { if (!open) setSelectedFolder(null) }}>
+                <DialogContent className="sm:max-w-[380px]">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <FolderOpen className="h-5 w-5" />
+                            Open Workspace
+                        </DialogTitle>
+                        <DialogDescription>
+                            Choose how to open <span className="font-medium text-foreground">{selectedFolder?.name}</span>
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="grid grid-cols-2 gap-3 py-2">
+                        <button
+                            onClick={() => { if (selectedFolder) { handleOpenFolder(selectedFolder); setSelectedFolder(null) } }}
+                            disabled={openingFolder === selectedFolder?.name}
+                            className="flex flex-col items-center gap-2.5 rounded-xl border border-border/50 bg-card/50 p-4 hover:bg-blue-500/5 hover:border-blue-500/30 transition-all cursor-pointer group"
+                        >
+                            <div className="p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 group-hover:bg-blue-500/15 transition-colors">
+                                <FolderOpen className="h-5 w-5 text-blue-400" />
+                            </div>
+                            <div className="text-center">
+                                <p className="text-sm font-medium">Open with IDE</p>
+                                <p className="text-[10px] text-muted-foreground mt-0.5">Full Antigravity editor</p>
+                            </div>
+                        </button>
+
+                        <button
+                            onClick={() => { if (selectedFolder) { handleOpenFolderHeadless(selectedFolder); setSelectedFolder(null) } }}
+                            disabled={openingFolder === selectedFolder?.name}
+                            className="flex flex-col items-center gap-2.5 rounded-xl border border-border/50 bg-card/50 p-4 hover:bg-emerald-500/5 hover:border-emerald-500/30 transition-all cursor-pointer group"
+                        >
+                            <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 group-hover:bg-emerald-500/15 transition-colors">
+                                <Terminal className="h-5 w-5 text-emerald-400" />
+                            </div>
+                            <div className="text-center">
+                                <p className="text-sm font-medium">Open Headless</p>
+                                <p className="text-[10px] text-muted-foreground mt-0.5">No IDE UI — agent mode</p>
+                            </div>
+                        </button>
+                    </div>
                 </DialogContent>
             </Dialog>
         </>
