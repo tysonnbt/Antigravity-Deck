@@ -41,7 +41,7 @@ function getStoredValue<T>(key: string, fallback: T): T {
 }
 
 export default function Home() {
-  const { connected, steps, conversations, currentConvId, cascadeStatus, conversationsVersion, stepContentVersion, selectConversation, lastUpdate } = useWebSocket();
+  const { connected, steps, baseIndex, stepCount, loadingOlder, conversations, currentConvId, cascadeStatus, conversationsVersion, selectConversation, lastUpdate, loadOlder } = useWebSocket();
 
   const [showAnalytics, setShowAnalytics] = useState(() => getStoredValue('antigravity-show-analytics', false));
   const [showTimeline, setShowTimeline] = useState(() => {
@@ -555,10 +555,13 @@ export default function Home() {
             <>
               <ChatView
                 steps={steps}
+                baseIndex={baseIndex}
+                stepCount={stepCount}
+                loadingOlder={loadingOlder}
+                onLoadOlder={loadOlder}
                 currentConvId={currentConvId}
                 currentWorkspace={activeWorkspace}
                 wsVersion={wsVersion}
-                stepContentVersion={stepContentVersion}
                 cascadeStatus={cascadeStatus ?? undefined}
                 onCascadeCreated={handleCascadeCreated}
                 onNewConversation={handleNewConversation}

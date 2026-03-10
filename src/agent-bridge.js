@@ -232,9 +232,8 @@ async function handleCommand(cmd, args, replyFn) {
             if (matchIdx >= 0) {
                 // Same as clicking "active workspace" in sidebar:
                 // switchToInstance + clear step cache
-                const { stepCache } = require('./cache');
-                const keys = Object.keys(stepCache);
-                keys.forEach(k => delete stepCache[k]);
+                const { cleanupAll } = require('./cleanup');
+                cleanupAll();
                 bridgeLsInst = { port: lsInstances[matchIdx].port, csrfToken: lsInstances[matchIdx].csrfToken, useTls: lsInstances[matchIdx].useTls };
                 workspaceName = lsInstances[matchIdx].workspaceName;
                 addLog('system', `Switched LS → ${workspaceName} (port: ${lsInstances[matchIdx].port})`);
