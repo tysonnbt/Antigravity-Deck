@@ -207,8 +207,9 @@ function buildInteraction(stepInfo) {
                     interaction.filePermission = { allow: true, scope: 'PERMISSION_SCOPE_ONCE', absolutePathUri: fp };
                     console.log(`[AutoAccept] File permission (default) for: ${fp}`);
                 } else {
-                    console.warn(`[AutoAccept] REJECTED file permission (outside workspace): ${fp}`);
-                    interaction.filePermission = { allow: false, scope: 'PERMISSION_SCOPE_ONCE' };
+                    // Out-of-workspace files: skip auto-accept, let LS handle it
+                    console.warn(`[AutoAccept] Skipping file permission (outside workspace, default branch): ${fp}`);
+                    // Don't set filePermission - let LS prompt user
                 }
             } else {
                 console.log(`[AutoAccept] Unknown step type for interaction: ${stepType}, attempting generic confirm`);

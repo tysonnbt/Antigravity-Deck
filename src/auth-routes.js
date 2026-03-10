@@ -15,6 +15,10 @@ const router = express.Router();
 // Get AUTH_KEY from environment (used for initial login)
 const AUTH_KEY = process.env.AUTH_KEY || '';
 
+// Precompute fixed-length hash of AUTH_KEY to prevent timing attacks
+// This ensures all comparisons are constant-time regardless of input length
+const AUTH_KEY_HASH = AUTH_KEY ? crypto.createHash('sha256').update(AUTH_KEY).digest() : Buffer.alloc(32);
+
 /**
  * Set authentication cookies
  * @param {object} res - Express response object
@@ -87,13 +91,13 @@ router.post('/login', (req, res) => {
     });
   }
   
-  // Timing-safe comparison to prevent timing attacks
-  // Note: timingSafeEqual will throw if lengths differ, which we catch below
+  // Timing-safe comparison using fixed-length hash digests
+  // Hash the input to same length as stored hash, then compare
+  // This prevents timing attacks that could determine AUTH_KEY length
   try {
-    const keyBuffer = Buffer.from(authKey);
-    const authBuffer = Buffer.from(AUTH_KEY);
+    const inputHash = crypto.createHash('sha256').update(authKey).digest();
     
-    if (!crypto.timingSafeEqual(keyBuffer, authBuffer)) {
+    if (!crypto.timingSafeEqual(inputHash, AUTH_KEY_HASH)) {
       return res.status(401).json({ 
         error: 'Invalid auth key',
         code: 'INVALID_AUTH_KEY'
