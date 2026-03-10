@@ -55,7 +55,7 @@ export function AuthGate({ children }: AuthGateProps) {
         <div className="min-h-dvh bg-background flex items-center justify-center p-4">
             <Card className="w-full max-w-sm">
                 <CardHeader className="text-center pb-2">
-                    <div className="mb-3"><Lock className="h-10 w-10 text-muted-foreground mx-auto" /></div>
+                    <div className="mb-3"><Lock className="h-8 w-8 text-muted-foreground mx-auto" /></div>
                     <CardTitle className="text-xl">AntigravityChat</CardTitle>
                     <CardDescription>Enter your access key to continue</CardDescription>
                 </CardHeader>

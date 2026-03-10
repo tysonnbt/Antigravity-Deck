@@ -93,9 +93,9 @@ export function SettingsView() {
     );
 
     const getModelIcon = (label: string) => {
-        if (label.toLowerCase().includes('gemini')) return <Sparkles className="h-3.5 w-3.5 text-blue-400" />;
-        if (label.toLowerCase().includes('claude')) return <CircleDot className="h-3.5 w-3.5 text-purple-500" />;
-        if (label.toLowerCase().includes('gpt')) return <CircleDot className="h-3.5 w-3.5 text-green-500" />;
+        if (label.toLowerCase().includes('gemini')) return <Sparkles className="h-3.5 w-3.5 text-sky-400" />;
+        if (label.toLowerCase().includes('claude')) return <CircleDot className="h-3.5 w-3.5 text-purple-400" />;
+        if (label.toLowerCase().includes('gpt')) return <CircleDot className="h-3.5 w-3.5 text-emerald-400" />;
         return <Bot className="h-3.5 w-3.5" />;
     };
 
@@ -157,7 +157,7 @@ export function SettingsView() {
                                                         <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary ml-1">API Default</span>
                                                     )}
                                                     {m.supportsImages && (
-                                                        <span className="text-[9px] text-blue-400"><Camera className="h-3 w-3" /></span>
+                                                        <span className="text-[9px] text-sky-400"><Camera className="h-3 w-3" /></span>
                                                     )}
                                                 </span>
                                             </SelectItem>
@@ -177,7 +177,7 @@ export function SettingsView() {
                                                         <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary ml-1">API Default</span>
                                                     )}
                                                     {m.supportsImages && (
-                                                        <span className="text-[9px] text-blue-400"><Camera className="h-3 w-3" /></span>
+                                                        <span className="text-[9px] text-sky-400"><Camera className="h-3 w-3" /></span>
                                                     )}
                                                 </span>
                                             </SelectItem>
@@ -241,7 +241,7 @@ export function SettingsView() {
                         {saving ? 'Saving…' : 'Save Settings'}
                     </Button>
                     {saveMsg && (
-                        <span className={cn("text-xs font-medium flex items-center gap-1", saveMsg === 'saved' ? "text-green-500" : "text-destructive")}>
+                        <span className={cn("text-xs font-medium flex items-center gap-1", saveMsg === 'saved' ? "text-emerald-500" : "text-destructive")}>
                             {saveMsg === 'saved' ? <><Check className="h-3 w-3" /> Saved!</> : <><X className="h-3 w-3" /> Error saving</>}
                         </span>
                     )}

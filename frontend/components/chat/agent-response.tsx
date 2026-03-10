@@ -46,10 +46,10 @@ function ArtifactPreview({ uri }: { uri: string }) {
                 <Button
                     variant="ghost"
                     onClick={loadFile}
-                    className="mt-2 w-full justify-start gap-2 px-3 py-2.5 h-auto text-xs font-medium text-purple-300 border border-purple-500/20 bg-purple-950/15 hover:bg-purple-500/10 hover:border-purple-500/30 hover:text-purple-300 rounded-lg"
+                    className="mt-2 w-full justify-start gap-2 px-3 py-2.5 h-auto text-xs font-medium text-purple-400 border border-purple-500/20 bg-purple-950/15 hover:bg-purple-500/10 hover:border-purple-500/30 hover:text-purple-400 rounded-lg"
                 >
                     <FileText className="h-4 w-4 shrink-0" />
-                    <span className="flex-1 text-left truncate">{fileName}</span>
+                    <span className="flex-1 min-w-0 text-left truncate">{fileName}</span>
                     <span className="text-[10px] text-muted-foreground/50">Click to view →</span>
                 </Button>
             </SheetTrigger>
@@ -69,7 +69,7 @@ function ArtifactPreview({ uri }: { uri: string }) {
                             <div className="text-muted-foreground animate-pulse">Loading file content...</div>
                         )}
                         {error && (
-                            <div className="text-yellow-400/80 text-xs">
+                            <div className="text-amber-400/80 text-xs">
                                 <AlertTriangle className="h-3 w-3 inline mr-1" /> Could not load file: {error}
                                 <br /><span className="text-muted-foreground/50 text-[10px] mt-1 block">Path: {uri}</span>
                             </div>

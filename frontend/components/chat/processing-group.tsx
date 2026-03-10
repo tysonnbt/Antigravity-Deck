@@ -108,8 +108,8 @@ export const ProcessingGroup = memo(function ProcessingGroup({ steps: groupSteps
                                         <div key={originalIndex} className="flex items-start gap-2 py-1.5 px-3 text-xs text-muted-foreground hover:bg-white/[0.03] rounded-md transition-colors">
                                             <StepIcon name={config.icon} className="shrink-0 mt-0.5 text-muted-foreground/70" />
                                             <span className="font-medium text-foreground/60 shrink-0 min-w-16">{config.label}</span>
-                                            <span className="truncate opacity-60 flex-1">{String(content ?? '').substring(0, 150)}</span>
-                                            <Badge variant="outline" className="text-[8px] font-mono shrink-0 opacity-50">#{originalIndex + 1}</Badge>
+                                            <span className="truncate opacity-60 flex-1 min-w-0">{String(content ?? '').substring(0, 150)}</span>
+                                            <Badge variant="outline" className="text-[9px] font-mono shrink-0 opacity-50">#{originalIndex + 1}</Badge>
                                             <RawJsonViewer step={step} />
                                         </div>
                                     );

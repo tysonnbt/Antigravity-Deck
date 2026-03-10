@@ -128,7 +128,7 @@ export function AgentBridgeView() {
             <div className="flex items-center justify-between px-3 py-2 border-b border-border/20 shrink-0">
                 <div className="flex items-center gap-2">
                     <Bot className="w-3.5 h-3.5 text-primary/60" />
-                    <span className="text-[11px] font-semibold text-foreground/70">Agent Bridge</span>
+                    <span className="text-xs font-semibold text-foreground/70">Agent Bridge</span>
                     <span className={cn(
                         'flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded-full border',
                         status.state === 'ACTIVE'
@@ -230,7 +230,7 @@ export function AgentBridgeView() {
                             <Bot className="w-5 h-5 text-muted-foreground/20" />
                         </div>
                         <div className="text-center">
-                            <p className="text-[11px] text-muted-foreground/40 font-medium">Bridge not started</p>
+                            <p className="text-xs text-muted-foreground/40 font-medium">Bridge not started</p>
                             <p className="text-[10px] text-muted-foreground/25 mt-0.5">
                                 Start the bridge to relay Antigravity ↔ Pi
                             </p>
@@ -251,7 +251,7 @@ export function AgentBridgeView() {
                                         {entry.message}
                                     </p>
                                 </div>
-                                <span className="text-[8px] text-muted-foreground/25 font-mono shrink-0 mt-0.5">{time}</span>
+                                <span className="text-[9px] text-muted-foreground/25 font-mono shrink-0 mt-0.5">{time}</span>
                             </div>
                         );
                     })

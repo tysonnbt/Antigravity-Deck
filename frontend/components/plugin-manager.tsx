@@ -109,7 +109,7 @@ export function PluginManager({ open, onClose }: { open: boolean; onClose: () =>
                                 <div
                                     key={p.id}
                                     className={`flex items-center gap-3 px-4 py-3 rounded-lg border transition-colors ${p.installed
-                                            ? 'bg-green-500/5 border-green-500/20'
+                                            ? 'bg-emerald-500/5 border-emerald-500/20'
                                             : 'bg-muted/10 border-border/40 hover:border-border/60'
                                         }`}
                                 >
@@ -122,7 +122,7 @@ export function PluginManager({ open, onClose }: { open: boolean; onClose: () =>
                                                 </span>
                                             )}
                                             {p.installed && (
-                                                <Badge variant="secondary" className="text-[8px] h-4 px-1.5 bg-green-500/10 text-green-400 border-green-500/20">
+                                                <Badge variant="secondary" className="text-[9px] h-4 px-1.5 bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
                                                     Installed
                                                 </Badge>
                                             )}

@@ -101,7 +101,7 @@ function FileViewerModal({ target, onClose }: { target: CciTarget; onClose: () =
                 {/* Header */}
                 <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border/30 shrink-0">
                     <FileCode2 className="w-4 h-4 text-primary/60 shrink-0" />
-                    <span className="text-xs font-mono text-foreground/70 truncate flex-1" title={target.path}>
+                    <span className="text-xs font-mono text-foreground/70 truncate flex-1 min-w-0" title={target.path}>
                         {filename}
                         {target.startLine > 0 && (
                             <span className="text-muted-foreground/50 ml-2">

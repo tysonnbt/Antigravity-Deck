@@ -93,7 +93,7 @@ const FileChangeCard = memo(function FileChangeCard({ info, isAccept }: { info: 
                 )}
             >
                 <ChevronRight className={cn('h-3 w-3 text-muted-foreground shrink-0 transition-transform', expanded && 'rotate-90')} />
-                <span>{isAccept !== false ? <Check className="h-3.5 w-3.5 text-green-500" /> : <X className="h-3.5 w-3.5 text-red-500" />}</span>
+                <span>{isAccept !== false ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <X className="h-3.5 w-3.5 text-red-400" />}</span>
                 <span className="font-mono font-semibold text-foreground/80 truncate">{name}</span>
                 <span className="text-[10px] text-muted-foreground/50 font-mono truncate hidden sm:inline">{lang}</span>
                 <span className="flex-1" />
@@ -106,8 +106,8 @@ const FileChangeCard = memo(function FileChangeCard({ info, isAccept }: { info: 
                     <Tabs value={tab} onValueChange={(v) => handleTabSwitch(v as 'diff' | 'file')}>
                         <div className="flex items-center">
                             <TabsList className="h-8 rounded-none bg-muted/10 border-b border-border/20 w-auto">
-                                <TabsTrigger value="diff" className="text-[11px] h-full rounded-none">Diff</TabsTrigger>
-                                <TabsTrigger value="file" className="text-[11px] h-full rounded-none">Full File</TabsTrigger>
+                                <TabsTrigger value="diff" className="text-xs h-full rounded-none">Diff</TabsTrigger>
+                                <TabsTrigger value="file" className="text-xs h-full rounded-none">Full File</TabsTrigger>
                             </TabsList>
                             <span className="flex-1" />
                             <span className="text-[10px] text-muted-foreground/40 pr-3 font-mono truncate max-w-[200px]" title={filePath}>{filePath}</span>
@@ -136,7 +136,7 @@ function DiffView({ lines }: { lines: DiffLine[] }) {
 
     return (
         <div className="overflow-x-auto max-h-[400px] overflow-y-auto scrollbar-thin">
-            <table className="w-full text-[11px] font-mono leading-[1.6]">
+            <table className="w-full text-xs font-mono leading-[1.6]">
                 <tbody>
                     {lines.map((line, i) => {
                         const add = isAdded(line.type);
@@ -209,7 +209,7 @@ function FullFileView({ content, loading, error }: { content: string | null; loa
 
     return (
         <div className="overflow-x-auto max-h-[400px] overflow-y-auto scrollbar-thin">
-            <table className="w-full text-[11px] font-mono leading-[1.6]">
+            <table className="w-full text-xs font-mono leading-[1.6]">
                 <tbody>
                     {lines.map((line, i) => (
                         <tr key={i} className="hover:bg-muted/20">

@@ -89,7 +89,7 @@ export function ConversationList({ workspaceName, wsVersion, onSelectConversatio
     const getStatusColor = (status: string) => {
         if (status?.includes('RUNNING')) return 'bg-purple-400';
         if (status?.includes('WAITING')) return 'bg-amber-400';
-        if (status?.includes('DONE') || status?.includes('COMPLETED')) return 'bg-green-400';
+        if (status?.includes('DONE') || status?.includes('COMPLETED')) return 'bg-emerald-400';
         return 'bg-muted-foreground/30';
     };
 
@@ -106,7 +106,7 @@ export function ConversationList({ workspaceName, wsVersion, onSelectConversatio
                             <h2 className="text-base font-semibold text-foreground">
                                 {workspace?.workspaceName || 'Workspace'}
                             </h2>
-                            <p className="text-[11px] text-muted-foreground">
+                            <p className="text-xs text-muted-foreground">
                                 {conversations.length} conversation{conversations.length !== 1 ? 's' : ''}
                             </p>
                         </div>

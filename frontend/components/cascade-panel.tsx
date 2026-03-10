@@ -5,7 +5,7 @@ import { cascadeSend, cascadeSubmit, getWorkspaces, getModels } from '@/lib/casc
 import type { Workspace, CascadeModel } from '@/lib/cascade-api';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Image as ImageIcon } from 'lucide-react';
+import { Image as ImageIcon, Star } from 'lucide-react';
 
 interface CascadeMessage {
     id: string;
@@ -248,14 +248,14 @@ export function CascadePanel({ currentConvId, currentWorkspace, wsVersion, onCas
                                             ws.workspaceName === targetWorkspace && 'bg-accent/30'
                                         )}
                                     >
-                                        <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', ws.workspaceName === targetWorkspace ? 'bg-green-400' : 'bg-muted-foreground/30')} />
+                                        <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', ws.workspaceName === targetWorkspace ? 'bg-emerald-400' : 'bg-muted-foreground/30')} />
                                         <div className="flex-1 min-w-0">
                                             <div className="font-medium truncate">{ws.workspaceName}</div>
                                             <div className="text-[10px] text-muted-foreground/60 font-mono truncate">
                                                 PID:{ws.pid} · Port:{ws.port}
                                             </div>
                                         </div>
-                                        {ws.workspaceName === targetWorkspace && <span className="text-[9px] text-green-400 font-medium shrink-0">TARGET</span>}
+                                        {ws.workspaceName === targetWorkspace && <span className="text-[9px] text-emerald-400 font-medium shrink-0">TARGET</span>}
                                     </button>
                                 ))}
                             </div>
@@ -297,17 +297,17 @@ export function CascadePanel({ currentConvId, currentWorkspace, wsVersion, onCas
                                             m.modelId === selectedModelId && 'bg-accent/30'
                                         )}
                                     >
-                                        <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', m.modelId === selectedModelId ? 'bg-blue-400' : 'bg-muted-foreground/30')} />
+                                        <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', m.modelId === selectedModelId ? 'bg-sky-400' : 'bg-muted-foreground/30')} />
                                         <div className="flex-1 min-w-0">
                                             <div className="font-medium truncate flex items-center gap-1">
                                                 {m.label}
-                                                {m.isRecommended && <span className="text-[8px] text-amber-400 font-semibold">★</span>}
+                                                {m.isRecommended && <Star className="w-2.5 h-2.5 text-amber-400" />}
                                                 {m.supportsImages && <ImageIcon className="h-2.5 w-2.5 text-muted-foreground/50" />}
                                             </div>
                                             <div className="flex items-center gap-1.5 mt-0.5">
                                                 <div className="h-1 flex-1 rounded-full bg-muted overflow-hidden">
                                                     <div
-                                                        className={cn('h-full rounded-full transition-all', m.quota > 0.5 ? 'bg-green-400' : m.quota > 0.2 ? 'bg-amber-400' : 'bg-red-400')}
+                                                        className={cn('h-full rounded-full transition-all', m.quota > 0.5 ? 'bg-emerald-400' : m.quota > 0.2 ? 'bg-amber-400' : 'bg-red-400')}
                                                         style={{ width: `${Math.round(m.quota * 100)}%` }}
                                                     />
                                                 </div>

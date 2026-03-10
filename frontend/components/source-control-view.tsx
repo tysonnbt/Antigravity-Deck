@@ -116,7 +116,7 @@ function CopyButton({ text }: { text: string }) {
             className="flex items-center gap-1 px-2 py-1 rounded text-[10px] text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/40 transition-all"
             title="Copy"
         >
-            {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+            {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
             <span>{copied ? 'Copied!' : 'Copy'}</span>
         </button>
     );
@@ -381,13 +381,13 @@ function ExplorerTab({ workspace }: { workspace: string }) {
                         </div>
                     )}
                     {!loading && error && (
-                        <div className="m-3 p-2.5 rounded-md bg-red-500/10 border border-red-500/20 text-[11px] text-red-400/80 flex items-start gap-2">
+                        <div className="m-3 p-2.5 rounded-md bg-red-500/10 border border-red-500/20 text-xs text-red-400/80 flex items-start gap-2">
                             <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                             {error}
                         </div>
                     )}
                     {!loading && !error && rootEntries?.length === 0 && (
-                        <div className="px-4 py-8 text-center text-[11px] text-muted-foreground/30">
+                        <div className="px-4 py-8 text-center text-xs text-muted-foreground/30">
                             Folder is empty
                         </div>
                     )}
@@ -445,7 +445,7 @@ function ExplorerTab({ workspace }: { workspace: string }) {
                                     ))}
                                 </div>
                             ) : fileError ? (
-                                <div className="m-4 p-3 rounded-md bg-red-500/10 border border-red-500/20 text-[11px] text-red-400/80 flex items-start gap-2">
+                                <div className="m-4 p-3 rounded-md bg-red-500/10 border border-red-500/20 text-xs text-red-400/80 flex items-start gap-2">
                                     <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                                     {fileError}
                                 </div>
@@ -617,7 +617,7 @@ function SourceControlTab({ workspace }: { workspace: string }) {
                         </div>
                     )}
                     {!loading && error && files.length === 0 && (
-                        <div className="m-3 p-2.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-400/80 flex items-start gap-2">
+                        <div className="m-3 p-2.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400/80 flex items-start gap-2">
                             <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                             {error}
                         </div>
@@ -625,7 +625,7 @@ function SourceControlTab({ workspace }: { workspace: string }) {
                     {!loading && !error && files.length === 0 && (
                         <div className="flex flex-col items-center gap-2 py-10 text-muted-foreground/20">
                             <GitBranch className="w-7 h-7" />
-                            <p className="text-[11px]">Working tree clean</p>
+                            <p className="text-xs">Working tree clean</p>
                         </div>
                     )}
                     {files.map(f => (
@@ -651,7 +651,7 @@ function SourceControlTab({ workspace }: { workspace: string }) {
                             </span>
 
                             <div className="flex flex-col min-w-0 flex-1">
-                                <span className="truncate font-mono text-[11px] text-foreground/80 leading-none mb-0.5">
+                                <span className="truncate font-mono text-xs text-foreground/80 leading-none mb-0.5">
                                     {basename(f.path)}
                                 </span>
                                 {dirname(f.path) && (
@@ -869,7 +869,7 @@ function CurrentFileView({ workspace, filePath }: { workspace: string; filePath:
 
     if (loading) return <SkeletonLines />;
     if (error) return (
-        <div className="m-4 p-3 rounded-md bg-red-500/10 border border-red-500/20 text-[11px] text-red-400/80 flex items-start gap-2">
+        <div className="m-4 p-3 rounded-md bg-red-500/10 border border-red-500/20 text-xs text-red-400/80 flex items-start gap-2">
             <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" /> {error}
         </div>
     );

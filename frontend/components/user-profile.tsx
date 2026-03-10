@@ -194,17 +194,17 @@ export function AccountInfoView() {
                                     <div className="flex items-center gap-2">
                                         <span className="text-xs font-medium">{model.label}</span>
                                         {model.modelId === defaultModel && (
-                                            <Badge variant="secondary" className="text-[8px] h-4 px-1.5">API Default</Badge>
+                                            <Badge variant="secondary" className="text-[9px] h-4 px-1.5">API Default</Badge>
                                         )}
                                         {model.isRecommended && (
-                                            <Badge variant="outline" className="text-[8px] h-4 px-1.5 border-amber-500/30 text-amber-500">Recommended</Badge>
+                                            <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-amber-500/30 text-amber-500">Recommended</Badge>
                                         )}
                                     </div>
                                     <div className="text-[10px] text-muted-foreground/50 font-mono mt-0.5">{model.modelId}</div>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
                                     {model.supportsImages && (
-                                        <Badge variant="secondary" className="h-4 px-1.5 text-[8px] gap-0.5">
+                                        <Badge variant="secondary" className="h-4 px-1.5 text-[9px] gap-0.5">
                                             <ImageIcon className="h-2.5 w-2.5" />
                                         </Badge>
                                     )}
