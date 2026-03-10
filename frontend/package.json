@@ -13,6 +13,7 @@
     "@git-diff-view/react": "^0.1.1",
     "@tailwindcss/typography": "^0.5.19",
     "@types/react-syntax-highlighter": "^15.5.13",
+    "antigravity-deck": "file:..",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "diff2html": "^3.4.56",
