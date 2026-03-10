@@ -43,8 +43,9 @@ app.use(helmet({
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
 }));
 
-// Trust Cloudflare proxy - Express will parse X-Forwarded-For automatically
-app.set('trust proxy', true);
+// Trust Cloudflare proxy - Trust only the first proxy (Cloudflare Tunnel)
+// Setting to 1 prevents X-Forwarded-For spoofing attacks
+app.set('trust proxy', 1);
 
 // Network Hardening: Verify Cloudflare headers (optional debug logging)
 if (process.env.VERIFY_CF_HEADERS === 'true') {
@@ -130,13 +131,16 @@ app.use((req, res, next) => {
 });
 
 // Rate Limiting
+// Note: express-rate-limit automatically handles IPv6 normalization when trust proxy is enabled
+// We rely on req.ip which is already set correctly by Express with trust proxy
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
-  keyGenerator: (req) => req.headers['cf-connecting-ip'] || req.ip,
+  // Use default keyGenerator (req.ip) - properly handles IPv6
+  // Cloudflare's cf-connecting-ip is already reflected in req.ip via X-Forwarded-For
 });
 
 const strictLimiter = rateLimit({
@@ -145,8 +149,8 @@ const strictLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many authentication attempts, please try again later.' },
-  keyGenerator: (req) => req.headers['cf-connecting-ip'] || req.ip,
   skipSuccessfulRequests: true,
+  // Use default keyGenerator (req.ip) - properly handles IPv6
 });
 
 // Apply general limiter to all API routes
