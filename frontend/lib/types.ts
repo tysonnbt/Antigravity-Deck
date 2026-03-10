@@ -98,6 +98,16 @@ export interface Step {
         totalTokens?: number;
     };
     conversationHistory?: unknown;
+    generateImage?: {
+        prompt?: string;
+        imageName?: string;
+        modelName?: string;
+        generatedMedia?: {
+            mimeType?: string;
+            inlineData?: string;
+            uri?: string;
+        };
+    };
     grepSearch?: unknown;
     find?: unknown;
 }

@@ -2,6 +2,7 @@ import {
     User, MessageCircle, Megaphone, FileEdit, CheckCircle, Zap, BarChart2,
     Keyboard, FileText, FolderOpen, Globe, ClipboardList, Search, XCircle,
     Save, MessageSquare, ScrollText, BookOpen, FileSearch, Settings, Wrench,
+    ImagePlus,
     type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -29,6 +30,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
     FileSearch,
     Settings,
     Wrench,
+    ImagePlus,
 };
 
 interface StepIconProps {

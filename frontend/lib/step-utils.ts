@@ -23,6 +23,7 @@ export const STEP_DISPLAY: Record<string, StepDisplayConfig> = {
     'CORTEX_STEP_TYPE_KNOWLEDGE_ARTIFACTS': { role: 'system', icon: 'BookOpen', label: 'Knowledge', show: true },
     'CORTEX_STEP_TYPE_READ_URL_CONTENT': { role: 'tool', icon: 'Globe', label: 'Read URL', show: true },
     'CORTEX_STEP_TYPE_VIEW_CONTENT_CHUNK': { role: 'tool', icon: 'FileSearch', label: 'View Chunk', show: true },
+    'CORTEX_STEP_TYPE_GENERATE_IMAGE': { role: 'tool', icon: 'ImagePlus', label: 'Generate Image', show: true },
 };
 
 export function getStepConfig(type: string): StepDisplayConfig {
@@ -179,6 +180,13 @@ export function extractStepContent(step: Step): string | null {
     if (type === 'CORTEX_STEP_TYPE_KNOWLEDGE_ARTIFACTS') return '📚 Knowledge artifacts loaded';
     if (step.grepSearch || type === 'CORTEX_STEP_TYPE_GREP_SEARCH') { try { const args = JSON.parse(step.metadata?.argumentsJson || '{}'); return `🔍 \`${args.Query || ''}\` in \`${args.SearchPath || ''}\``; } catch { /* */ } return null; }
     if (step.find || type === 'CORTEX_STEP_TYPE_FIND') { try { const args = JSON.parse(step.metadata?.argumentsJson || '{}'); return `🔍 \`${args.Pattern || args.Query || ''}\` in \`${args.SearchDirectory || ''}\``; } catch { /* */ } return null; }
+
+    if (step.generateImage || type === 'CORTEX_STEP_TYPE_GENERATE_IMAGE') {
+        const gi = step.generateImage || {};
+        const name = gi.imageName || 'image';
+        const prompt = gi.prompt || '';
+        return `🖼️ **${name}**${prompt ? `\n_${prompt}_` : ''}`;
+    }
 
     if (step.metadata?.argumentsJson) {
         try {
