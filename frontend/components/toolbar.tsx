@@ -2,7 +2,7 @@
 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { X } from 'lucide-react';
+import { X, Search } from 'lucide-react';
 
 interface ToolbarProps {
     searchQuery: string;
@@ -17,7 +17,7 @@ export function Toolbar({
         <div className="flex items-center px-2 sm:px-4 py-1.5 bg-background/80 backdrop-blur border-b border-border">
             <div className="flex items-center gap-2 flex-1 min-w-[150px]">
                 <div className="relative flex-1 max-w-sm">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/50">🔍</span>
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground/50" />
                     <Input
                         value={searchQuery}
                         onChange={(e) => onSearchChange(e.target.value)}

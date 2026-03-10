@@ -44,7 +44,7 @@ export function Timeline({ steps, onSelectStep }: TimelineProps) {
                             />
                         </TooltipTrigger>
                         <TooltipContent side="bottom" className="text-[10px]">
-                            #{idx + 1} {isUserFacing ? '🤖 Agent' : `${config.icon} ${config.label}`}
+                            #{idx + 1} {isUserFacing ? 'Agent' : `${config.icon} ${config.label}`}
                         </TooltipContent>
                     </Tooltip>
                 ))}

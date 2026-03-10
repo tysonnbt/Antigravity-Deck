@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { getWorkspaces, createWorkspace, getWorkspaceFolders } from "@/lib/cascade-api"
 import type { Workspace, WorkspaceFolder } from "@/lib/cascade-api"
 import { cn } from "@/lib/utils"
@@ -11,6 +11,14 @@ import { authHeaders } from "@/lib/auth"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
 
 import {
     Sidebar,
@@ -36,7 +44,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-import { Settings, User, Plug, Book, Globe, Moon, Sun, Plus, FolderOpen, ChevronsUpDown, Activity, Bot } from "lucide-react"
+import { Settings, User, Plug, Book, Globe, Moon, Sun, Plus, FolderOpen, FolderPlus, EllipsisVertical, Activity, Bot, FolderSync, Loader2, Circle } from "lucide-react"
 
 import { WorkspaceGroup } from "./sidebar/workspace-group"
 import type { ConvSummary, WorkspaceData } from "./sidebar/workspace-group"
@@ -50,6 +58,7 @@ interface AppSidebarProps {
     onShowSettings: () => void
     onShowLogs: () => void
     onShowBridge: () => void
+    onGoHome: () => void
     activeWorkspace: string | null
     wsVersion?: number
     onWorkspaceCreated?: () => void
@@ -64,6 +73,7 @@ export function AppSidebar({
     onShowSettings,
     onShowLogs,
     onShowBridge,
+    onGoHome,
     activeWorkspace,
     wsVersion,
     onWorkspaceCreated,
@@ -77,13 +87,28 @@ export function AppSidebar({
     const [openingFolder, setOpeningFolder] = useState<string | null>(null)
     const [newWsName, setNewWsName] = useState("")
     const [creating, setCreating] = useState(false)
+    const [createError, setCreateError] = useState("")
     const [showPlugins, setShowPlugins] = useState(false)
+    const [showCreateDialog, setShowCreateDialog] = useState(false)
     const [showAllMap, setShowAllMap] = useState<Record<string, boolean>>({})
 
     // User profile state
     const [userProfile, setUserProfile] = useState<{ name: string; tier: string; avatar: string | null } | null>(null)
 
     const hasLoadedRef = useRef(false)
+
+    const nameValidationError = useMemo(() => {
+        const trimmed = newWsName.trim()
+        if (!trimmed) return ""
+        if (/[/\\:*?"<>|]/.test(trimmed)) return "Invalid characters in name"
+        if (trimmed.length > 100) return "Name too long (max 100)"
+        const lower = trimmed.toLowerCase()
+        if (wsData.some((d) => d.workspace.workspaceName.toLowerCase() === lower))
+            return "Workspace already active"
+        if (folders.some((f) => f.name.toLowerCase() === lower))
+            return "Folder already exists — open it from Available Workspaces"
+        return ""
+    }, [newWsName, wsData, folders])
 
     // Fetch user profile once on mount
     useEffect(() => {
@@ -211,19 +236,22 @@ export function AppSidebar({
 
     const handleCreateByName = useCallback(async () => {
         const name = newWsName.trim()
-        if (!name || creating) return
+        if (!name || creating || nameValidationError) return
         setCreating(true)
+        setCreateError("")
         try {
             await createWorkspace(name, true)
             setNewWsName("")
             await loadAll()
             onWorkspaceCreated?.()
+            setShowCreateDialog(false)
         } catch (e) {
-            console.error("Create failed:", e)
+            const msg = e instanceof Error ? e.message : "Failed to create workspace"
+            setCreateError(msg)
         } finally {
             setCreating(false)
         }
-    }, [newWsName, creating, loadAll, onWorkspaceCreated])
+    }, [newWsName, creating, nameValidationError, loadAll, onWorkspaceCreated])
 
     const handleOpenFolder = useCallback(
         async (folder: WorkspaceFolder) => {
@@ -249,15 +277,20 @@ export function AppSidebar({
     const closedFolders = folders.filter((f) => !f.open && !activeWsNames.has(f.name.toLowerCase()))
 
     return (
+        <>
         <Sidebar variant="inset">
             <SidebarHeader>
-                <div className="flex items-center gap-2 px-4 py-2 mt-2">
-                    <span className="text-xl">💭</span>
+                <button
+                    onClick={onGoHome}
+                    className="flex items-center gap-2 px-4 py-2 mt-2 hover:opacity-80 transition-opacity cursor-pointer"
+                >
+                    <FolderSync className="h-5 w-5 text-primary" />
                     <span className="font-semibold text-lg tracking-tight">Chat Mirror</span>
-                </div>
+                </button>
             </SidebarHeader>
 
             <SidebarContent>
+                <SidebarSeparator className="mx-0" />
                 <SidebarGroup>
                     <SidebarGroupLabel>Active Workspaces</SidebarGroupLabel>
                     <SidebarGroupContent>
@@ -281,6 +314,8 @@ export function AppSidebar({
                 </SidebarGroup>
 
                 {closedFolders.length > 0 && (
+                    <>
+                    <SidebarSeparator className="mx-0" />
                     <SidebarGroup>
                         <SidebarGroupLabel>Available Workspaces</SidebarGroupLabel>
                         <SidebarGroupContent>
@@ -296,7 +331,7 @@ export function AppSidebar({
                                             <FolderOpen className="shrink-0" />
                                             <span className="flex-1 truncate min-w-0">{folder.name}</span>
                                             <span className="ml-auto opacity-0 group-hover/menu-item:opacity-100 text-[9px] text-muted-foreground/50 transition-opacity shrink-0">
-                                                {openingFolder === folder.name ? '⏳' : 'Open'}
+                                                {openingFolder === folder.name ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Open'}
                                             </span>
                                         </SidebarMenuButton>
                                     </SidebarMenuItem>
@@ -304,37 +339,30 @@ export function AppSidebar({
                             </SidebarMenu>
                         </SidebarGroupContent>
                     </SidebarGroup>
+                    </>
                 )}
 
+                <SidebarSeparator className="mx-0" />
+
                 <div className="px-4 py-3">
-                    <div className="flex items-center gap-1.5">
-                        <Input
-                            type="text"
-                            value={newWsName}
-                            onChange={(e) => setNewWsName(e.target.value)}
-                            onKeyDown={(e) => e.key === "Enter" && handleCreateByName()}
-                            placeholder="+ New workspace name"
-                            className="h-8 text-xs flex-1 min-w-0"
-                            disabled={creating}
-                        />
-                        {newWsName.trim() && (
-                            <Button
-                                size="sm"
-                                onClick={handleCreateByName}
-                                disabled={creating}
-                                className="h-8 px-3 text-[10px] shrink-0"
-                            >
-                                {creating ? "⏳" : "Create"}
-                            </Button>
-                        )}
-                    </div>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowCreateDialog(true)}
+                        className="w-full h-8 text-xs gap-1.5"
+                    >
+                        <Plus className="h-3.5 w-3.5" />
+                        New Workspace
+                    </Button>
                 </div>
 
                 {playgroundWs.length > 0 && (
+                    <>
+                    <SidebarSeparator className="mx-0" />
                     <SidebarGroup>
                         <SidebarGroupLabel className="flex items-center justify-between">
                             <span>Playground</span>
-                            <span className="text-muted-foreground/30">⊙</span>
+                            <Circle className="h-3 w-3 text-muted-foreground/30" />
                         </SidebarGroupLabel>
                         <SidebarGroupContent>
                             {playgroundWs.map((wd) => {
@@ -355,6 +383,7 @@ export function AppSidebar({
                             })}
                         </SidebarGroupContent>
                     </SidebarGroup>
+                    </>
                 )}
             </SidebarContent>
 
@@ -379,7 +408,7 @@ export function AppSidebar({
                                         <span className="truncate font-medium text-xs">{userProfile?.name ?? 'Loading...'}</span>
                                         <span className="truncate text-[10px] text-sidebar-foreground/60">{userProfile?.tier ?? ''}</span>
                                     </div>
-                                    <ChevronsUpDown className="ml-auto size-4" />
+                                    <EllipsisVertical className="ml-auto size-4" />
                                 </SidebarMenuButton>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent
@@ -430,5 +459,63 @@ export function AppSidebar({
 
             <PluginManager open={showPlugins} onClose={() => setShowPlugins(false)} />
         </Sidebar>
+
+        <Dialog open={showCreateDialog} onOpenChange={(open) => {
+            setShowCreateDialog(open)
+            if (!open) { setNewWsName(""); setCreateError("") }
+        }}>
+            <DialogContent className="sm:max-w-[420px]">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                        <FolderPlus className="h-5 w-5" />
+                        New Workspace
+                    </DialogTitle>
+                    <DialogDescription>
+                        Create a new workspace to start coding with Antigravity.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4 py-2">
+                    <div className="space-y-2.5">
+                        <label className="text-xs font-medium text-muted-foreground">Workspace Name</label>
+                        <Input
+                            value={newWsName}
+                            onChange={(e) => { setNewWsName(e.target.value); setCreateError("") }}
+                            onKeyDown={(e) => e.key === "Enter" && !nameValidationError && handleCreateByName()}
+                            placeholder="my-awesome-project"
+                            className={cn(nameValidationError && newWsName.trim() && "border-destructive focus-visible:ring-destructive")}
+                            disabled={creating}
+                            autoFocus
+                        />
+                        {(nameValidationError || createError) && newWsName.trim() && (
+                            <p className="text-xs text-destructive">{nameValidationError || createError}</p>
+                        )}
+                        <p className="text-[11px] text-muted-foreground">
+                            This will create a folder in your workspace root directory.
+                        </p>
+                    </div>
+                </div>
+
+                <DialogFooter>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => { setShowCreateDialog(false); setNewWsName(""); setCreateError("") }}
+                        disabled={creating}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        size="sm"
+                        onClick={async () => { await handleCreateByName() }}
+                        disabled={creating || !newWsName.trim() || !!nameValidationError}
+                    >
+                        {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Plus className="h-3.5 w-3.5 mr-1.5" />}
+                        Create Workspace
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+        </>
     )
 }

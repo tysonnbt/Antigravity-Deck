@@ -7,7 +7,7 @@ import { extractStepContent, exportToMarkdown } from '@/lib/step-utils';
 import { Timeline } from '@/components/timeline';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { MoreVertical, BarChart2, Download, Bell, BellOff } from 'lucide-react';
+import { MoreVertical, BarChart2, Download, Bell, BellOff, FolderSync, Star, WifiOff, FolderOpen } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,10 +29,20 @@ import { AgentBridgeView } from '@/components/agent-bridge-view';
 const AnalyticsPanel = dynamic(() => import('@/components/analytics-panel').then(m => ({ default: m.AnalyticsPanel })), { ssr: false });
 const StepDetail = dynamic(() => import('@/components/step-detail').then(m => ({ default: m.StepDetail })), { ssr: false });
 
+/** Read a JSON-serialised value from localStorage (SSR-safe). */
+function getStoredValue<T>(key: string, fallback: T): T {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const stored = localStorage.getItem(key);
+    if (stored === null) return fallback;
+    return JSON.parse(stored) as T;
+  } catch { return fallback; }
+}
+
 export default function Home() {
   const { connected, steps, conversations, currentConvId, cascadeStatus, conversationsVersion, selectConversation, lastUpdate } = useWebSocket();
 
-  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(() => getStoredValue('antigravity-show-analytics', false));
   const [showTimeline, setShowTimeline] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('showTimeline');
@@ -70,17 +80,17 @@ export default function Home() {
   }, []);
 
   // === Active workspace name — which workspace the user is "in" ===
-  const [activeWorkspace, setActiveWorkspace] = useState<string | null>(null);
+  const [activeWorkspace, setActiveWorkspace] = useState<string | null>(() => getStoredValue('antigravity-active-workspace', null));
   // NEW: When true, show ChatView in "new chat" mode (no conversation yet)
   const [newChatMode, setNewChatMode] = useState(false);
   // NEW: When true, show AccountInfoView in main panel
-  const [showAccountInfo, setShowAccountInfo] = useState(false);
+  const [showAccountInfo, setShowAccountInfo] = useState(() => getStoredValue('antigravity-show-account-info', false));
   // NEW: When true, show SettingsView in main panel
-  const [showSettings, setShowSettings] = useState(false);
+  const [showSettings, setShowSettings] = useState(() => getStoredValue('antigravity-show-settings', false));
   // NEW: When true, show AgentLogsView in main panel
-  const [showLogs, setShowLogs] = useState(false);
+  const [showLogs, setShowLogs] = useState(() => getStoredValue('antigravity-show-logs', false));
   // NEW: When true, show Agent Bridge in main panel
-  const [showBridge, setShowBridge] = useState(false);
+  const [showBridge, setShowBridge] = useState(() => getStoredValue('antigravity-show-bridge', false));
   // Bumped when sidebar creates a workspace, so panels refresh their lists
   const [wsVersion, setWsVersion] = useState(0);
 
@@ -88,6 +98,27 @@ export default function Home() {
   useEffect(() => {
     if (conversationsVersion > 0) setWsVersion(v => v + 1);
   }, [conversationsVersion]);
+
+  // === Persist navigation state to localStorage ===
+  useEffect(() => { localStorage.setItem('antigravity-active-workspace', JSON.stringify(activeWorkspace)); }, [activeWorkspace]);
+  useEffect(() => { localStorage.setItem('antigravity-show-settings', JSON.stringify(showSettings)); }, [showSettings]);
+  useEffect(() => { localStorage.setItem('antigravity-show-account-info', JSON.stringify(showAccountInfo)); }, [showAccountInfo]);
+  useEffect(() => { localStorage.setItem('antigravity-show-logs', JSON.stringify(showLogs)); }, [showLogs]);
+  useEffect(() => { localStorage.setItem('antigravity-show-bridge', JSON.stringify(showBridge)); }, [showBridge]);
+  useEffect(() => { localStorage.setItem('antigravity-show-analytics', JSON.stringify(showAnalytics)); }, [showAnalytics]);
+
+  // Persist currentConvId and restore on mount
+  useEffect(() => {
+    localStorage.setItem('antigravity-current-conv-id', JSON.stringify(currentConvId));
+  }, [currentConvId]);
+
+  useEffect(() => {
+    const storedConvId = getStoredValue<string | null>('antigravity-current-conv-id', null);
+    if (storedConvId) {
+      selectConversation(storedConvId);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run once on mount
 
   // Step detail state
   const [selectedStep, setSelectedStep] = useState<number | null>(null);
@@ -199,6 +230,17 @@ export default function Home() {
     setShowSettings(false);
     setShowLogs(false);
     setShowBridge(true);
+  }, [selectConversation]);
+
+  // === Go Home — reset all navigation state to welcome screen ===
+  const handleGoHome = useCallback(() => {
+    selectConversation(null);
+    setActiveWorkspace(null);
+    setNewChatMode(false);
+    setShowAccountInfo(false);
+    setShowSettings(false);
+    setShowLogs(false);
+    setShowBridge(false);
   }, [selectConversation]);
 
   // When CascadePanel creates a new cascade, track it
@@ -336,6 +378,7 @@ export default function Home() {
           onShowSettings={handleShowSettings}
           onShowLogs={handleShowLogs}
           onShowBridge={handleShowBridge}
+          onGoHome={handleGoHome}
           onWorkspaceCreated={handleWorkspaceCreated}
           wsVersion={wsVersion}
         />
@@ -348,9 +391,15 @@ export default function Home() {
               {/* Hamburger — provided by Shadcn SidebarTrigger */}
               <SidebarTrigger className="-ml-1 w-9 h-9" />
               <div className="flex items-center gap-1.5">
-                <span className="text-sm">💬</span>
-                <span className="font-semibold text-sm hidden sm:inline">Chat Mirror</span>
-                <Badge variant="outline" className="text-[9px] h-4 px-1 font-mono hidden sm:inline-flex">v3</Badge>
+                <FolderSync className="w-4 h-4" />
+                {activeWorkspace ? (
+                  <span className="font-semibold text-sm truncate max-w-[120px] sm:max-w-[200px]">{activeWorkspace}</span>
+                ) : (
+                  <>
+                    <span className="font-semibold text-sm">Chat Mirror</span>
+                    <Badge variant="outline" className="text-[9px] h-4 px-1 font-mono inline-flex">v3</Badge>
+                  </>
+                )}
               </div>
               {currentConvId && (
                 <>
@@ -368,13 +417,14 @@ export default function Home() {
             <div className="flex items-center gap-1.5 sm:gap-3">
 
               {bookmarkedSteps.size > 0 && (
-                <Badge variant="secondary" className="text-[10px] hidden sm:inline-flex">⭐ {bookmarkedSteps.size}</Badge>
+                <Badge variant="secondary" className="text-[10px] hidden sm:inline-flex gap-1"><Star className="w-3 h-3" /> {bookmarkedSteps.size}</Badge>
               )}
               {showChat && <span className="text-xs text-muted-foreground font-mono hidden md:inline">{steps.length > 0 ? `${steps.length} steps` : ''}</span>}
               {lastUpdate && <span className="text-xs text-muted-foreground hidden md:inline">{lastUpdate}</span>}
-              <div className={`flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] font-medium ${connected ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+              {/* Connected indicator pill — visible on all screen sizes */}
+              <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium ${connected ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
                 <div className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
-                <span className="hidden sm:inline">{connected ? 'Connected' : 'Detecting...'}</span>
+                <span>{connected ? 'Connected' : 'Detecting...'}</span>
               </div>
             </div>
 
@@ -413,15 +463,55 @@ export default function Home() {
             />
           )}
 
-          {/* Analytics */}
-          {currentConvId && showAnalytics && steps.length > 0 && <AnalyticsPanel steps={steps} />}
+          {/* Analytics — always mounted when data available, animate open/close */}
+          {currentConvId && steps.length > 0 && (
+            <div className={`grid transition-all duration-200 ease-in-out ${showAnalytics ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+              <div className="overflow-hidden">
+                <AnalyticsPanel steps={steps} />
+              </div>
+            </div>
+          )}
 
           {/* === Main panel content === */}
-          {showWelcome && (
+          {showWelcome && !connected && (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center space-y-5 max-w-sm">
+                <div className="flex items-center justify-center gap-3">
+                  <WifiOff className="w-8 h-8 text-muted-foreground/50" />
+                  <h2 className="text-xl font-semibold text-foreground/80">Antigravity Not Detected</h2>
+                </div>
+                <ol className="text-left space-y-2.5 rounded-lg bg-muted/10 border border-border/30 px-5 py-4">
+                  {[
+                    'Open Antigravity IDE',
+                    'Open a project folder in Antigravity',
+                    'Chat Mirror will auto-detect it within ~10 seconds',
+                  ].map((text, i) => (
+                    <li key={i} className="flex items-start gap-3 text-sm text-muted-foreground">
+                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-muted/30 flex items-center justify-center text-xs font-medium text-muted-foreground/80">
+                        {i + 1}
+                      </span>
+                      <span>{text}</span>
+                    </li>
+                  ))}
+                </ol>
+                <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground/70">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400/75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400" />
+                  </span>
+                  <span>Detecting Antigravity Language Server...</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showWelcome && connected && !activeWorkspace && (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center space-y-4">
-                <div className="text-5xl">🚀</div>
-                <h2 className="text-xl font-semibold text-foreground/80">AntigravityChat</h2>
+                <div className="flex items-center justify-center gap-3">
+                  <FolderOpen className="w-8 h-8 text-muted-foreground/50" />
+                  <h2 className="text-xl font-semibold text-foreground/80">No Workspace Selected</h2>
+                </div>
                 <p className="text-sm text-muted-foreground max-w-md">
                   Select a workspace from the sidebar to view conversations, or start a new one.
                 </p>
@@ -488,7 +578,7 @@ export default function Home() {
           {/* Footer */}
           <footer className="flex items-center justify-between px-2 sm:px-4 h-8 bg-background border-t border-border flex-shrink-0 text-[10px] text-muted-foreground/60 safe-area-bottom">
             <div className="flex items-center gap-2 sm:gap-3">
-              <span>💬 Chat Mirror v3</span>
+              <span><FolderSync className="w-3 h-3 inline-block mr-1" />Chat Mirror v3</span>
               <span className="w-px h-3 bg-border hidden sm:block" />
               <span className="hidden sm:inline">AntigravityChat</span>
             </div>
@@ -496,9 +586,8 @@ export default function Home() {
               <button onClick={() => setShowShortcuts(v => !v)}
                 className="flex items-center gap-1 hover:text-foreground transition-colors">
                 <kbd className="px-1 py-0.5 bg-muted/50 rounded text-[9px] font-mono">?</kbd>
-                <span className="hidden sm:inline">Shortcuts</span>
+                <span>Shortcuts</span>
               </button>
-              <span className="w-px h-3 bg-border hidden sm:block" />
             </div>
           </footer>
         </div>{/* end main content */}

@@ -5,7 +5,7 @@ import { readFile } from '@/lib/cascade-api';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Check, X, AlertTriangle } from 'lucide-react';
 
 interface DiffLine {
     text?: string;
@@ -93,7 +93,7 @@ const FileChangeCard = memo(function FileChangeCard({ info, isAccept }: { info: 
                 )}
             >
                 <ChevronRight className={cn('h-3 w-3 text-muted-foreground shrink-0 transition-transform', expanded && 'rotate-90')} />
-                <span>{isAccept !== false ? '✅' : '❌'}</span>
+                <span>{isAccept !== false ? <Check className="h-3.5 w-3.5 text-green-500" /> : <X className="h-3.5 w-3.5 text-red-500" />}</span>
                 <span className="font-mono font-semibold text-foreground/80 truncate">{name}</span>
                 <span className="text-[10px] text-muted-foreground/50 font-mono truncate hidden sm:inline">{lang}</span>
                 <span className="flex-1" />
@@ -196,7 +196,7 @@ function FullFileView({ content, loading, error }: { content: string | null; loa
     if (error) {
         return (
             <div className="px-4 py-3 text-xs text-red-400/80">
-                ⚠ {error}
+                <AlertTriangle className="h-3 w-3 inline mr-1" />{error}
             </div>
         );
     }
