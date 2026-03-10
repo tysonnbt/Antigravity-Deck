@@ -237,6 +237,12 @@ async function init(onReady) {
 
     // Activate first instance
     switchToInstance(0);
+    lastDetectedState = true;
+    // Broadcast detection status to all connected clients (they may have connected before init finished)
+    try {
+        const { broadcastAll } = require('./ws');
+        broadcastAll({ type: 'status', detected: true, port: lsInstances[0]?.port || null });
+    } catch { }
     if (onReady) onReady();
 }
 
@@ -262,6 +268,7 @@ function switchToInstance(index) {
 // Periodic re-scan for new LS instances (every 10s)
 const RESCAN_INTERVAL = 10000;
 let rescanTimer = null;
+let lastDetectedState = false; // track detection state transitions
 
 function startAutoRescan() {
     if (rescanTimer) clearInterval(rescanTimer);
@@ -354,6 +361,17 @@ async function rescanNow() {
             try {
                 const { broadcastAll } = require('./ws');
                 broadcastAll({ type: 'conversations_updated' });
+            } catch { }
+        }
+
+        // Broadcast detection status when state transitions (detected ↔ not detected)
+        const nowDetected = lsInstances.length > 0;
+        if (nowDetected !== lastDetectedState) {
+            lastDetectedState = nowDetected;
+            try {
+                const { broadcastAll } = require('./ws');
+                broadcastAll({ type: 'status', detected: nowDetected, port: lsInstances[0]?.port || null });
+                console.log(`[WS] status broadcast: detected=${nowDetected}`);
             } catch { }
         }
     } catch { }

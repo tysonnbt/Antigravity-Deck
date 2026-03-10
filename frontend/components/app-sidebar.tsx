@@ -52,6 +52,8 @@ import { SystemResourceSummary } from "./sidebar/system-resource-summary"
 interface AppSidebarProps {
     currentConvId: string | null
     conversationsVersion: number
+    /** Whether Windsurf Language Server is detected by backend */
+    detected: boolean
     onSelectConversation: (convId: string | null, wsName: string) => void
     onSelectWorkspace: (wsName: string) => void
     onShowAccountInfo: () => void
@@ -70,6 +72,7 @@ interface AppSidebarProps {
 export function AppSidebar({
     currentConvId,
     conversationsVersion,
+    detected,
     onSelectConversation,
     onSelectWorkspace,
     onShowAccountInfo,
@@ -118,8 +121,12 @@ export function AppSidebar({
         return ""
     }, [newWsName, wsData, folders])
 
-    // Fetch user profile once on mount
+    // Fetch user profile on mount and when connection is established
     useEffect(() => {
+        if (!detected) {
+            setUserProfile(null)
+            return
+        }
         fetch(`${API_BASE}/api/user/profile`, { headers: authHeaders() })
             .then(r => r.json())
             .then(d => {
@@ -132,7 +139,7 @@ export function AppSidebar({
                 })
             })
             .catch(() => { })
-    }, [])
+    }, [detected])
 
     const loadAll = useCallback(async () => {
         try {
@@ -197,26 +204,33 @@ export function AppSidebar({
         if (wsVersion && wsVersion > 0) loadAll()
     }, [wsVersion, loadAll])
 
+    // Refresh workspace list when backend broadcasts conversations_updated or status change via WS
     useEffect(() => {
-        let interval: ReturnType<typeof setInterval> | null = null
-        const start = () => {
-            if (!interval) interval = setInterval(loadAll, 30000)
-        }
-        const stop = () => {
-            if (interval) {
-                clearInterval(interval)
-                interval = null
-            }
-        }
-        const onVisibility = () => (document.hidden ? stop() : start())
+        if (conversationsVersion > 0) loadAll()
+    }, [conversationsVersion, loadAll])
 
-        start()
-        document.addEventListener("visibilitychange", onVisibility)
-        return () => {
-            stop()
-            document.removeEventListener("visibilitychange", onVisibility)
-        }
-    }, [loadAll])
+    // TODO: Temporarily disabled 30s polling — workspace updates now driven by WS events
+    // (conversationsVersion from useWebSocket). Re-enable if WS proves unreliable.
+    // useEffect(() => {
+    //     let interval: ReturnType<typeof setInterval> | null = null
+    //     const start = () => {
+    //         if (!interval) interval = setInterval(loadAll, 30000)
+    //     }
+    //     const stop = () => {
+    //         if (interval) {
+    //             clearInterval(interval)
+    //             interval = null
+    //         }
+    //     }
+    //     const onVisibility = () => (document.hidden ? stop() : start())
+    //
+    //     start()
+    //     document.addEventListener("visibilitychange", onVisibility)
+    //     return () => {
+    //         stop()
+    //         document.removeEventListener("visibilitychange", onVisibility)
+    //     }
+    // }, [loadAll])
 
     const handleWorkspaceClick = useCallback(
         (arrayIdx: number) => {
@@ -440,13 +454,20 @@ export function AppSidebar({
                                             {userProfile?.avatar && (
                                                 <AvatarImage src={`data:image/png;base64,${userProfile.avatar}`} alt={userProfile.name} />
                                             )}
-                                            <AvatarFallback className="rounded-lg bg-indigo-500/20 text-indigo-400 text-xs font-semibold">
-                                                {userProfile?.name?.[0]?.toUpperCase() ?? '?'}
+                                            <AvatarFallback className={cn(
+                                                "rounded-lg text-xs font-semibold",
+                                                detected ? "bg-indigo-500/20 text-indigo-400" : "bg-muted text-muted-foreground"
+                                            )}>
+                                                {userProfile?.name?.[0]?.toUpperCase() ?? (detected ? '?' : '—')}
                                             </AvatarFallback>
                                         </Avatar>
                                         <div className="grid flex-1 text-left text-sm leading-tight">
-                                            <span className="truncate font-medium text-xs">{userProfile?.name ?? 'Loading...'}</span>
-                                            <span className="truncate text-[10px] text-sidebar-foreground/60">{userProfile?.tier ?? ''}</span>
+                                            <span className="truncate font-medium text-xs">
+                                                {userProfile?.name ?? (detected ? 'Loading...' : 'Not Connected')}
+                                            </span>
+                                            <span className="truncate text-[10px] text-sidebar-foreground/60">
+                                                {userProfile?.tier ?? (detected ? '' : 'Open Antigravity IDE')}
+                                            </span>
                                         </div>
                                         <EllipsisVertical className="ml-auto size-4" />
                                     </SidebarMenuButton>

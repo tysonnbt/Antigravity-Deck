@@ -269,6 +269,9 @@ function setupRoutes(app) {
         if (!folderPath && name) {
             const settings = getSettings();
             const root = settings.defaultWorkspaceRoot;
+            if (!root) {
+                return res.status(400).json({ error: 'defaultWorkspaceRoot is not configured — set it in Settings first' });
+            }
             // Ensure root exists
             if (!fs.existsSync(root)) {
                 fs.mkdirSync(root, { recursive: true });

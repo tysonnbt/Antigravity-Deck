@@ -42,8 +42,7 @@ function getStoredValue<T>(key: string, fallback: T): T {
 }
 
 export default function Home() {
-const { connected, steps, baseIndex, stepCount, loadingOlder, conversations, currentConvId, cascadeStatus, conversationsVersion, stepContentVersion, workspaceResources, selectConversation, lastUpdate, loadOlder } = useWebSocket();
-
+  const { connected, detected, steps, baseIndex, stepCount, loadingOlder, conversations, currentConvId, cascadeStatus, conversationsVersion, stepContentVersion, workspaceResources, selectConversation, lastUpdate, loadOlder } = useWebSocket();
 
   const [showAnalytics, setShowAnalytics] = useState(() => getStoredValue('antigravity-show-analytics', false));
   const [showTimeline, setShowTimeline] = useState(() => {
@@ -359,9 +358,10 @@ const { connected, steps, baseIndex, stepCount, loadingOlder, conversations, cur
   const currentConvInfo = currentConvId ? conversations[currentConvId] : null;
 
   // === Determine what to show in main panel ===
-  const showChat = currentConvId !== null || newChatMode;
-  const showConversationList = !showChat && !showAccountInfo && !showSettings && !showLogs && !showBridge && !showSourceControl && !showResources && activeWorkspace !== null;
-  const showWelcome = !showChat && !showConversationList && !showAccountInfo && !showSettings && !showLogs && !showBridge && !showSourceControl && !showResources;
+  // When LS not detected, force welcome/detection screen regardless of stored state
+  const showChat = detected && (currentConvId !== null || newChatMode);
+  const showConversationList = detected && !showChat && !showAccountInfo && !showSettings && !showLogs && !showBridge && !showSourceControl && !showResources && activeWorkspace !== null;
+  const showWelcome = !detected || (!showChat && !showConversationList && !showAccountInfo && !showSettings && !showLogs && !showBridge && !showSourceControl && !showResources);
 
   return (
     <AuthGate>
@@ -370,6 +370,7 @@ const { connected, steps, baseIndex, stepCount, loadingOlder, conversations, cur
         <AppSidebar
           currentConvId={currentConvId}
           conversationsVersion={conversationsVersion}
+          detected={detected}
           activeWorkspace={activeWorkspace}
           workspaceResources={workspaceResources}
           onSelectWorkspace={handleSelectWorkspace}
@@ -423,10 +424,18 @@ const { connected, steps, baseIndex, stepCount, loadingOlder, conversations, cur
               )}
               {showChat && <span className="text-xs text-muted-foreground font-mono hidden md:inline">{steps.length > 0 ? `${steps.length} steps` : ''}</span>}
               {lastUpdate && <span className="text-xs text-muted-foreground hidden md:inline">{lastUpdate}</span>}
-              {/* Connected indicator pill — visible on all screen sizes */}
-              <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium ${connected ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
-                <div className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
-                <span>{connected ? 'Connected' : 'Detecting...'}</span>
+              {/* Status indicators — WS connection + LS detection */}
+              <div className="flex items-center gap-1.5">
+                {/* WebSocket connection status */}
+                <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${connected ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                  <div className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                  <span>WS</span>
+                </div>
+                {/* Language Server detection status */}
+                <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${detected ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : connected ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-muted text-muted-foreground border border-border/30'}`}>
+                  <div className={`w-1.5 h-1.5 rounded-full ${detected ? 'bg-emerald-400' : connected ? 'bg-amber-400 animate-pulse' : 'bg-muted-foreground/50'}`} />
+                  <span>{detected ? 'LS Connected' : connected ? 'Detecting...' : 'LS N/A'}</span>
+                </div>
               </div>
             </div>
 
@@ -475,7 +484,7 @@ const { connected, steps, baseIndex, stepCount, loadingOlder, conversations, cur
           )}
 
           {/* === Main panel content === */}
-          {showWelcome && !connected && (
+          {showWelcome && !detected && (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center space-y-5 max-w-sm">
                 <div className="flex items-center justify-center gap-3">
@@ -507,7 +516,7 @@ const { connected, steps, baseIndex, stepCount, loadingOlder, conversations, cur
             </div>
           )}
 
-          {showWelcome && connected && !activeWorkspace && (
+          {showWelcome && detected && !activeWorkspace && (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center space-y-4">
                 <div className="flex items-center justify-center gap-3">
@@ -521,17 +530,17 @@ const { connected, steps, baseIndex, stepCount, loadingOlder, conversations, cur
             </div>
           )}
 
-          {showAccountInfo && <AccountInfoView />}
+          {detected && showAccountInfo && <AccountInfoView />}
 
-          {showSettings && <SettingsView />}
+          {detected && showSettings && <SettingsView />}
 
           {/* Always mounted — WS stays alive, events accumulate in background */}
-          <div className={showLogs ? 'flex flex-col flex-1 min-h-0 overflow-hidden' : 'hidden'}>
+          <div className={detected && showLogs ? 'flex flex-col flex-1 min-h-0 overflow-hidden' : 'hidden'}>
             <AgentLogsView />
           </div>
 
           {/* Agent Bridge panel */}
-          <div className={showBridge ? 'flex flex-col flex-1 min-h-0 overflow-hidden' : 'hidden'}>
+          <div className={detected && showBridge ? 'flex flex-col flex-1 min-h-0 overflow-hidden' : 'hidden'}>
             <AgentBridgeView />
           </div>
 
