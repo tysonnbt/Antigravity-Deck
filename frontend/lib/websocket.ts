@@ -5,8 +5,8 @@ import { Step, ConversationsResponse, TrajectorySummary } from './types';
 import { extractStepContent } from './step-utils';
 import { showNotification } from './notifications';
 import { API_BASE, getWsUrl } from './config';
-import { authHeaders, authWsUrl } from './auth';
 import { getCascadeStatus, getWorkspaceResources } from './cascade-api';
+import { apiClient } from './api-client';
 import type { ResourceSnapshot } from './cascade-api';
 
 interface WSState {
@@ -48,7 +48,7 @@ export function useWebSocket() {
 
     const loadConversations = useCallback(async () => {
         try {
-            const res = await fetch(`${API_BASE}/api/conversations`, { headers: authHeaders() });
+            const res = await apiClient(`${API_BASE}/api/conversations`);
             const data: ConversationsResponse = await res.json();
             if (data.trajectorySummaries) {
                 setState(prev => ({ ...prev, conversations: data.trajectorySummaries! }));
@@ -65,7 +65,8 @@ export function useWebSocket() {
     const connect = useCallback(async () => {
         try {
             const wsBase = await getWsUrl();
-            const ws = new WebSocket(authWsUrl(wsBase));
+            // WebSocket uses cookies automatically - no auth query params needed
+            const ws = new WebSocket(wsBase);
             wsRef.current = ws;
 
             ws.onopen = () => {

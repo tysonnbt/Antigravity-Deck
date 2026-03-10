@@ -1,7 +1,6 @@
 'use client';
 import { useState, useCallback, useEffect } from 'react';
-import { setAuthKey, getAuthKey } from '@/lib/auth';
-import { API_BASE } from '@/lib/config';
+import { login, checkAuth } from '@/lib/auth';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -21,8 +20,11 @@ export function AuthGate({ children }: AuthGateProps) {
     useEffect(() => {
         if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
             setAuthenticated(true);
-        } else if (getAuthKey()) {
-            setAuthenticated(true);
+        } else {
+            // Check if user has valid JWT token
+            checkAuth().then(isAuth => {
+                if (isAuth) setAuthenticated(true);
+            });
         }
     }, []);
 
@@ -32,21 +34,13 @@ export function AuthGate({ children }: AuthGateProps) {
         setChecking(true);
         setError('');
 
-        try {
-            const res = await fetch(`${API_BASE}/api/settings`, {
-                headers: { 'X-Auth-Key': key.trim() }
-            });
-            if (res.ok) {
-                setAuthKey(key.trim());
-                setAuthenticated(true);
-            } else {
-                setError('Invalid key');
-            }
-        } catch {
-            setError('Cannot reach server');
-        } finally {
-            setChecking(false);
+        const result = await login(key.trim());
+        if (result.success) {
+            setAuthenticated(true);
+        } else {
+            setError(result.error || 'Invalid key');
         }
+        setChecking(false);
     }, [key]);
 
     if (authenticated) return <>{children}</>;

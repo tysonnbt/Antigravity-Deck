@@ -7,7 +7,8 @@ import { cn } from "@/lib/utils"
 import { useTheme } from "@/lib/theme"
 import { PluginManager } from "./plugin-manager"
 import { API_BASE } from "@/lib/config"
-import { authHeaders } from "@/lib/auth"
+import { logout } from "@/lib/auth"
+import { apiClient } from "@/lib/api-client"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -43,7 +44,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Settings, User, Plug, Book, Globe, Moon, Sun, Plus, FolderOpen, FolderPlus, EllipsisVertical, Activity, Bot, FolderSync, Loader2, Circle, GitBranch, Monitor } from "lucide-react"
+import { Settings, User, Plug, Book, Globe, Moon, Sun, Plus, FolderOpen, FolderPlus, EllipsisVertical, Activity, Bot, FolderSync, Loader2, Circle, GitBranch, Monitor, LogOut } from "lucide-react"
 
 import { WorkspaceGroup } from "./sidebar/workspace-group"
 import type { ConvSummary, WorkspaceData } from "./sidebar/workspace-group"
@@ -118,7 +119,7 @@ export function AppSidebar({
 
     // Fetch user profile once on mount
     useEffect(() => {
-        fetch(`${API_BASE}/api/user/profile`, { headers: authHeaders() })
+        apiClient(`${API_BASE}/api/user/profile`)
             .then(r => r.json())
             .then(d => {
                 const u = d.user
@@ -140,7 +141,7 @@ export function AppSidebar({
             const conversationsData = await Promise.all(
                 wss.map(async (ws) => {
                     try {
-                        const res = await fetch(`${API_BASE}/api/workspaces/${encodeURIComponent(ws.workspaceName)}/conversations`, { headers: authHeaders() })
+                        const res = await apiClient(`${API_BASE}/api/workspaces/${encodeURIComponent(ws.workspaceName)}/conversations`)
                         if (!res.ok) return [] as ConvSummary[]
                         const data = await res.json()
                         // API returns { trajectorySummaries: { [id]: info, ... } } — not an array
@@ -470,10 +471,18 @@ export function AppSidebar({
                                         <Globe className="mr-2 h-4 w-4 text-muted-foreground" />
                                         <span className="text-muted-foreground">Browser (Coming Soon)</span>
                                     </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
+                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem onClick={onShowSettings}>
                                         <Settings className="mr-2 h-4 w-4" />
                                         <span>App Settings</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={async () => {
+                                        await logout();
+                                        window.location.reload();
+                                    }}>
+                                        <LogOut className="mr-2 h-4 w-4" />
+                                        <span>Logout</span>
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
