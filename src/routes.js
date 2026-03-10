@@ -216,6 +216,13 @@ function setupRoutes(app) {
         res.json({ root, folders: entries });
     });
 
+    // Resource usage snapshot for all workspace PIDs
+    app.get('/api/workspaces/resources', (req, res) => {
+        const { getResourceSnapshot } = require('./resource-monitor');
+        res.json(getResourceSnapshot());
+    });
+
+
     // --- resolveInst: determine which LS instance to route a request to ---
     function resolveInst(req) {
         // 1. By cascade ID (existing cascades)
@@ -348,11 +355,13 @@ function setupRoutes(app) {
 
             child.unref();
         } else {
-            // Windows/Linux: use spawn instead of exec
+            // Windows/Linux: use spawn with shell:true on Windows (.cmd files need shell)
+            const { platform } = require('./config');
             const child = spawn('antigravity', ['--trust-workspace', folderPath], {
                 timeout: 10000,
                 detached: true,
-                stdio: 'ignore'
+                stdio: 'ignore',
+                shell: platform === 'win32', // Windows .cmd files require shell
             });
 
             child.on('error', (err) => {
