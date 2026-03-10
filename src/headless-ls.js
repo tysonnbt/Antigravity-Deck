@@ -21,7 +21,16 @@ function getLsBinaryPath() {
             'language_server_windows_x64.exe'
         );
     } else if (platform === 'darwin') {
-        return '/Applications/Antigravity.app/Contents/Resources/app/extensions/antigravity/bin/language_server';
+        const base = '/Applications/Antigravity.app/Contents/Resources/app/extensions/antigravity/bin';
+        const candidates = [
+            path.join(base, 'language_server_macos_arm'),
+            path.join(base, 'language_server_macos_x64'),
+            path.join(base, 'language_server'),
+        ];
+        for (const p of candidates) {
+            if (fs.existsSync(p)) return p;
+        }
+        return candidates[0]; // will fail at launch with descriptive error
     } else {
         // Linux — try common paths
         const home = os.homedir();
