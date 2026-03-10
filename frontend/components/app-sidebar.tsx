@@ -43,7 +43,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Settings, User, Plug, Book, Globe, Moon, Sun, Plus, FolderOpen, ChevronsUpDown, Activity, Bot, GitBranch, FolderPlus, EllipsisVertical, Activity, Bot, FolderSync, Loader2, Circle } from "lucide-react"
+import { Settings, User, Plug, Book, Globe, Moon, Sun, Plus, FolderOpen, FolderPlus, EllipsisVertical, Activity, Bot, FolderSync, Loader2, Circle, GitBranch } from "lucide-react"
 
 import { WorkspaceGroup } from "./sidebar/workspace-group"
 import type { ConvSummary, WorkspaceData } from "./sidebar/workspace-group"
@@ -279,94 +279,24 @@ export function AppSidebar({
 
     return (
         <>
-        <Sidebar variant="inset">
-            <SidebarHeader>
-                <button
-                    onClick={onGoHome}
-                    className="flex items-center gap-2 px-4 py-2 mt-2 hover:opacity-80 transition-opacity cursor-pointer"
-                >
-                    <FolderSync className="h-5 w-5 text-primary" />
-                    <span className="font-semibold text-lg tracking-tight">Chat Mirror</span>
-                </button>
-            </SidebarHeader>
-
-            <SidebarContent>
-                <SidebarSeparator className="mx-0" />
-                <SidebarGroup>
-                    <SidebarGroupLabel>Active Workspaces</SidebarGroupLabel>
-                    <SidebarGroupContent>
-                        {loading && <div className="px-3 py-4 text-xs text-muted-foreground text-center">Loading...</div>}
-                        {regularWs.map((wd) => {
-                            const arrayIdx = wsData.indexOf(wd)
-                            return (
-                                <WorkspaceGroup
-                                    key={wd.workspace.workspaceName}
-                                    data={wd}
-                                    arrayIdx={arrayIdx}
-                                    showAll={!!showAllMap[arrayIdx]}
-                                    currentConvId={currentConvId}
-                                    onToggleExpand={() => handleWorkspaceClick(arrayIdx)}
-                                    onSelectConv={(convId) => handleSelectConv(convId, arrayIdx)}
-                                    onToggleShowAll={() => setShowAllMap((prev) => ({ ...prev, [arrayIdx]: true }))}
-                                />
-                            )
-                        })}
-                    </SidebarGroupContent>
-                </SidebarGroup>
-
-                {closedFolders.length > 0 && (
-                    <>
-                    <SidebarSeparator className="mx-0" />
-                    <SidebarGroup>
-                        <SidebarGroupLabel>Available Workspaces</SidebarGroupLabel>
-                        <SidebarGroupContent>
-                            <SidebarMenu>
-                                {closedFolders.map((folder) => (
-                                    <SidebarMenuItem key={folder.name}>
-                                        <SidebarMenuButton
-                                            onClick={() => handleOpenFolder(folder)}
-                                            disabled={openingFolder === folder.name}
-                                            tooltip={folder.name}
-                                            className="text-xs !pr-2"
-                                        >
-                                            <FolderOpen className="shrink-0" />
-                                            <span className="flex-1 truncate min-w-0">{folder.name}</span>
-                                            <span className="ml-auto opacity-0 group-hover/menu-item:opacity-100 text-[9px] text-muted-foreground/50 transition-opacity shrink-0">
-                                                {openingFolder === folder.name ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Open'}
-                                            </span>
-                                        </SidebarMenuButton>
-                                    </SidebarMenuItem>
-                                ))}
-                            </SidebarMenu>
-                        </SidebarGroupContent>
-                    </SidebarGroup>
-                    </>
-                )}
-
-                <SidebarSeparator className="mx-0" />
-
-                <div className="px-4 py-3">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowCreateDialog(true)}
-                        className="w-full h-8 text-xs gap-1.5"
+            <Sidebar variant="inset">
+                <SidebarHeader>
+                    <button
+                        onClick={onGoHome}
+                        className="flex items-center gap-2 px-4 py-2 mt-2 hover:opacity-80 transition-opacity cursor-pointer"
                     >
-                        <Plus className="h-3.5 w-3.5" />
-                        New Workspace
-                    </Button>
-                </div>
+                        <FolderSync className="h-5 w-5 text-primary" />
+                        <span className="font-semibold text-lg tracking-tight">Chat Mirror</span>
+                    </button>
+                </SidebarHeader>
 
-                {playgroundWs.length > 0 && (
-                    <>
+                <SidebarContent>
                     <SidebarSeparator className="mx-0" />
                     <SidebarGroup>
-                        <SidebarGroupLabel className="flex items-center justify-between">
-                            <span>Playground</span>
-                            <Circle className="h-3 w-3 text-muted-foreground/30" />
-                        </SidebarGroupLabel>
+                        <SidebarGroupLabel>Active Workspaces</SidebarGroupLabel>
                         <SidebarGroupContent>
-                            {playgroundWs.map((wd) => {
+                            {loading && <div className="px-3 py-4 text-xs text-muted-foreground text-center">Loading...</div>}
+                            {regularWs.map((wd) => {
                                 const arrayIdx = wsData.indexOf(wd)
                                 return (
                                     <WorkspaceGroup
@@ -375,7 +305,6 @@ export function AppSidebar({
                                         arrayIdx={arrayIdx}
                                         showAll={!!showAllMap[arrayIdx]}
                                         currentConvId={currentConvId}
-                                        showActiveIndicator={false}
                                         onToggleExpand={() => handleWorkspaceClick(arrayIdx)}
                                         onSelectConv={(convId) => handleSelectConv(convId, arrayIdx)}
                                         onToggleShowAll={() => setShowAllMap((prev) => ({ ...prev, [arrayIdx]: true }))}
@@ -384,143 +313,214 @@ export function AppSidebar({
                             })}
                         </SidebarGroupContent>
                     </SidebarGroup>
-                    </>
-                )}
-            </SidebarContent>
 
-            <SidebarFooter>
-                <SidebarMenu>
-                    <SidebarMenuItem>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <SidebarMenuButton
-                                    size="lg"
-                                    className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-                                >
-                                    <Avatar className="h-8 w-8 rounded-lg">
-                                        {userProfile?.avatar && (
-                                            <AvatarImage src={`data:image/png;base64,${userProfile.avatar}`} alt={userProfile.name} />
-                                        )}
-                                        <AvatarFallback className="rounded-lg bg-indigo-500/20 text-indigo-400 text-xs font-semibold">
-                                            {userProfile?.name?.[0]?.toUpperCase() ?? '?'}
-                                        </AvatarFallback>
-                                    </Avatar>
-                                    <div className="grid flex-1 text-left text-sm leading-tight">
-                                        <span className="truncate font-medium text-xs">{userProfile?.name ?? 'Loading...'}</span>
-                                        <span className="truncate text-[10px] text-sidebar-foreground/60">{userProfile?.tier ?? ''}</span>
-                                    </div>
-                                    <EllipsisVertical className="ml-auto size-4" />
-                                </SidebarMenuButton>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent
-                                side={isMobile ? "bottom" : "right"}
-                                align="end"
-                                sideOffset={4}
-                                className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
-                            >
-                                <DropdownMenuItem onClick={onShowAccountInfo}>
-                                    <User className="mr-2 h-4 w-4" />
-                                    <span>Account & Plan</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={onShowLogs}>
-                                    <Activity className="mr-2 h-4 w-4" />
-                                    <span>Live Logs</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={onShowBridge}>
-                                    <Bot className="mr-2 h-4 w-4" />
-                                    <span>Agent Bridge</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={onShowSourceControl}>
-                                    <GitBranch className="mr-2 h-4 w-4" />
-                                    <span>Source Control</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={toggleTheme}>
-                                    {isDark ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
-                                    <span>{isDark ? "Light Mode" : "Dark Mode"}</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => setShowPlugins(true)}>
-                                    <Plug className="mr-2 h-4 w-4" />
-                                    <span>Plugins</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem disabled>
-                                    <Book className="mr-2 h-4 w-4 text-muted-foreground" />
-                                    <span className="text-muted-foreground">Knowledge (Coming Soon)</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem disabled>
-                                    <Globe className="mr-2 h-4 w-4 text-muted-foreground" />
-                                    <span className="text-muted-foreground">Browser (Coming Soon)</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={onShowSettings}>
-                                    <Settings className="mr-2 h-4 w-4" />
-                                    <span>App Settings</span>
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </SidebarMenuItem>
-                </SidebarMenu>
-            </SidebarFooter>
+                    {closedFolders.length > 0 && (
+                        <>
+                            <SidebarSeparator className="mx-0" />
+                            <SidebarGroup>
+                                <SidebarGroupLabel>Available Workspaces</SidebarGroupLabel>
+                                <SidebarGroupContent>
+                                    <SidebarMenu>
+                                        {closedFolders.map((folder) => (
+                                            <SidebarMenuItem key={folder.name}>
+                                                <SidebarMenuButton
+                                                    onClick={() => handleOpenFolder(folder)}
+                                                    disabled={openingFolder === folder.name}
+                                                    tooltip={folder.name}
+                                                    className="text-xs !pr-2"
+                                                >
+                                                    <FolderOpen className="shrink-0" />
+                                                    <span className="flex-1 truncate min-w-0">{folder.name}</span>
+                                                    <span className="ml-auto opacity-0 group-hover/menu-item:opacity-100 text-[9px] text-muted-foreground/50 transition-opacity shrink-0">
+                                                        {openingFolder === folder.name ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Open'}
+                                                    </span>
+                                                </SidebarMenuButton>
+                                            </SidebarMenuItem>
+                                        ))}
+                                    </SidebarMenu>
+                                </SidebarGroupContent>
+                            </SidebarGroup>
+                        </>
+                    )}
 
-            <PluginManager open={showPlugins} onClose={() => setShowPlugins(false)} />
-        </Sidebar>
+                    <SidebarSeparator className="mx-0" />
 
-        <Dialog open={showCreateDialog} onOpenChange={(open) => {
-            setShowCreateDialog(open)
-            if (!open) { setNewWsName(""); setCreateError("") }
-        }}>
-            <DialogContent className="sm:max-w-[420px]">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                        <FolderPlus className="h-5 w-5" />
-                        New Workspace
-                    </DialogTitle>
-                    <DialogDescription>
-                        Create a new workspace to start coding with Antigravity.
-                    </DialogDescription>
-                </DialogHeader>
-
-                <div className="space-y-4 py-2">
-                    <div className="space-y-2.5">
-                        <label className="text-xs font-medium text-muted-foreground">Workspace Name</label>
-                        <Input
-                            value={newWsName}
-                            onChange={(e) => { setNewWsName(e.target.value); setCreateError("") }}
-                            onKeyDown={(e) => e.key === "Enter" && !nameValidationError && handleCreateByName()}
-                            placeholder="my-awesome-project"
-                            className={cn(nameValidationError && newWsName.trim() && "border-destructive focus-visible:ring-destructive")}
-                            disabled={creating}
-                            autoFocus
-                        />
-                        {(nameValidationError || createError) && newWsName.trim() && (
-                            <p className="text-xs text-destructive">{nameValidationError || createError}</p>
-                        )}
-                        <p className="text-[11px] text-muted-foreground">
-                            This will create a folder in your workspace root directory.
-                        </p>
+                    <div className="px-4 py-3">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowCreateDialog(true)}
+                            className="w-full h-8 text-xs gap-1.5"
+                        >
+                            <Plus className="h-3.5 w-3.5" />
+                            New Workspace
+                        </Button>
                     </div>
-                </div>
 
-                <DialogFooter>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => { setShowCreateDialog(false); setNewWsName(""); setCreateError("") }}
-                        disabled={creating}
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        size="sm"
-                        onClick={async () => { await handleCreateByName() }}
-                        disabled={creating || !newWsName.trim() || !!nameValidationError}
-                    >
-                        {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Plus className="h-3.5 w-3.5 mr-1.5" />}
-                        Create Workspace
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+                    {playgroundWs.length > 0 && (
+                        <>
+                            <SidebarSeparator className="mx-0" />
+                            <SidebarGroup>
+                                <SidebarGroupLabel className="flex items-center justify-between">
+                                    <span>Playground</span>
+                                    <Circle className="h-3 w-3 text-muted-foreground/30" />
+                                </SidebarGroupLabel>
+                                <SidebarGroupContent>
+                                    {playgroundWs.map((wd) => {
+                                        const arrayIdx = wsData.indexOf(wd)
+                                        return (
+                                            <WorkspaceGroup
+                                                key={wd.workspace.workspaceName}
+                                                data={wd}
+                                                arrayIdx={arrayIdx}
+                                                showAll={!!showAllMap[arrayIdx]}
+                                                currentConvId={currentConvId}
+                                                showActiveIndicator={false}
+                                                onToggleExpand={() => handleWorkspaceClick(arrayIdx)}
+                                                onSelectConv={(convId) => handleSelectConv(convId, arrayIdx)}
+                                                onToggleShowAll={() => setShowAllMap((prev) => ({ ...prev, [arrayIdx]: true }))}
+                                            />
+                                        )
+                                    })}
+                                </SidebarGroupContent>
+                            </SidebarGroup>
+                        </>
+                    )}
+                </SidebarContent>
+
+                <SidebarFooter>
+                    <SidebarMenu>
+                        <SidebarMenuItem>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <SidebarMenuButton
+                                        size="lg"
+                                        className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                                    >
+                                        <Avatar className="h-8 w-8 rounded-lg">
+                                            {userProfile?.avatar && (
+                                                <AvatarImage src={`data:image/png;base64,${userProfile.avatar}`} alt={userProfile.name} />
+                                            )}
+                                            <AvatarFallback className="rounded-lg bg-indigo-500/20 text-indigo-400 text-xs font-semibold">
+                                                {userProfile?.name?.[0]?.toUpperCase() ?? '?'}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <div className="grid flex-1 text-left text-sm leading-tight">
+                                            <span className="truncate font-medium text-xs">{userProfile?.name ?? 'Loading...'}</span>
+                                            <span className="truncate text-[10px] text-sidebar-foreground/60">{userProfile?.tier ?? ''}</span>
+                                        </div>
+                                        <EllipsisVertical className="ml-auto size-4" />
+                                    </SidebarMenuButton>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent
+                                    side={isMobile ? "bottom" : "right"}
+                                    align="end"
+                                    sideOffset={4}
+                                    className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+                                >
+                                    <DropdownMenuItem onClick={onShowAccountInfo}>
+                                        <User className="mr-2 h-4 w-4" />
+                                        <span>Account & Plan</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={onShowLogs}>
+                                        <Activity className="mr-2 h-4 w-4" />
+                                        <span>Live Logs</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={onShowBridge}>
+                                        <Bot className="mr-2 h-4 w-4" />
+                                        <span>Agent Bridge</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={onShowSourceControl}>
+                                        <GitBranch className="mr-2 h-4 w-4" />
+                                        <span>Source Control</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={toggleTheme}>
+                                        {isDark ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
+                                        <span>{isDark ? "Light Mode" : "Dark Mode"}</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={() => setShowPlugins(true)}>
+                                        <Plug className="mr-2 h-4 w-4" />
+                                        <span>Plugins</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem disabled>
+                                        <Book className="mr-2 h-4 w-4 text-muted-foreground" />
+                                        <span className="text-muted-foreground">Knowledge (Coming Soon)</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem disabled>
+                                        <Globe className="mr-2 h-4 w-4 text-muted-foreground" />
+                                        <span className="text-muted-foreground">Browser (Coming Soon)</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={onShowSettings}>
+                                        <Settings className="mr-2 h-4 w-4" />
+                                        <span>App Settings</span>
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </SidebarMenuItem>
+                    </SidebarMenu>
+                </SidebarFooter>
+
+                <PluginManager open={showPlugins} onClose={() => setShowPlugins(false)} />
+            </Sidebar>
+
+            <Dialog open={showCreateDialog} onOpenChange={(open) => {
+                setShowCreateDialog(open)
+                if (!open) { setNewWsName(""); setCreateError("") }
+            }}>
+                <DialogContent className="sm:max-w-[420px]">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <FolderPlus className="h-5 w-5" />
+                            New Workspace
+                        </DialogTitle>
+                        <DialogDescription>
+                            Create a new workspace to start coding with Antigravity.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-2">
+                        <div className="space-y-2.5">
+                            <label className="text-xs font-medium text-muted-foreground">Workspace Name</label>
+                            <Input
+                                value={newWsName}
+                                onChange={(e) => { setNewWsName(e.target.value); setCreateError("") }}
+                                onKeyDown={(e) => e.key === "Enter" && !nameValidationError && handleCreateByName()}
+                                placeholder="my-awesome-project"
+                                className={cn(nameValidationError && newWsName.trim() && "border-destructive focus-visible:ring-destructive")}
+                                disabled={creating}
+                                autoFocus
+                            />
+                            {(nameValidationError || createError) && newWsName.trim() && (
+                                <p className="text-xs text-destructive">{nameValidationError || createError}</p>
+                            )}
+                            <p className="text-[11px] text-muted-foreground">
+                                This will create a folder in your workspace root directory.
+                            </p>
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => { setShowCreateDialog(false); setNewWsName(""); setCreateError("") }}
+                            disabled={creating}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            size="sm"
+                            onClick={async () => { await handleCreateByName() }}
+                            disabled={creating || !newWsName.trim() || !!nameValidationError}
+                        >
+                            {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Plus className="h-3.5 w-3.5 mr-1.5" />}
+                            Create Workspace
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </>
     )
 }
