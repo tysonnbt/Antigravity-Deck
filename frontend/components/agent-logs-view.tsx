@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { cn } from '@/lib/utils';
 import { getWsUrl } from '@/lib/config';
-import { authWsUrl } from '@/lib/auth';
 import {
     Activity, User, Bot, Wrench, Filter, Trash2,
     Wifi, WifiOff, ChevronDown, ChevronRight,
@@ -277,7 +276,8 @@ export function AgentLogsView() {
         setWsStatus('connecting');
         try {
             const wsBase = await getWsUrl();
-            const ws = new WebSocket(authWsUrl(wsBase));
+            // WebSocket uses cookies automatically - no auth query params needed
+            const ws = new WebSocket(wsBase);
             wsRef.current = ws;
 
             ws.onopen = () => {

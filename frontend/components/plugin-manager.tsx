@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { API_BASE } from '@/lib/config';
-import { authHeaders } from '@/lib/auth';
+import { apiClient } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -32,7 +32,7 @@ export function PluginManager({ open, onClose }: { open: boolean; onClose: () =>
     const fetchPlugins = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await fetch(`${API_BASE}/api/plugins`, { headers: authHeaders() });
+            const res = await apiClient(`${API_BASE}/api/plugins`);
             const data = await res.json();
             setPlugins(data.plugins || data.availablePlugins || []);
         } catch {
@@ -49,9 +49,8 @@ export function PluginManager({ open, onClose }: { open: boolean; onClose: () =>
     const handleInstall = async (plugin: Plugin) => {
         setInstalling(plugin.id);
         try {
-            await fetch(`${API_BASE}/api/plugins/install`, {
+            await apiClient(`${API_BASE}/api/plugins/install`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...authHeaders() },
                 body: JSON.stringify({ pluginId: plugin.id })
             });
             await fetchPlugins();
@@ -65,7 +64,7 @@ export function PluginManager({ open, onClose }: { open: boolean; onClose: () =>
     const handleUninstall = async (pluginId: string) => {
         setInstalling(pluginId);
         try {
-            await fetch(`${API_BASE}/api/plugins/${pluginId}`, { method: 'DELETE', headers: authHeaders() });
+            await apiClient(`${API_BASE}/api/plugins/${pluginId}`, { method: 'DELETE' });
             await fetchPlugins();
         } catch (e) {
             console.error('Uninstall error:', e);

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Trash2, ChevronRight, FolderIcon, MessageSquare } from 'lucide-react'
 import { API_BASE } from '@/lib/config'
-import { authHeaders } from '@/lib/auth'
+import { apiClient } from '@/lib/api-client'
 import { ResourceBar } from './resource-bar'
 import type { WorkspaceResources } from '@/lib/cascade-api'
 import {
@@ -78,9 +78,8 @@ export function WorkspaceGroup({
     const handleConfirmDelete = async () => {
         if (!deleteTarget) return
         try {
-            await fetch(`${API_BASE}/api/cascade/${deleteTarget.id}`, {
+            await apiClient(`${API_BASE}/api/cascade/${deleteTarget.id}`, {
                 method: 'DELETE',
-                headers: authHeaders(),
             })
         } catch (err) {
             console.error('Failed to delete conversation:', err)
