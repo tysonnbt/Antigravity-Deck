@@ -25,11 +25,10 @@ function setupWebSocket(wss, { ensureCached, stepCache }) {
                 const url = new URL(req.url, 'http://localhost');
                 let authenticated = false;
                 
-                // JWT mode: only accept JWT tokens
+                // JWT mode: only accept JWT tokens from HttpOnly cookies (no query params for security)
                 if (jwtSecret) {
-                    // Extract JWT from query param or cookie
-                    const token = url.searchParams.get('token') || 
-                                 req.headers.cookie?.match(/access_token=([^;]+)/)?.[1];
+                    // Extract JWT from cookie only (query param tokens are insecure - logged in URLs/history)
+                    const token = req.headers.cookie?.match(/access_token=([^;]+)/)?.[1];
                     
                     if (token) {
                         try {
@@ -70,12 +69,18 @@ function setupWebSocket(wss, { ensureCached, stepCache }) {
                     sendToOne(ws, {
                         type: 'steps_init',
                         conversationId: msg.conversationId,
-                        steps: cache ? cache.steps : []
+                        steps: cache ? cache.steps : [],
+                        baseIndex: cache ? (cache.baseIndex || 0) : 0,
+                        stepCount: cache ? (cache.stepCount || 0) : 0,
                     });
                 } else if (msg.type === 'subscribe_all') {
                     // Live Logs mode: receive all broadcasts regardless of conversation
                     globalViewers.add(ws);
                     console.log(`[WS] subscribe_all — global viewers: ${globalViewers.size}`);
+                } else if (msg.type === 'unsubscribe_all') {
+                    // Stop receiving global broadcasts (Live Logs closed)
+                    globalViewers.delete(ws);
+                    console.log(`[WS] unsubscribe_all — global viewers: ${globalViewers.size}`);
                 }
             } catch (e) { }
         });

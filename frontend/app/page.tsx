@@ -42,7 +42,7 @@ function getStoredValue<T>(key: string, fallback: T): T {
 }
 
 export default function Home() {
-  const { connected, steps, conversations, currentConvId, cascadeStatus, conversationsVersion, stepContentVersion, workspaceResources, selectConversation, lastUpdate } = useWebSocket();
+  const { connected, detected, steps, baseIndex, stepCount, loadingOlder, conversations, currentConvId, cascadeStatus, conversationsVersion, stepContentVersion, workspaceResources, selectConversation, lastUpdate, loadOlder } = useWebSocket();
 
   const [showAnalytics, setShowAnalytics] = useState(() => getStoredValue('antigravity-show-analytics', false));
   const [showTimeline, setShowTimeline] = useState(() => {
@@ -358,9 +358,10 @@ export default function Home() {
   const currentConvInfo = currentConvId ? conversations[currentConvId] : null;
 
   // === Determine what to show in main panel ===
-  const showChat = currentConvId !== null || newChatMode;
-  const showConversationList = !showChat && !showAccountInfo && !showSettings && !showLogs && !showBridge && !showSourceControl && !showResources && activeWorkspace !== null;
-  const showWelcome = !showChat && !showConversationList && !showAccountInfo && !showSettings && !showLogs && !showBridge && !showSourceControl && !showResources;
+  // When LS not detected, force welcome/detection screen regardless of stored state
+  const showChat = detected && (currentConvId !== null || newChatMode);
+  const showConversationList = detected && !showChat && !showAccountInfo && !showSettings && !showLogs && !showBridge && !showSourceControl && !showResources && activeWorkspace !== null;
+  const showWelcome = !detected || (!showChat && !showConversationList && !showAccountInfo && !showSettings && !showLogs && !showBridge && !showSourceControl && !showResources);
 
   return (
     <AuthGate>
@@ -369,6 +370,7 @@ export default function Home() {
         <AppSidebar
           currentConvId={currentConvId}
           conversationsVersion={conversationsVersion}
+          detected={detected}
           activeWorkspace={activeWorkspace}
           workspaceResources={workspaceResources}
           onSelectWorkspace={handleSelectWorkspace}
@@ -397,7 +399,7 @@ export default function Home() {
                   <span className="font-semibold text-sm truncate max-w-[120px] sm:max-w-[200px]">{activeWorkspace}</span>
                 ) : (
                   <>
-                    <span className="font-semibold text-sm">Chat Mirror</span>
+                    <span className="font-semibold text-sm">Antigravity Deck</span>
                     <Badge variant="outline" className="text-[9px] h-4 px-1 font-mono inline-flex">v3</Badge>
                   </>
                 )}
@@ -422,10 +424,18 @@ export default function Home() {
               )}
               {showChat && <span className="text-xs text-muted-foreground font-mono hidden md:inline">{steps.length > 0 ? `${steps.length} steps` : ''}</span>}
               {lastUpdate && <span className="text-xs text-muted-foreground hidden md:inline">{lastUpdate}</span>}
-              {/* Connected indicator pill — visible on all screen sizes */}
-              <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium ${connected ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
-                <div className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
-                <span>{connected ? 'Connected' : 'Detecting...'}</span>
+              {/* Status indicators — WS connection + LS detection */}
+              <div className="flex items-center gap-1.5">
+                {/* WebSocket connection status */}
+                <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${connected ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                  <div className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                  <span>WS</span>
+                </div>
+                {/* Language Server detection status */}
+                <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${detected ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : connected ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-muted text-muted-foreground border border-border/30'}`}>
+                  <div className={`w-1.5 h-1.5 rounded-full ${detected ? 'bg-emerald-400' : connected ? 'bg-amber-400 animate-pulse' : 'bg-muted-foreground/50'}`} />
+                  <span>{detected ? 'LS Connected' : connected ? 'Detecting...' : 'LS N/A'}</span>
+                </div>
               </div>
             </div>
 
@@ -474,7 +484,7 @@ export default function Home() {
           )}
 
           {/* === Main panel content === */}
-          {showWelcome && !connected && (
+          {showWelcome && !detected && (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center space-y-5 max-w-sm">
                 <div className="flex items-center justify-center gap-3">
@@ -485,7 +495,7 @@ export default function Home() {
                   {[
                     'Open Antigravity IDE',
                     'Open a project folder in Antigravity',
-                    'Chat Mirror will auto-detect it within ~10 seconds',
+                    'Antigravity Deck will auto-detect it within ~10 seconds',
                   ].map((text, i) => (
                     <li key={i} className="flex items-start gap-3 text-sm text-muted-foreground">
                       <span className="flex-shrink-0 w-5 h-5 rounded-full bg-muted/30 flex items-center justify-center text-xs font-medium text-muted-foreground/80">
@@ -506,7 +516,7 @@ export default function Home() {
             </div>
           )}
 
-          {showWelcome && connected && !activeWorkspace && (
+          {showWelcome && detected && !activeWorkspace && (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center space-y-4">
                 <div className="flex items-center justify-center gap-3">
@@ -520,17 +530,17 @@ export default function Home() {
             </div>
           )}
 
-          {showAccountInfo && <AccountInfoView />}
+          {detected && showAccountInfo && <AccountInfoView />}
 
-          {showSettings && <SettingsView />}
+          {detected && showSettings && <SettingsView />}
 
           {/* Always mounted — WS stays alive, events accumulate in background */}
-          <div className={showLogs ? 'flex flex-col flex-1 min-h-0 overflow-hidden' : 'hidden'}>
+          <div className={detected && showLogs ? 'flex flex-col flex-1 min-h-0 overflow-hidden' : 'hidden'}>
             <AgentLogsView />
           </div>
 
           {/* Agent Bridge panel */}
-          <div className={showBridge ? 'flex flex-col flex-1 min-h-0 overflow-hidden' : 'hidden'}>
+          <div className={detected && showBridge ? 'flex flex-col flex-1 min-h-0 overflow-hidden' : 'hidden'}>
             <AgentBridgeView />
           </div>
 
@@ -576,10 +586,13 @@ export default function Home() {
             <>
               <ChatView
                 steps={steps}
+                baseIndex={baseIndex}
+                stepCount={stepCount}
+                loadingOlder={loadingOlder}
+                onLoadOlder={loadOlder}
                 currentConvId={currentConvId}
                 currentWorkspace={activeWorkspace}
                 wsVersion={wsVersion}
-                stepContentVersion={stepContentVersion}
                 cascadeStatus={cascadeStatus ?? undefined}
                 onCascadeCreated={handleCascadeCreated}
                 onNewConversation={handleNewConversation}
@@ -609,7 +622,7 @@ export default function Home() {
           {/* Footer */}
           <footer className="flex items-center justify-between px-2 sm:px-4 h-8 bg-background border-t border-border flex-shrink-0 text-[10px] text-muted-foreground/60 safe-area-bottom">
             <div className="flex items-center gap-2 sm:gap-3">
-              <span><FolderSync className="w-3 h-3 inline-block mr-1" />Chat Mirror v3</span>
+              <span><FolderSync className="w-3 h-3 inline-block mr-1" />Antigravity Deck v3</span>
               <span className="w-px h-3 bg-border hidden sm:block" />
               <span className="hidden sm:inline">AntigravityChat</span>
             </div>

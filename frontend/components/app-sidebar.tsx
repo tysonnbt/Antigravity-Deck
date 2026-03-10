@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react"
-import { getWorkspaces, createWorkspace, getWorkspaceFolders } from "@/lib/cascade-api"
+import { getWorkspaces, createWorkspace, createHeadlessWorkspace, getWorkspaceFolders } from "@/lib/cascade-api"
 import type { Workspace, WorkspaceFolder, WorkspaceResources, ResourceSnapshot } from "@/lib/cascade-api"
 import { cn } from "@/lib/utils"
 import { useTheme } from "@/lib/theme"
@@ -44,7 +44,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Settings, User, Plug, Book, Globe, Moon, Sun, Plus, FolderOpen, FolderPlus, EllipsisVertical, Activity, Bot, FolderSync, Loader2, Circle, GitBranch, Monitor, LogOut } from "lucide-react"
+import { Settings, User, Plug, Book, Globe, Moon, Sun, Plus, FolderOpen, FolderPlus, EllipsisVertical, Activity, Bot, FolderSync, Loader2, Circle, GitBranch, Terminal, Monitor, LogOut } from "lucide-react"
 
 import { WorkspaceGroup } from "./sidebar/workspace-group"
 import type { ConvSummary, WorkspaceData } from "./sidebar/workspace-group"
@@ -53,6 +53,8 @@ import { SystemResourceSummary } from "./sidebar/system-resource-summary"
 interface AppSidebarProps {
     currentConvId: string | null
     conversationsVersion: number
+    /** Whether Windsurf Language Server is detected by backend */
+    detected: boolean
     onSelectConversation: (convId: string | null, wsName: string) => void
     onSelectWorkspace: (wsName: string) => void
     onShowAccountInfo: () => void
@@ -71,6 +73,7 @@ interface AppSidebarProps {
 export function AppSidebar({
     currentConvId,
     conversationsVersion,
+    detected,
     onSelectConversation,
     onSelectWorkspace,
     onShowAccountInfo,
@@ -98,6 +101,8 @@ export function AppSidebar({
     const [showPlugins, setShowPlugins] = useState(false)
     const [showCreateDialog, setShowCreateDialog] = useState(false)
     const [showAllMap, setShowAllMap] = useState<Record<string, boolean>>({})
+    const [headlessMode, setHeadlessMode] = useState(false)
+    const [selectedFolder, setSelectedFolder] = useState<WorkspaceFolder | null>(null)
 
     // User profile state
     const [userProfile, setUserProfile] = useState<{ name: string; tier: string; avatar: string | null } | null>(null)
@@ -117,8 +122,12 @@ export function AppSidebar({
         return ""
     }, [newWsName, wsData, folders])
 
-    // Fetch user profile once on mount
+    // Fetch user profile on mount and when connection is established
     useEffect(() => {
+        if (!detected) {
+            setUserProfile(null)
+            return
+        }
         apiClient(`${API_BASE}/api/user/profile`)
             .then(r => r.json())
             .then(d => {
@@ -131,7 +140,7 @@ export function AppSidebar({
                 })
             })
             .catch(() => { })
-    }, [])
+    }, [detected])
 
     const loadAll = useCallback(async () => {
         try {
@@ -196,26 +205,33 @@ export function AppSidebar({
         if (wsVersion && wsVersion > 0) loadAll()
     }, [wsVersion, loadAll])
 
+    // Refresh workspace list when backend broadcasts conversations_updated or status change via WS
     useEffect(() => {
-        let interval: ReturnType<typeof setInterval> | null = null
-        const start = () => {
-            if (!interval) interval = setInterval(loadAll, 30000)
-        }
-        const stop = () => {
-            if (interval) {
-                clearInterval(interval)
-                interval = null
-            }
-        }
-        const onVisibility = () => (document.hidden ? stop() : start())
+        if (conversationsVersion > 0) loadAll()
+    }, [conversationsVersion, loadAll])
 
-        start()
-        document.addEventListener("visibilitychange", onVisibility)
-        return () => {
-            stop()
-            document.removeEventListener("visibilitychange", onVisibility)
-        }
-    }, [loadAll])
+    // TODO: Temporarily disabled 30s polling — workspace updates now driven by WS events
+    // (conversationsVersion from useWebSocket). Re-enable if WS proves unreliable.
+    // useEffect(() => {
+    //     let interval: ReturnType<typeof setInterval> | null = null
+    //     const start = () => {
+    //         if (!interval) interval = setInterval(loadAll, 30000)
+    //     }
+    //     const stop = () => {
+    //         if (interval) {
+    //             clearInterval(interval)
+    //             interval = null
+    //         }
+    //     }
+    //     const onVisibility = () => (document.hidden ? stop() : start())
+    //
+    //     start()
+    //     document.addEventListener("visibilitychange", onVisibility)
+    //     return () => {
+    //         stop()
+    //         document.removeEventListener("visibilitychange", onVisibility)
+    //     }
+    // }, [loadAll])
 
     const handleWorkspaceClick = useCallback(
         (arrayIdx: number) => {
@@ -247,18 +263,23 @@ export function AppSidebar({
         setCreating(true)
         setCreateError("")
         try {
-            await createWorkspace(name, true)
+            if (headlessMode) {
+                await createHeadlessWorkspace(name, true)
+            } else {
+                await createWorkspace(name, true)
+            }
             setNewWsName("")
             await loadAll()
             onWorkspaceCreated?.()
             setShowCreateDialog(false)
+            setHeadlessMode(false)
         } catch (e) {
             const msg = e instanceof Error ? e.message : "Failed to create workspace"
             setCreateError(msg)
         } finally {
             setCreating(false)
         }
-    }, [newWsName, creating, nameValidationError, loadAll, onWorkspaceCreated])
+    }, [newWsName, creating, nameValidationError, headlessMode, loadAll, onWorkspaceCreated])
 
     const handleOpenFolder = useCallback(
         async (folder: WorkspaceFolder) => {
@@ -270,6 +291,23 @@ export function AppSidebar({
                 onWorkspaceCreated?.()
             } catch (e) {
                 console.error("Open failed:", e)
+            } finally {
+                setOpeningFolder(null)
+            }
+        },
+        [openingFolder, loadAll, onWorkspaceCreated]
+    )
+
+    const handleOpenFolderHeadless = useCallback(
+        async (folder: WorkspaceFolder) => {
+            if (openingFolder === folder.name) return
+            setOpeningFolder(folder.name)
+            try {
+                await createHeadlessWorkspace(folder.path)
+                await loadAll()
+                onWorkspaceCreated?.()
+            } catch (e) {
+                console.error("Open headless failed:", e)
             } finally {
                 setOpeningFolder(null)
             }
@@ -292,7 +330,7 @@ export function AppSidebar({
                         className="flex items-center gap-2 px-4 py-2 mt-2 hover:opacity-80 transition-opacity cursor-pointer"
                     >
                         <FolderSync className="h-5 w-5 text-primary" />
-                        <span className="font-semibold text-lg tracking-tight">Chat Mirror</span>
+                        <span className="font-semibold text-lg tracking-tight">Antigravity Deck</span>
                     </button>
                 </SidebarHeader>
 
@@ -339,7 +377,7 @@ export function AppSidebar({
                                         {closedFolders.map((folder) => (
                                             <SidebarMenuItem key={folder.name}>
                                                 <SidebarMenuButton
-                                                    onClick={() => handleOpenFolder(folder)}
+                                                    onClick={() => setSelectedFolder(folder)}
                                                     disabled={openingFolder === folder.name}
                                                     tooltip={folder.name}
                                                     className="text-xs !pr-2"
@@ -417,13 +455,20 @@ export function AppSidebar({
                                             {userProfile?.avatar && (
                                                 <AvatarImage src={`data:image/png;base64,${userProfile.avatar}`} alt={userProfile.name} />
                                             )}
-                                            <AvatarFallback className="rounded-lg bg-indigo-500/20 text-indigo-400 text-xs font-semibold">
-                                                {userProfile?.name?.[0]?.toUpperCase() ?? '?'}
+                                            <AvatarFallback className={cn(
+                                                "rounded-lg text-xs font-semibold",
+                                                detected ? "bg-indigo-500/20 text-indigo-400" : "bg-muted text-muted-foreground"
+                                            )}>
+                                                {userProfile?.name?.[0]?.toUpperCase() ?? (detected ? '?' : '—')}
                                             </AvatarFallback>
                                         </Avatar>
                                         <div className="grid flex-1 text-left text-sm leading-tight">
-                                            <span className="truncate font-medium text-xs">{userProfile?.name ?? 'Loading...'}</span>
-                                            <span className="truncate text-[10px] text-sidebar-foreground/60">{userProfile?.tier ?? ''}</span>
+                                            <span className="truncate font-medium text-xs">
+                                                {userProfile?.name ?? (detected ? 'Loading...' : 'Not Connected')}
+                                            </span>
+                                            <span className="truncate text-[10px] text-sidebar-foreground/60">
+                                                {userProfile?.tier ?? (detected ? '' : 'Open Antigravity IDE')}
+                                            </span>
                                         </div>
                                         <EllipsisVertical className="ml-auto size-4" />
                                     </SidebarMenuButton>
@@ -500,7 +545,7 @@ export function AppSidebar({
 
             <Dialog open={showCreateDialog} onOpenChange={(open) => {
                 setShowCreateDialog(open)
-                if (!open) { setNewWsName(""); setCreateError("") }
+                if (!open) { setNewWsName(""); setCreateError(""); setHeadlessMode(false) }
             }}>
                 <DialogContent className="sm:max-w-[420px]">
                     <DialogHeader>
@@ -532,6 +577,31 @@ export function AppSidebar({
                                 This will create a folder in your workspace root directory.
                             </p>
                         </div>
+
+                        <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
+                            <div className="flex items-center gap-2">
+                                <Terminal className="h-4 w-4 text-muted-foreground" />
+                                <div>
+                                    <p className="text-xs font-medium">Headless Mode</p>
+                                    <p className="text-[10px] text-muted-foreground">No IDE UI — requires running IDE for auth</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                role="switch"
+                                aria-checked={headlessMode}
+                                onClick={() => setHeadlessMode(!headlessMode)}
+                                className={cn(
+                                    "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
+                                    headlessMode ? "bg-primary" : "bg-muted"
+                                )}
+                            >
+                                <span className={cn(
+                                    "pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform",
+                                    headlessMode ? "translate-x-4" : "translate-x-0"
+                                )} />
+                            </button>
+                        </div>
                     </div>
 
                     <DialogFooter>
@@ -548,10 +618,54 @@ export function AppSidebar({
                             onClick={async () => { await handleCreateByName() }}
                             disabled={creating || !newWsName.trim() || !!nameValidationError}
                         >
-                            {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Plus className="h-3.5 w-3.5 mr-1.5" />}
-                            Create Workspace
+                            {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : headlessMode ? <Terminal className="h-3.5 w-3.5 mr-1.5" /> : <Plus className="h-3.5 w-3.5 mr-1.5" />}
+                            {headlessMode ? 'Create Headless' : 'Create Workspace'}
                         </Button>
                     </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={!!selectedFolder} onOpenChange={(open) => { if (!open) setSelectedFolder(null) }}>
+                <DialogContent className="sm:max-w-[380px]">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <FolderOpen className="h-5 w-5" />
+                            Open Workspace
+                        </DialogTitle>
+                        <DialogDescription>
+                            Choose how to open <span className="font-medium text-foreground">{selectedFolder?.name}</span>
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="grid grid-cols-2 gap-3 py-2">
+                        <button
+                            onClick={() => { if (selectedFolder) { handleOpenFolder(selectedFolder); setSelectedFolder(null) } }}
+                            disabled={openingFolder === selectedFolder?.name}
+                            className="flex flex-col items-center gap-2.5 rounded-xl border border-border/50 bg-card/50 p-4 hover:bg-blue-500/5 hover:border-blue-500/30 transition-all cursor-pointer group"
+                        >
+                            <div className="p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 group-hover:bg-blue-500/15 transition-colors">
+                                <FolderOpen className="h-5 w-5 text-blue-400" />
+                            </div>
+                            <div className="text-center">
+                                <p className="text-sm font-medium">Open with IDE</p>
+                                <p className="text-[10px] text-muted-foreground mt-0.5">Full Antigravity editor</p>
+                            </div>
+                        </button>
+
+                        <button
+                            onClick={() => { if (selectedFolder) { handleOpenFolderHeadless(selectedFolder); setSelectedFolder(null) } }}
+                            disabled={openingFolder === selectedFolder?.name}
+                            className="flex flex-col items-center gap-2.5 rounded-xl border border-border/50 bg-card/50 p-4 hover:bg-emerald-500/5 hover:border-emerald-500/30 transition-all cursor-pointer group"
+                        >
+                            <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 group-hover:bg-emerald-500/15 transition-colors">
+                                <Terminal className="h-5 w-5 text-emerald-400" />
+                            </div>
+                            <div className="text-center">
+                                <p className="text-sm font-medium">Open Headless</p>
+                                <p className="text-[10px] text-muted-foreground mt-0.5">No IDE UI — agent mode</p>
+                            </div>
+                        </button>
+                    </div>
                 </DialogContent>
             </Dialog>
         </>

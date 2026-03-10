@@ -6,6 +6,15 @@ const path = require('path');
 const os = require('os');
 const { lsConfig, lsInstances, platform } = require('./config');
 
+// Lazy-load to avoid circular dependency (headless-ls requires config which is loaded here)
+let _isHeadlessPid = null;
+function isHeadlessPid(pid) {
+    if (!_isHeadlessPid) {
+        try { _isHeadlessPid = require('./headless-ls').isHeadlessPid; } catch { return false; }
+    }
+    return _isHeadlessPid(pid);
+}
+
 // Auto-detect Language Server process (macOS/Linux/Windows)
 async function detectLanguageServers() {
     return new Promise((resolve) => {
@@ -228,6 +237,12 @@ async function init(onReady) {
 
     // Activate first instance
     switchToInstance(0);
+    lastDetectedState = true;
+    // Broadcast detection status to all connected clients (they may have connected before init finished)
+    try {
+        const { broadcastAll } = require('./ws');
+        broadcastAll({ type: 'status', detected: true, port: lsInstances[0]?.port || null });
+    } catch { }
     if (onReady) onReady();
 }
 
@@ -253,6 +268,7 @@ function switchToInstance(index) {
 // Periodic re-scan for new LS instances (every 10s)
 const RESCAN_INTERVAL = 10000;
 let rescanTimer = null;
+let lastDetectedState = false; // track detection state transitions
 
 function startAutoRescan() {
     if (rescanTimer) clearInterval(rescanTimer);
@@ -267,6 +283,7 @@ async function rescanNow() {
 
         for (const inst of instances) {
             if (knownPids.has(inst.pid)) continue; // already known
+            if (isHeadlessPid(inst.pid)) continue; // managed by headless-ls module
 
             const ports = await detectPorts(inst.pid);
             if (!ports.length) continue;
@@ -284,6 +301,9 @@ async function rescanNow() {
                 if (existingIdx >= 0) {
                     const old = lsInstances[existingIdx];
                     console.log(`[~] Replacing stale workspace: ${old.workspaceName} (PID: ${old.pid} → ${inst.pid})`);
+                    // Cleanup old instance's cascade state before replacing
+                    const { cleanupByInstance } = require('./cleanup');
+                    cleanupByInstance(old);
                     const wasActive = old.active;
                     lsInstances[existingIdx] = {
                         pid: inst.pid,
@@ -320,7 +340,12 @@ async function rescanNow() {
         for (let i = lsInstances.length - 1; i >= 0; i--) {
             if (!instances.find(inst => inst.pid === lsInstances[i].pid)) {
                 const removed = lsInstances[i];
+                // Headless instances handle their own cleanup via child.on('exit')
+                if (removed.headless) continue;
                 console.log(`[-] Workspace gone: ${removed.workspaceName} (PID: ${removed.pid})`);
+                // Cleanup cascade state for this dead instance before removing
+                const { cleanupByInstance } = require('./cleanup');
+                cleanupByInstance(removed);
                 // If this was the active instance, switch to another
                 if (removed.active && lsInstances.length > 1) {
                     const nextIdx = i === 0 ? 1 : 0;
@@ -336,6 +361,17 @@ async function rescanNow() {
             try {
                 const { broadcastAll } = require('./ws');
                 broadcastAll({ type: 'conversations_updated' });
+            } catch { }
+        }
+
+        // Broadcast detection status when state transitions (detected ↔ not detected)
+        const nowDetected = lsInstances.length > 0;
+        if (nowDetected !== lastDetectedState) {
+            lastDetectedState = nowDetected;
+            try {
+                const { broadcastAll } = require('./ws');
+                broadcastAll({ type: 'status', detected: nowDetected, port: lsInstances[0]?.port || null });
+                console.log(`[WS] status broadcast: detected=${nowDetected}`);
             } catch { }
         }
     } catch { }

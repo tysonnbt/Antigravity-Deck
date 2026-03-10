@@ -1,11 +1,11 @@
 // === Step Cache & Fetching ===
 // Manages the step cache, fetching steps (JSON + binary protobuf), and ensuring cached data.
 
-const { lsConfig, lsInstances, BATCH_SIZE } = require('./config');
+const { lsConfig, lsInstances, BATCH_SIZE, STEP_WINDOW_SIZE } = require('./config');
 const { callApi } = require('./api');
 const { countBinarySteps, decodeBinarySteps } = require('./protobuf');
 
-const stepCache = {};       // { convId: { steps: [], stepCount: N } }
+const stepCache = {};       // { convId: { steps: [], stepCount: N, baseIndex: M } }
 const fetchingSet = new Set(); // per-conversation fetching lock
 
 // --- Step count ---
@@ -23,28 +23,32 @@ async function getStepCountAndStatus(convId, callFn = null) {
 
 // --- Fetch all steps: hybrid JSON + binary protobuf strategy ---
 // JSON may cap results; binary protobuf correctly respects pagination.
-async function fetchAllSteps(convId, totalSteps, inst = null) {
+async function fetchAllSteps(convId, totalSteps, inst = null, fromIndex = 0) {
     const maxSteps = Math.max(totalSteps, 0);
     if (maxSteps === 0) return { steps: [], hasGaps: false };
 
-    // Step 1: JSON call for all steps
+    // Step 1: JSON call for steps from fromIndex
     const jsonData = await callApi('GetCascadeTrajectorySteps', {
-        cascadeId: convId, startIndex: 0, endIndex: maxSteps
+        cascadeId: convId, startIndex: fromIndex, endIndex: maxSteps
     }, inst);
     const jsonSteps = jsonData.steps || [];
     const jsonCount = jsonSteps.length;
 
-    if (jsonCount >= maxSteps) {
-        return { steps: jsonSteps.slice(0, maxSteps), hasGaps: false };
+    // Check if JSON returned enough (respects fromIndex or returned from 0)
+    const expectedCount = maxSteps - fromIndex;
+    if (jsonCount >= expectedCount) {
+        return { steps: jsonSteps.slice(0, expectedCount), hasGaps: false };
     }
 
     // Step 2: Binary protobuf for remaining steps
     const { callApiBinary } = require('./api');
-    console.log(`[*] JSON returned ${jsonCount}/${maxSteps} steps. Using binary protobuf for remaining...`);
+    console.log(`[*] JSON returned ${jsonCount}/${expectedCount} steps (from ${fromIndex}). Using binary protobuf for remaining...`);
 
     const allSteps = [...jsonSteps];
     let hasGaps = false;
-    let binaryStart = jsonCount;
+    // Detect if JSON API ignored our fromIndex and returned from 0
+    const jsonActualStart = jsonCount > expectedCount ? 0 : fromIndex;
+    let binaryStart = jsonActualStart + jsonCount;
     let consecutiveEmptyRanges = 0;
     const MAX_EMPTY_RANGES = 5;
     const SUB_BATCH_SIZE = 50;
@@ -133,9 +137,11 @@ async function ensureCached(convId, inst = null) {
         const stepCount = await getStepCountAndStatus(convId, callFn).then(r => r.stepCount);
         console.log(`[*] Loading ${convId.substring(0, 8)} (stepCount: ${stepCount}, batches: ${Math.ceil(stepCount / BATCH_SIZE)})...`);
 
-        const { steps, hasGaps } = await fetchAllSteps(convId, stepCount, inst);
-        stepCache[convId] = { steps, stepCount };
-        console.log(`[✓] Cached ${steps.length} / ${stepCount} steps${hasGaps ? ' (with gaps)' : ''}`);
+        // Only fetch the tail window (last STEP_WINDOW_SIZE steps)
+        const baseIndex = Math.max(0, stepCount - STEP_WINDOW_SIZE);
+        const { steps, hasGaps } = await fetchAllSteps(convId, stepCount, inst, baseIndex);
+        stepCache[convId] = { steps, stepCount, baseIndex };
+        console.log(`[✓] Cached ${steps.length}/${stepCount} steps (window from ${baseIndex})${hasGaps ? ' (with gaps)' : ''}`);
     } catch (e) {
         console.log(`[!] Load error: ${e.message}`);
         // Don't cache empty on error — will retry on next set_conversation

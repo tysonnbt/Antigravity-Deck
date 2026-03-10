@@ -1,61 +1,101 @@
-# 🔮 Antigravity Chat Mirror
+# 🔮 Antigravity Deck
 
-Real-time chat mirror for [Windsurf (Antigravity)](https://codeium.com/windsurf) conversations. Extracts and displays **all** conversation steps from the Language Server API — including steps beyond the JSON API's 598-step cap — with a full-featured chat UI that lets you **view, send messages, manage workspaces, and control cascades**.
+Full-featured workspace dashboard for [Windsurf (Antigravity)](https://codeium.com/windsurf). View, send, and manage AI conversations across multiple workspaces — with resource monitoring, source control, headless IDE, agent bridge, and remote access.
 
-## ✨ Features
+---
 
-### Core
+## ✨ Feature Highlights
+
+### 💬 Chat & Conversations
 - **Full conversation history** — Bypasses the 598-step JSON API limit via hybrid JSON + binary protobuf fetching
-- **Real-time updates** — WebSocket-powered polling with adaptive rates (1s active / 3s default / 5s idle)
-- **All step types** — User input, agent responses, tool calls, code actions, commands, browser subagent, and 17+ more
-- **Smart rendering** — Markdown with syntax highlighting, collapsible thinking blocks, step type tags
-
-### Chat & Interaction
-- **Send messages** — Compose and send messages directly to Windsurf cascades from the web UI
+- **Real-time updates** — WebSocket-powered polling with adaptive rates (1s active → 5s idle)
+- **Send messages** — Compose and send directly to Windsurf cascades from the web UI
 - **Image upload** — Attach images via paste or file picker for multimodal AI interactions
-- **Model selection** — Choose from available AI models (fetched live from the LS API)
-- **Create conversations** — Start new cascade conversations from the UI
-- **Delete conversations** — Remove cascade conversations
+- **Model selection** — Choose from available AI models (fetched live from LS API)
+- **Create & delete conversations** — Full CRUD for cascade conversations
+- **All step types** — User input, agent responses, tool calls, code actions, commands, browser subagent, generated images, and 17+ more
+- **Smart rendering** — Markdown with syntax highlighting, collapsible thinking blocks, step type tags
+- **Workflow autocomplete** — Suggests available workflow commands while typing
 
-### Multi-Workspace
-- **Auto-detection** — Discovers all running LS processes, ports, and CSRF tokens automatically (macOS/Linux/Windows)
+### 🖥️ Multi-Workspace Management
+- **Auto-detection** — Discovers all running LS processes, ports, and CSRF tokens automatically (Windows/macOS/Linux)
 - **Workspace switching** — Switch between multiple Windsurf workspaces seamlessly
-- **Workspace creation** — Launch new Windsurf IDE instances and auto-bind them
+- **Workspace creation** — Launch new Windsurf IDE instances with auto-binding
 - **Workspace folders** — Configure a default root directory; existing subfolders appear as available workspaces
-- **Workspace-scoped conversations** — Filter conversations by workspace folder URI
+- **Open mode dialog** — Click any available workspace to choose: **Open with IDE** or **Open Headless**
 - **Auto-rescan** — Detects new LS instances every 10 seconds
 
-### Cascade Control (Gateway API)
-- **Cascade status** — Check if a cascade is running, idle, or waiting for user input
-- **Accept/Reject changes** — Accept or reject pending code changes from the web UI
-- **Auto-accept** — Server-side auto-accept mode that instantly approves pending code changes
+### 🧠 Headless Language Server
+Run Antigravity LS instances **without the IDE UI** — directly from the Deck.
+
+- **Full lifecycle management** — Launch, kill, and list headless instances
+- **Auto-auth** — Reuses extension server (port + CSRF) from a running IDE for cloud API access
+- **HL badge** — Visual indicators (Terminal icon + green "HL" badge) in sidebar and resource monitor
+- **Kill from dashboard** — Terminate headless instances via styled AlertDialog in Resource Monitor
+- **Workspace binding** — Proper `AddTrackedWorkspace` + `GetWorkspaceInfos` for correct routing
+- **Mock parent pipe** — Keeps LS alive and allows port binding
+- **Protobuf metadata** — Binary encoding for LS stdin handshake
+
+### 📊 Resource Monitor
+Real-time system and per-workspace resource dashboard.
+
+- **System overview** — CPU, RAM, Disk in animated donut charts with tooltips
+- **Per-workspace breakdown** — CPU% and memory bars for each LS process, sorted by usage
+- **Self-monitoring** — Backend + frontend process stats with PID display
+- **History graph** — SVG sparkline showing CPU/RAM trends over time (5-minute window)
+- **Compact sidebar bar** — Mini CPU/RAM bars always visible in sidebar header
+- **Cross-platform** — Windows (PowerShell), macOS/Linux (ps) stat collection
+
+### 🔀 Source Control
+Built-in Git integration with visual diff viewer and file explorer.
+
+- **Git status** — Modified, added, deleted, untracked, renamed files with color-coded badges
+- **Side-by-side diffs** — Powered by `@git-diff-view`, with syntax highlighting
+- **File explorer** — Tree view of workspace files with expand/collapse, file icons per extension
+- **Code viewer** — Syntax-highlighted file viewer for 30+ languages
+- **Git operations** — Stage, commit, push, pull — all from the UI
+- **Branch display** — Current branch shown in header
+
+### 🤖 Agent Bridge
+Connect external AI agents (e.g., Pi, OpenClaw) to Antigravity via Discord.
+
+- **Discord relay** — Real WebSocket via discord.js with slash commands and @mention routing
+- **Cascade relay** — Stateless module that polls cascade completion and extracts full responses
+- **Commands** — `/help`, `/listws`, `/setws`, `/start`, `/send`, `/status`, `/accept`, `/reject`, `/abort`, `/logs`
+- **Auto cascade transition** — Automatic conversation switching when step limits are reached
+- **State persistence** — Bridge state saved to `settings.json` across restarts
+- **Live logs** — Bridge activity log viewable in the UI
+
+### ⚡ Cascade Control
+- **Cascade status** — Running, idle, or waiting for user input
+- **Accept/Reject** — Approve or reject pending code changes from the web UI
+- **Auto-accept** — Server-side mode that instantly approves all pending changes
 - **Cancel cascades** — Stop active cascade invocations
 - **Token usage** — View generator metadata and token consumption
 
-### Security & Remote Access
-- **API key authentication** — Protect with `AUTH_KEY` env var; gated by `AuthGate` login form on the frontend
-- **Cloudflare Tunnel deployment** — One command to deploy securely via `npm run online` (auto-generates auth key, creates tunnels for BE + FE)
-- **CORS enabled** — All origins allowed for cross-domain access
+### 🔒 Security & Remote Access
+- **API key authentication** — `AUTH_KEY` env var + `AuthGate` login form
+- **Cloudflare Tunnel** — One command: `npm run online` (auto-generates auth key, creates tunnels for BE + FE)
+- **Workspace path validation** — Prevents command injection
 
-### Settings & Configuration
-- **Default model** — Configure a preferred AI model for new conversations
+### ⚙️ Settings & Extras
+- **Default model** — Configure preferred AI model
 - **Default workspace root** — Set where new workspaces are created
-- **Persistent settings** — Saved to `settings.json` (auto-created from `settings.sample.json`)
-
-### Extras
-- **Plugin management** — List, install, and uninstall cascade plugins
-- **User profile** — Fetch user status and profile picture
+- **Plugin management** — List, install, uninstall cascade plugins
+- **User profile** — Account info, plan tier, profile picture
+- **Dark/Light theme** — Toggle between themes
 - **Generic LS proxy** — Call any Language Server method via `POST /api/ls/:method`
-- **Dark/Light theme** — Toggle between dark and light mode
+- **Export conversations** — Export as formatted Markdown
+
+---
 
 ## 🚀 Quick Start
 
 ### Local Development
 
 ```bash
-# Install all dependencies (backend + frontend)
-npm install
-cd frontend && npm install && cd ..
+# Install all dependencies
+npm run setup
 
 # Start both backend (port 3500) and frontend (port 3000)
 npm run dev
@@ -66,239 +106,102 @@ Open **http://localhost:3000** in your browser.
 ### Remote Access (Cloudflare Tunnel)
 
 ```bash
-# Deploy with auto-generated auth key & Cloudflare tunnels
 npm run online
 ```
 
-This starts backend on port 9807, frontend on port 9808, creates Cloudflare tunnels for both, and prints the public URL + auth key. Tunnel info is also saved to `.tunnel-info.txt`.
-
 > **Prerequisite:** [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) must be installed.
 
-### With Authentication (local)
+### With Authentication
 
 ```bash
 AUTH_KEY=your-secret-key npm run dev
 ```
 
-The frontend will show a login form; enter the key to access.
+---
 
 ## 📐 Architecture
 
 ```
-┌─────────────────┐   JSON + Binary Proto   ┌──────────────┐
-│  Windsurf LS     │ ◄───────────────────── │   server.js  │
-│  (port auto-     │   Connect Protocol     │  :3500 API   │
-│   detected)      │   HTTPS / HTTP         │              │
-└─────────────────┘                         └──────┬───────┘
-                                                   │ WebSocket
-                                            ┌──────┴───────┐
-                                            │   Next.js    │
-                                            │   :3000 UI   │
-                                            └──────────────┘
+┌──────────────────┐   JSON + Binary Proto   ┌───────────────┐
+│  Windsurf LS     │ ◄───────────────────── │   server.js   │
+│  (auto-detected) │   Connect Protocol     │   :3500 API   │
+│                  │   HTTPS / HTTP         │               │
+└──────────────────┘                         └──────┬────────┘
+                                                    │ WebSocket
+       ┌──────────────┐                      ┌──────┴────────┐
+       │  Discord Bot  │ ◄─── Agent Bridge ──│   Next.js     │
+       │  (optional)   │                     │   :3000 UI    │
+       └──────────────┘                      └───────────────┘
 ```
 
-- **Backend** (`server.js` + `src/`) — Express API proxy + WebSocket hub, caches steps, polls LS with adaptive rate
-- **Frontend** (`frontend/`) — Next.js 16 + React 19 + shadcn/ui + Tailwind CSS 4, receives steps via WebSocket
+- **Backend** (`server.js` + `src/`) — Express API proxy + WebSocket hub, adaptive polling, resource monitor, headless LS manager
+- **Frontend** (`frontend/`) — Next.js 16 + React 19 + shadcn/ui + Tailwind CSS 4
 
-## 🔧 How It Works: Binary Protobuf Pagination
-
-The Windsurf Language Server has a bug where JSON API requests (`Content-Type: application/json`) **ignore `startIndex`/`endIndex` parameters** and always return the first ~598 steps.
-
-**Solution:** Binary protobuf requests (`Content-Type: application/proto`) correctly respect pagination:
-
-1. **JSON** — First request gets ~598 steps with perfect JSON decoding
-2. **Binary protobuf** — Subsequent requests with `startIndex = 598+` fetch remaining steps
-3. **Schema-aware decoder** — Binary steps decoded to JSON using field name maps auto-discovered by cross-referencing JSON and binary responses
-
-### Field Mapping
-
-| Step Type | Binary Enum | Content Field# | JSON Key |
-|-----------|:-----------:|:--------------:|----------|
-| USER_INPUT | 14 | 19 | `userInput` |
-| PLANNER_RESPONSE | 15 | 20 | `plannerResponse` |
-| CODE_ACTION | 5 | 10 | `codeAction` |
-| RUN_COMMAND | 21 | 28 | `runCommand` |
-| VIEW_FILE | 8 | 14 | `viewFile` |
-| BROWSER_SUBAGENT | 84 | 97 | `browserSubagent` |
-| TASK_BOUNDARY | 81 | 93 | `taskBoundary` |
-| NOTIFY_USER | 82 | 94 | `notifyUser` |
-| *...17+ types total* | | | |
+---
 
 ## 📁 Project Structure
 
 ```
-├── server.js               # Express + WebSocket entry point (auth middleware)
-├── start-tunnel.js         # Cloudflare Tunnel deployment script
-├── settings.sample.json    # Sample settings file (copy to settings.json)
+├── server.js                   # Express + WebSocket entry point
+├── start-tunnel.js             # Cloudflare Tunnel deployment
+├── settings.sample.json        # Sample settings (copy to settings.json)
 ├── src/
-│   ├── config.js           # Shared state, constants, persistent settings
-│   ├── detector.js         # LS process auto-detection, port scanning, workspace resolution
-│   ├── api.js              # API call helpers (JSON, binary protobuf, streaming)
-│   ├── protobuf.js         # Binary protobuf encoder/decoder, field name maps
-│   ├── poller.js           # Adaptive polling engine (JSON + binary hybrid, WebSocket broadcast)
-│   ├── step-cache.js       # Step cache with deduplication and binary fallback
-│   ├── auto-accept.js      # Server-side auto-accept for pending code changes
-│   ├── cascade.js          # Cascade submit (StartCascade, SendUserCascadeMessage)
-│   ├── ws.js               # WebSocket connection management and broadcasting
-│   ├── cache.js            # Cache setup and coordination (delegates to poller/step-cache)
-│   └── routes.js           # All Express HTTP route handlers
+│   ├── config.js               # Shared state, constants, persistent settings
+│   ├── detector.js             # LS process auto-detection & port scanning
+│   ├── api.js                  # API call helpers (JSON, binary protobuf)
+│   ├── protobuf.js             # Binary protobuf encoder/decoder
+│   ├── poller.js               # Adaptive polling engine + WebSocket broadcast
+│   ├── step-cache.js           # Step cache with dedup & binary fallback
+│   ├── routes.js               # All HTTP route handlers (60+ endpoints)
+│   ├── ws.js                   # WebSocket connection management
+│   ├── cascade.js              # Cascade submit (Start + Send)
+│   ├── auto-accept.js          # Server-side auto-accept for pending changes
+│   ├── headless-ls.js          # Headless Language Server lifecycle manager
+│   ├── resource-monitor.js     # Per-workspace CPU/RAM monitoring
+│   ├── agent-bridge.js         # External agent relay (Pi/OpenClaw ↔ Antigravity)
+│   ├── cascade-relay.js        # Cascade completion polling & response extraction
+│   └── discord-relay.js        # Discord bot with slash commands & @mention relay
 ├── frontend/
-│   ├── app/                # Next.js pages, layout, globals.css
+│   ├── app/                    # Next.js pages, layout, globals.css
 │   ├── components/
-│   │   ├── auth-gate.tsx       # Authentication gate (login form for AUTH_KEY)
-│   │   ├── chat-view.tsx       # Main chat view with message input & image upload
-│   │   ├── chat-area.tsx       # Chat message rendering area
-│   │   ├── chat/
-│   │   │   ├── user-message.tsx       # User message bubble
-│   │   │   ├── agent-response.tsx     # Agent response with file diffs
-│   │   │   ├── processing-group.tsx   # Collapsible processing steps group
-│   │   │   ├── waiting-step.tsx       # Accept/reject pending changes UI
-│   │   │   ├── raw-json-viewer.tsx    # Raw JSON step viewer
-│   │   │   ├── streaming-indicator.tsx # Typing/streaming animation
-│   │   │   └── chat-helpers.ts        # Step grouping utilities
-│   │   ├── sidebar.tsx         # Workspace tree with conversation list
-│   │   ├── conversation-list.tsx # Full conversation list view
-│   │   ├── cascade-panel.tsx   # Cascade control panel
-│   │   ├── settings-view.tsx   # Settings page (default model, workspace root)
-│   │   ├── step-detail.tsx     # Detailed step inspector
-│   │   ├── toolbar.tsx         # Top toolbar
-│   │   ├── timeline.tsx        # Visual step timeline
-│   │   ├── token-usage.tsx     # Token usage display
-│   │   ├── analytics-panel.tsx # Conversation analytics
-│   │   ├── plugin-manager.tsx  # Plugin install/uninstall UI
-│   │   ├── user-profile.tsx    # User profile & account info display
-│   │   ├── markdown-renderer.tsx # Markdown with syntax highlighting
-│   │   └── ui/                 # shadcn/ui primitives (14+ components)
-│   ├── lib/
-│   │   ├── auth.ts             # Auth key storage & header helpers
-│   │   ├── config.ts           # Frontend config (API_BASE, WS_URL, isLocalhost)
-│   │   ├── websocket.ts        # WebSocket client with reconnection & auth
-│   │   ├── cascade-api.ts      # Cascade API client (send, start, models, settings)
-│   │   ├── step-utils.ts       # Step type parsing & display utilities
-│   │   ├── types.ts            # TypeScript type definitions
-│   │   ├── theme.ts            # Dark/light theme toggle
-│   │   ├── notifications.ts    # Browser notification helpers
-│   │   └── utils.ts            # General utilities (cn)
-│   └── public/                 # Static assets
-├── docs/
-│   └── antigravity-api.md      # Full LS API reference (70+ methods documented)
-├── package.json                # Backend dependencies + scripts
-└── .gitignore
+│   │   ├── chat-view.tsx           # Main chat with message input & image upload
+│   │   ├── chat-area.tsx           # Chat message rendering area
+│   │   ├── chat/                   # Message components (user, agent, processing)
+│   │   ├── app-sidebar.tsx         # Sidebar with workspace tree & conversations
+│   │   ├── source-control-view.tsx # Git status, diffs, file explorer
+│   │   ├── resource-monitor-view.tsx # System & workspace resource dashboard
+│   │   ├── agent-bridge-view.tsx   # Agent bridge control panel
+│   │   ├── agent-logs-view.tsx     # Live bridge activity logs
+│   │   ├── cascade-panel.tsx       # Cascade control panel
+│   │   ├── settings-view.tsx       # App settings page
+│   │   ├── plugin-manager.tsx      # Plugin install/uninstall UI
+│   │   ├── user-profile.tsx        # User profile & account info
+│   │   ├── workflow-autocomplete.tsx # Workflow suggestions in chat input
+│   │   └── ui/                     # shadcn/ui primitives (21 components)
+│   └── lib/                    # API clients, WebSocket, auth, types
+└── docs/
+    └── antigravity-api.md      # Full LS API reference (70+ methods)
 ```
 
-## ⚙️ API Endpoints (port 3500)
-
-### Status & Workspace Management
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/status` | LS connection status |
-| `GET` | `/api/workspaces` | List all detected LS instances |
-| `POST` | `/api/workspaces/switch` | Switch active workspace `{ index }` |
-| `POST` | `/api/workspaces/create` | Launch new IDE & detect LS `{ path }` or `{ name }` |
-| `GET` | `/api/workspaces/folders` | List folders in default workspace root |
-
-### Conversations & Steps
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/conversations` | List all conversations (active workspace) |
-| `GET` | `/api/workspaces/:index/conversations` | Conversations for a specific workspace |
-| `GET` | `/api/conversations/:id/steps` | Get steps (JSON, with `?start=&end=`) |
-
-### Cascade Control
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/cascade/start` | Create new cascade conversation |
-| `POST` | `/api/cascade/send` | Send message to cascade `{ cascadeId, message, modelId?, images? }` |
-| `POST` | `/api/cascade/submit` | Start + send in one call `{ message, modelId?, images? }` |
-| `GET` | `/api/cascade/:id/status` | Cascade run status |
-| `POST` | `/api/cascade/:id/accept` | Accept pending code changes |
-| `POST` | `/api/cascade/:id/cancel` | Cancel active cascade |
-| `GET` | `/api/cascade/:id/metadata` | Token usage / generator metadata |
-| `DELETE` | `/api/cascade/:id` | Delete a conversation |
-
-### Auto-Accept
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/auto-accept` | Get current auto-accept state |
-| `POST` | `/api/auto-accept` | Toggle auto-accept `{ enabled }` |
-
-### User, Models & Settings
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/user` | User status info |
-| `GET` | `/api/user/profile` | User profile + picture |
-| `GET` | `/api/models` | Available AI models |
-| `GET` | `/api/settings` | Get app settings |
-| `POST` | `/api/settings` | Update app settings |
-| `POST` | `/api/media/save` | Save media as artifact (for image upload) |
-
-### Plugins & Cache
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/plugins` | List available plugins |
-| `POST` | `/api/plugins/install` | Install a plugin |
-| `DELETE` | `/api/plugins/:id` | Uninstall a plugin |
-| `DELETE` | `/api/cache` | Clear entire step cache |
-| `DELETE` | `/api/cache/:id` | Clear cache for one conversation |
-
-### Generic Proxy
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/ls/:method` | Call any LS API method |
-
-### WebSocket
-
-| Event | Direction | Description |
-|-------|-----------|-------------|
-| `set_conversation` | Client → Server | Subscribe to a conversation's updates |
-| `steps_init` | Server → Client | Full step list for the conversation |
-| `steps_new` | Server → Client | New steps appended |
-| `step_updated` | Server → Client | Existing step content changed (streaming) |
-| `cascade_status` | Server → Client | Cascade run status changed |
-| `conversations_updated` | Server → Client | Conversation list changed (new/removed) |
-| `status` | Server → Client | LS connection status on connect |
-
-## 🔒 Authentication
-
-When `AUTH_KEY` environment variable is set:
-- All `/api/*` routes require `X-Auth-Key` header or `?auth_key=` query param
-- WebSocket connections require `?auth_key=` query param
-- Frontend shows a login form (`AuthGate`) before granting access
-- Key is stored in `localStorage` and sent with all requests
-
-## 🌐 Cloudflare Tunnel Deployment
-
-The `start-tunnel.js` script handles:
-1. Generates a random auth key
-2. Starts backend on port 9807 with auth enabled
-3. Creates a Cloudflare tunnel for the backend
-4. Starts frontend on port 9808 with `NEXT_PUBLIC_BACKEND_URL` pointing to the backend tunnel
-5. Creates a Cloudflare tunnel for the frontend
-6. Prints the public URL and auth key
-7. Saves tunnel info to `.tunnel-info.txt`
+---
 
 ## ⚡ Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Backend runtime | Node.js |
-| Backend framework | Express 4 |
+| Backend | Node.js + Express 4 |
 | WebSocket | ws 8 |
 | Protobuf | protobufjs 8 |
-| Frontend framework | Next.js 16 (Turbopack) |
-| UI library | React 19 |
-| Component library | shadcn/ui (Radix UI) |
+| Frontend | Next.js 16 (Turbopack) + React 19 |
+| Components | shadcn/ui (Radix UI) |
 | Styling | Tailwind CSS 4 |
-| Markdown | react-markdown + rehype-highlight + remark-gfm |
-| Language | TypeScript 5 (frontend), JavaScript (backend) |
-| Tunnel | cloudflared (Cloudflare Tunnel) |
+| Source Control | @git-diff-view |
+| Markdown | react-markdown + rehype-highlight |
+| Discord | discord.js 14 |
+| Language | TypeScript 5 (FE) / JavaScript (BE) |
+| Tunnel | cloudflared |
+
+---
 
 ## 📄 License
 

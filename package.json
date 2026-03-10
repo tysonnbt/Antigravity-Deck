@@ -1,13 +1,13 @@
 {
-  "name": "antigravity-chat",
+  "name": "antigravity-deck",
   "version": "1.0.0",
-  "description": "Real-time chat mirror for Windsurf (Antigravity) with full conversation history, multi-workspace, and remote access",
+  "description": "Antigravity Deck — full-featured workspace dashboard for Antigravity (Windsurf) with conversation history, multi-workspace, and remote access",
   "main": "server.js",
   "scripts": {
     "setup": "npm install && npm install --prefix frontend && node -e \"const fs=require('fs');if(!fs.existsSync('settings.json'))fs.copyFileSync('settings.sample.json','settings.json');console.log('✅ Setup complete! Run: npm run dev')\"",
     "start": "node server.js",
-    "dev": "concurrently -n BE,FE -c cyan,magenta \"node server.js\" \"npm run dev --prefix frontend\"",
-    "server": "node server.js",
+    "dev": "concurrently -n BE,FE -c cyan,magenta \"node --watch server.js\" \"npm run dev --prefix frontend\"",
+    "server": "node --watch server.js",
     "tunnel:be": "cloudflared tunnel --url http://localhost:3500",
     "tunnel:fe": "cloudflared tunnel --url http://localhost:3000",
     "tunnel": "concurrently -n TUN-BE,TUN-FE -c green,yellow \"npm run tunnel:be\" \"npm run tunnel:fe\"",

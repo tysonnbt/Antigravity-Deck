@@ -18,14 +18,12 @@ export function AuthGate({ children }: AuthGateProps) {
 
     // Client-side auth check after hydration (avoids SSR mismatch)
     useEffect(() => {
-        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-            setAuthenticated(true);
-        } else {
-            // Check if user has valid JWT token
-            checkAuth().then(isAuth => {
-                if (isAuth) setAuthenticated(true);
-            });
-        }
+        // Check if user has valid JWT token
+        // Note: This PR implements JWT authentication as the primary auth mode
+        // Backend must have JWT_SECRET set. For local dev without auth, set ALLOW_LOCALHOST_BYPASS=true
+        checkAuth().then(isAuth => {
+            if (isAuth) setAuthenticated(true);
+        });
     }, []);
 
     const handleSubmit = useCallback(async (e: React.FormEvent) => {

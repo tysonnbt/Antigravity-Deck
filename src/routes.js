@@ -17,11 +17,10 @@ function pathToFileUri(fsPath) {
         : 'file:///' + normalized;   // C:/Users/... → file:///C:/Users/...
 }
 
-// Helper: clear step cache
+// Helper: clear step cache — delegated to centralized cleanup
 function clearCache() {
-    const keys = Object.keys(stepCache);
-    keys.forEach(k => delete stepCache[k]);
-    return keys.length;
+    const { cleanupAll } = require('./cleanup');
+    return cleanupAll();
 }
 
 // Helper: Execute git command safely with argument array
@@ -115,17 +114,8 @@ function setupRoutes(app) {
         res.json({ detected: lsInstances.length > 0, port: firstInst?.port || null });
     });
 
-    // Clear cache for a specific conversation
-    app.delete('/api/cache/:id', (req, res) => {
-        const cascadeId = req.params.id;
-        if (stepCache[cascadeId]) {
-            delete stepCache[cascadeId];
-            console.log(`[Cache] Cleared cache for ${cascadeId.substring(0, 8)}`);
-            res.json({ cleared: true });
-        } else {
-            res.json({ cleared: false, message: 'Not cached' });
-        }
-    });
+    // Clear cache for a specific conversation — see also app.delete('/api/cache/:id') below
+    // (consolidated into single handler below)
 
     // --- Settings ---
     app.get('/api/settings', (req, res) => {
@@ -181,6 +171,7 @@ function setupRoutes(app) {
             workspaceFolderUri: inst.workspaceFolderUri || '',
             category: inst.category || 'workspace',
             port: inst.port,
+            headless: !!inst.headless,
         })));
     });
 
@@ -278,6 +269,9 @@ function setupRoutes(app) {
         if (!folderPath && name) {
             const settings = getSettings();
             const root = settings.defaultWorkspaceRoot;
+            if (!root) {
+                return res.status(400).json({ error: 'defaultWorkspaceRoot is not configured — set it in Settings first' });
+            }
             // Ensure root exists
             if (!fs.existsSync(root)) {
                 fs.mkdirSync(root, { recursive: true });
@@ -447,6 +441,61 @@ function setupRoutes(app) {
             });
         } else {
             res.json({ created: false, message: `LS not detected after ${MAX_WAIT / 1000}s. Auto-rescan will pick it up later.` });
+        }
+    });
+
+    // === Headless LS Management ===
+    // Create a headless LS instance (no IDE UI) — requires running IDE for auth
+    app.post('/api/workspaces/create-headless', async (req, res) => {
+        const fs = require('fs');
+        const path = require('path');
+        const { getSettings } = require('./config');
+        const { launchHeadlessLS } = require('./headless-ls');
+
+        let folderPath = req.body.path;
+        const name = req.body.name;
+
+        // Same path/name resolution as /api/workspaces/create
+        if (!folderPath && name) {
+            const settings = getSettings();
+            const root = settings.defaultWorkspaceRoot;
+            if (!fs.existsSync(root)) {
+                fs.mkdirSync(root, { recursive: true });
+            }
+            folderPath = path.join(root, name);
+        }
+
+        if (!folderPath) return res.status(400).json({ error: 'path or name is required' });
+
+        try {
+            folderPath = validateWorkspacePath(folderPath);
+        } catch (error) {
+            return res.status(400).json({ error: error.message });
+        }
+
+        try {
+            const result = await launchHeadlessLS(folderPath);
+            res.json(result);
+        } catch (e) {
+            console.error(`[Headless] Launch failed: ${e.message}`);
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    // List headless LS instances
+    app.get('/api/workspaces/headless', (req, res) => {
+        const { getHeadlessInstances } = require('./headless-ls');
+        res.json(getHeadlessInstances());
+    });
+
+    // Kill a headless LS instance
+    app.delete('/api/workspaces/headless/:pid', (req, res) => {
+        const { killHeadlessLS } = require('./headless-ls');
+        try {
+            const result = killHeadlessLS(req.params.pid);
+            res.json(result);
+        } catch (e) {
+            res.status(400).json({ error: e.message });
         }
     });
 
@@ -740,6 +789,7 @@ function setupRoutes(app) {
                 supportsImages: !!m.supportsImages,
                 isRecommended: !!m.isRecommended,
                 quota: m.quotaInfo?.remainingFraction ?? 1,
+                resetTime: m.quotaInfo?.resetTime || null,
             }));
             const defaultModel = data.defaultOverrideModelConfig?.modelOrAlias?.model || '';
             res.json({ models, defaultModel });
@@ -776,6 +826,45 @@ function setupRoutes(app) {
         } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
+    // Load older steps for scroll-up pagination (binary protobuf for reliability)
+    app.get('/api/conversations/:id/steps/older', async (req, res) => {
+        try {
+            const { STEP_LOAD_CHUNK } = require('./config');
+            const cascadeId = req.params.id;
+            const cache = stepCache[cascadeId];
+            if (!cache || (cache.baseIndex || 0) === 0) {
+                return res.json({ steps: [], baseIndex: 0, hasMore: false });
+            }
+
+            const currentBase = cache.baseIndex || 0;
+            const loadFrom = Math.max(0, currentBase - STEP_LOAD_CHUNK);
+            const loadTo = currentBase;
+
+            // Use binary protobuf for reliable pagination
+            const { callApiBinary } = require('./api');
+            const { countBinarySteps, decodeBinarySteps } = require('./protobuf');
+            const inst = resolveInst(req);
+            const binBuf = await callApiBinary(cascadeId, loadFrom, loadTo, inst);
+            const binCount = countBinarySteps(binBuf);
+            let olderSteps = [];
+            if (binCount > 0) {
+                olderSteps = decodeBinarySteps(binBuf);
+            }
+
+            // Prepend to cache (allow temporary expansion, next poll trim will restore)
+            if (olderSteps.length > 0) {
+                cache.steps.unshift(...olderSteps);
+                cache.baseIndex = loadFrom;
+            }
+
+            res.json({
+                steps: olderSteps,
+                baseIndex: loadFrom,
+                hasMore: loadFrom > 0,
+            });
+        } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
     // User info
     app.get('/api/user', async (req, res) => {
         try { res.json(await callApi('GetUserStatus', {}, resolveInst(req))); }
@@ -792,7 +881,8 @@ function setupRoutes(app) {
     app.delete('/api/cache/:id', (req, res) => {
         const id = req.params.id;
         if (stepCache[id]) {
-            delete stepCache[id];
+            const { cleanupCascade } = require('./cleanup');
+            cleanupCascade(id);
             console.log(`[*] Cache cleared for ${id.substring(0, 8)}`);
             res.json({ cleared: true, id });
         } else {
@@ -1096,7 +1186,8 @@ function setupRoutes(app) {
     app.delete('/api/cascade/:id', async (req, res) => {
         try {
             await callApi('DeleteCascadeTrajectory', { cascadeId: req.params.id }, resolveInst(req));
-            delete stepCache[req.params.id];
+            const { cleanupCascade } = require('./cleanup');
+            cleanupCascade(req.params.id);
             res.json({ success: true });
         } catch (e) { res.status(500).json({ error: e.message }); }
     });

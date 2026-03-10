@@ -12,6 +12,8 @@ const POLL_INTERVAL = 3000;
 const FAST_POLL_INTERVAL = 1000;  // Active cascade (running / waiting for user)
 const SLOW_POLL_INTERVAL = 5000;  // Idle
 const BATCH_SIZE = 200;
+const STEP_WINDOW_SIZE = 500;       // max steps to hold in memory per conversation
+const STEP_LOAD_CHUNK = 200;        // how many older steps to load on scroll-up
 
 // --- Persistent settings ---
 const SETTINGS_PATH = path.join(__dirname, '..', 'settings.json');
@@ -53,5 +55,6 @@ function getSettings() { return loadSettings(); }
 module.exports = {
     lsConfig, lsInstances, platform, PORT,
     POLL_INTERVAL, FAST_POLL_INTERVAL, SLOW_POLL_INTERVAL, BATCH_SIZE,
+    STEP_WINDOW_SIZE, STEP_LOAD_CHUNK,
     getSettings, saveSettings,
 };

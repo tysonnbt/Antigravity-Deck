@@ -1,6 +1,7 @@
 // === Cascade API Client ===
 import { API_BASE } from './config';
 import { apiClient } from './api-client';
+import type { Step } from './types';
 
 export interface Workspace {
     pid: string;
@@ -9,6 +10,7 @@ export interface Workspace {
     workspaceFolderUri: string;
     category: 'workspace' | 'playground';
     port: number;
+    headless?: boolean;
 }
 
 export interface WorkspaceResources {
@@ -16,6 +18,7 @@ export interface WorkspaceResources {
     memBytes: number;
     memMB: number;
     name?: string;
+    headless?: boolean;
 }
 
 export interface SystemResources {
@@ -144,6 +147,28 @@ export async function createWorkspace(nameOrPath: string, isName = false): Promi
         body: JSON.stringify(isName ? { name: nameOrPath } : { path: nameOrPath }),
     });
     if (!res.ok) throw new Error(`Create failed: ${res.status}`);
+    return res.json();
+}
+
+// Create a headless workspace (no IDE UI) — requires running IDE for auth
+export async function createHeadlessWorkspace(nameOrPath: string, isName = false): Promise<{ created: boolean; alreadyRunning?: boolean; workspace?: { pid: string; workspaceName: string; port: number; headless: boolean }; error?: string }> {
+    const res = await apiClient(`${API_BASE}/api/workspaces/create-headless`, {
+        method: 'POST',
+        body: JSON.stringify(isName ? { name: nameOrPath } : { path: nameOrPath }),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(err.error || `Create headless failed: ${res.status}`);
+    }
+    return res.json();
+}
+
+// Kill a headless workspace
+export async function killHeadlessWorkspace(pid: string): Promise<{ killed: boolean; workspace: string }> {
+    const res = await apiClient(`${API_BASE}/api/workspaces/headless/${pid}`, {
+        method: 'DELETE',
+    });
+    if (!res.ok) throw new Error(`Kill headless failed: ${res.status}`);
     return res.json();
 }
 
@@ -313,6 +338,17 @@ export async function listWorkspaceDir(workspace: string, subpath = ''): Promise
     const url = `${API_BASE}/api/workspaces/${encodeURIComponent(workspace)}/fs/list${subpath ? `?path=${encodeURIComponent(subpath)}` : ''}`;
     const res = await apiClient(url);
     if (!res.ok) throw new Error(`Dir list failed: ${res.status}`);
+    return res.json();
+}
+
+// Load older steps for scroll-up pagination (binary protobuf on backend)
+export async function loadOlderSteps(
+    conversationId: string
+): Promise<{ steps: Step[]; baseIndex: number; hasMore: boolean }> {
+    const res = await apiClient(
+        `${API_BASE}/api/conversations/${conversationId}/steps/older`
+    );
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
 }
 
