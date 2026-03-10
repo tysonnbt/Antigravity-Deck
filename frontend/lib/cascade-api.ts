@@ -11,6 +11,47 @@ export interface Workspace {
     port: number;
 }
 
+export interface WorkspaceResources {
+    cpuPercent: number;
+    memBytes: number;
+    memMB: number;
+    name?: string;
+}
+
+export interface SystemResources {
+    cpuPercent: number;
+    memUsedMB: number;
+    memTotalMB: number;
+    memPercent: number;
+    cpuCores: number;
+}
+
+export interface ResourceHistoryPoint {
+    t: number;
+    cpu: number;
+    mem: number;
+}
+
+export interface ResourceSnapshot {
+    system: SystemResources;
+    selfStats: SelfStats;
+    workspaces: Record<string, WorkspaceResources>;
+    history: ResourceHistoryPoint[];
+}
+
+export interface SelfProcessStats {
+    pid: number | null;
+    cpuPercent: number;
+    memMB: number;
+}
+
+export interface SelfStats {
+    backend: SelfProcessStats;
+    frontend: SelfProcessStats;
+    totalCpuPercent: number;
+    totalMemMB: number;
+}
+
 export interface CascadeModel {
     label: string;
     modelId: string;
@@ -88,6 +129,13 @@ export async function cascadeSubmit(message: string, modelId?: string, images?: 
 export async function getWorkspaces(): Promise<Workspace[]> {
     const res = await fetch(`${API_BASE}/api/workspaces`, { headers: authHeaders() });
     if (!res.ok) throw new Error(`Workspaces failed: ${res.status}`);
+    return res.json();
+}
+
+// Get CPU/RAM resource stats for all workspace PIDs
+export async function getWorkspaceResources(): Promise<ResourceSnapshot> {
+    const res = await fetch(`${API_BASE}/api/workspaces/resources`, { headers: authHeaders() });
+    if (!res.ok) throw new Error(`Resources failed: ${res.status}`);
     return res.json();
 }
 
