@@ -76,6 +76,11 @@ export async function apiClient(url: string, options: RequestInit = {}): Promise
                 (mergedOptions.headers as Record<string, string>)['X-CSRF-Token'] = newCsrf;
             }
             response = await fetch(url, mergedOptions);
+        } else {
+            // Bug fix: Refresh failed, redirect to login
+            console.warn('[Auth] 401 and refresh failed - redirecting to login');
+            stopTokenRefreshTimer();
+            window.location.reload();
         }
     }
 
@@ -91,7 +96,10 @@ export function startTokenRefreshTimer(): void {
     refreshTimer = setInterval(async () => {
         const refreshed = await refreshAccessToken();
         if (!refreshed) {
-            console.warn('[Auth] Token refresh failed - user may need to re-login');
+            console.warn('[Auth] Token refresh failed - redirecting to login');
+            // Bug fix: Redirect to login on refresh failure instead of silent fail
+            stopTokenRefreshTimer();
+            window.location.reload(); // Force re-auth
         }
     }, 13 * 60 * 1000); // 13 minutes (access token expires at 15 min)
 }

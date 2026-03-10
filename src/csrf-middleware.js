@@ -32,6 +32,9 @@ function csrfProtection(req, res, next) {
   }
   
   // Skip for auth endpoints (login doesn't have CSRF token yet)
+  // Note: /auth/refresh DOES require CSRF token for consistency, even though
+  // refresh tokens are single-use and inherently CSRF-safe. This is a design
+  // choice to maintain uniform CSRF protection across all POST endpoints.
   if (req.path === '/auth/login' || req.path.startsWith('/auth/login')) {
     return next();
   }

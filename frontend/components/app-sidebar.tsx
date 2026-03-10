@@ -453,7 +453,7 @@ export function AppSidebar({
                                     >
                                         <Avatar className="h-8 w-8 rounded-lg">
                                             {userProfile?.avatar && (
-                                                <AvatarImage src={`data:image/png;base64,${userProfile.avatar}`} alt={userProfile.name} />
+                                                <AvatarImage src={`data:image/png;base64,${userProfile.avatar}`} alt={userProfile?.name} />
                                             )}
                                             <AvatarFallback className={cn(
                                                 "rounded-lg text-xs font-semibold",

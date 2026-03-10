@@ -45,6 +45,9 @@ export async function logout(): Promise<{ success: boolean; error?: string }> {
         
         if (res.ok) {
             stopTokenRefreshTimer();
+            // Bug fix: Clear frontend auth state by reloading page
+            // This ensures all components reset to unauthenticated state
+            window.location.reload();
             return { success: true };
         }
         

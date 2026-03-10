@@ -33,7 +33,7 @@ export function UserProfile() {
         <div className="px-3 py-3 border-t border-border bg-sidebar flex items-center justify-between group-hover:bg-accent/50 transition-colors">
             <div className="flex items-center gap-2.5">
                 <Avatar className="w-8 h-8 rounded-full">
-                    {profilePic && <AvatarImage src={`data:image/png;base64,${profilePic}`} alt={user.name} />}
+                    {profilePic && <AvatarImage src={`data:image/png;base64,${profilePic}`} alt={user?.name} />}
                     <AvatarFallback className="rounded-full bg-indigo-500/20 text-indigo-400 text-xs font-semibold">
                         {user.name?.[0]?.toUpperCase() || '?'}
                     </AvatarFallback>

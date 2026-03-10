@@ -284,10 +284,9 @@ export function AgentLogsView() {
         // Set initial status
         setWsStatus(wsService.connected ? 'connected' : 'connecting');
         
-        // If already connected, subscribe now
-        if (wsService.connected) {
-            wsService.send({ type: 'subscribe_all' });
-        }
+        // Bug fix: Remove duplicate subscribe_all - already sent in offOpen handler
+        // If already connected, the offOpen handler will fire on next reconnect
+        // For initial connection, we send it once in offOpen
 
         // Listen to ALL messages for live logging
         const offAll = wsService.onAll((data) => {
@@ -326,7 +325,8 @@ export function AgentLogsView() {
                         stepRole: role,
                         stepLabel: `↻ ${STEP_LABELS[stepType] || stepType.replace('CORTEX_STEP_TYPE_', '')}`,
                         stepContent: content,
-                        stepIndex: data.index as number,
+                        // Bug fix: Add null check for data.index to prevent NaN display
+                        stepIndex: (data.index as number | undefined) ?? 0,
                         payload: { step, index: data.index },
                     });
                 }

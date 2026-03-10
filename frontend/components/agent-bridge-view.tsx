@@ -71,7 +71,8 @@ export function AgentBridgeView() {
 
     const fetchStatus = useCallback(async () => {
         try {
-            const res = await fetch(`${API_BASE}/api/agent-bridge/status`);
+            // Bug fix: Use apiClient() instead of fetch() for authentication + CSRF
+            const res = await apiClient(`${API_BASE}/api/agent-bridge/status`);
             if (res.ok) setStatus(await res.json());
         } catch { /* silent */ }
     }, []);

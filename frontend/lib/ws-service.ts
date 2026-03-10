@@ -21,8 +21,14 @@ class WebSocketService {
     /** Subscribe to a specific message type (e.g. 'status', 'steps_new') */
     on(type: string, fn: WSListener) {
         if (!this.listeners.has(type)) this.listeners.set(type, new Set());
-        this.listeners.get(type)!.add(fn);
-        return () => { this.listeners.get(type)?.delete(fn); };
+        const listeners = this.listeners.get(type)!;
+        // Bug fix: Prevent duplicate subscriptions
+        if (listeners.has(fn)) {
+            console.warn(`[WS-Service] Duplicate subscription prevented for type: ${type}`);
+            return () => listeners.delete(fn);
+        }
+        listeners.add(fn);
+        return () => { listeners.delete(fn); };
     }
 
     /** Subscribe to ALL messages (for Live Logs) */
@@ -79,7 +85,11 @@ class WebSocketService {
                 this.reconnectTimer = setTimeout(() => this.connect(), 2000);
             };
 
-            ws.onerror = () => ws.close();
+            ws.onerror = (event) => {
+                // Bug fix: Add error logging for debugging
+                console.error('[WS-Service] WebSocket error:', event);
+                ws.close();
+            };
         } catch {
             this.reconnectTimer = setTimeout(() => this.connect(), 2000);
         }

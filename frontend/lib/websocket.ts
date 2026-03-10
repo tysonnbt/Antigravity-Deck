@@ -95,7 +95,8 @@ export function useWebSocket() {
             const convId = currentConvIdRef.current;
             console.log('[WS] onopen currentConvId:', convId?.substring(0, 8));
             if (convId) {
-                wsService!.send({ type: 'set_conversation', conversationId: convId });
+                // Bug fix: Remove non-null assertion - use optional chaining
+                wsService?.send({ type: 'set_conversation', conversationId: convId });
             }
             // Fetch initial resource data immediately (don't wait for first 5s broadcast)
             getWorkspaceResources()
@@ -178,10 +179,15 @@ export function useWebSocket() {
             setState(prev => {
                 if (data.conversationId && data.conversationId !== prev.currentConvId) return prev;
                 // Convert server-absolute index to local array index
-                const localIndex = (data.index as number) - prev.baseIndex;
+                // Bug fix: Add null check for data.index to prevent NaN
+                const index = (data.index as number | undefined) ?? 0;
+                const localIndex = index - prev.baseIndex;
                 if (localIndex < 0 || localIndex >= prev.steps.length) return prev;
                 const updated = [...prev.steps];
-                updated[localIndex] = data.step as Step;
+                // Bug fix: Add null check for data.step to prevent undefined corruption
+                if (data.step) {
+                    updated[localIndex] = data.step as Step;
+                }
                 return { ...prev, steps: updated, lastUpdate: new Date().toLocaleTimeString(), stepContentVersion: prev.stepContentVersion + 1 };
             });
         });
