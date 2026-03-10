@@ -1,6 +1,7 @@
 // === Express HTTP Routes ===
 const express = require('express');
 const https = require('https');
+const { spawn } = require('child_process');
 const { callApi, callApiOnInstance, callApiStream, callApiFireAndForget, callApiFireAndForgetOnInstance } = require('./api');
 const { stepCache, getAutoAccept, setAutoAccept, buildAcceptPayload } = require('./cache');
 const { startCascade, sendMessage, startAndSend } = require('./cascade');
@@ -21,6 +22,83 @@ function clearCache() {
     const keys = Object.keys(stepCache);
     keys.forEach(k => delete stepCache[k]);
     return keys.length;
+}
+
+// Helper: Execute git command safely with argument array
+function execGitSafe(args, cwd) {
+    return new Promise((resolve, reject) => {
+        const MAX_BUFFER = 10 * 1024 * 1024; // 10MB limit
+        const git = spawn('git', args, { cwd });
+        let stdout = '';
+        let stderr = '';
+
+        git.stdout.on('data', (data) => {
+            stdout += data;
+            if (stdout.length > MAX_BUFFER) {
+                git.kill();
+                reject(new Error('OUTPUT_LIMIT_EXCEEDED'));
+            }
+        });
+
+        git.stderr.on('data', (data) => {
+            stderr += data;
+            if (stderr.length > MAX_BUFFER) {
+                git.kill();
+                reject(new Error('OUTPUT_LIMIT_EXCEEDED'));
+            }
+        });
+
+        git.on('close', (code) => {
+            if (code !== 0) {
+                // Log detailed error server-side only
+                console.error(`[Git Error] Command: git ${args.join(' ')}, Exit code: ${code}, Stderr: ${stderr}`);
+                // Return structured error with code and stderr pattern for caller to handle
+                const error = new Error('GIT_COMMAND_FAILED');
+                error.exitCode = code;
+                error.stderr = stderr;
+                reject(error);
+            } else {
+                resolve(stdout);
+            }
+        });
+
+        git.on('error', (err) => {
+            console.error(`[Git Error] Spawn failed: ${err.message}`);
+            reject(new Error('GIT_COMMAND_FAILED'));
+        });
+    });
+}
+
+// Helper: Validate git file path (allowlist approach)
+function validateGitPath(filePath) {
+    if (!filePath) return null;
+
+    // Since we use spawn() with argument arrays (no shell interpretation),
+    // we can be more permissive with characters. Focus on path traversal and absolute paths.
+
+    // Reject null bytes (can cause issues in C-based tools)
+    if (filePath.includes('\0')) {
+        throw new Error('Invalid file path: null byte not allowed');
+    }
+
+    // Reject path traversal - check for ".." as a path segment, not substring
+    // This allows legitimate filenames like "a..b.txt" while blocking "../etc/passwd"
+    const segments = filePath.split(/[/\\]/); // Split by both / and \ for cross-platform
+    if (segments.some(segment => segment === '..')) {
+        throw new Error('Invalid file path: path traversal not allowed');
+    }
+
+    // Reject absolute paths
+    if (filePath.startsWith('/') || /^[a-zA-Z]:/.test(filePath)) {
+        throw new Error('Invalid file path: absolute paths not allowed');
+    }
+
+    // Reject paths starting with dash (could be interpreted as git options)
+    if (filePath.startsWith('-')) {
+        throw new Error('Invalid file path: paths starting with dash not allowed');
+    }
+
+    return filePath;
 }
 
 function setupRoutes(app) {
@@ -84,8 +162,8 @@ function setupRoutes(app) {
             res.json(updated);
         } catch (error) {
             if (error instanceof z.ZodError) {
-                return res.status(400).json({ 
-                    error: 'Invalid settings', 
+                return res.status(400).json({
+                    error: 'Invalid settings',
                     details: error.issues  // Zod v4 uses 'issues', not 'errors'
                 });
             }
@@ -160,20 +238,20 @@ function setupRoutes(app) {
     // Validate workspace path to prevent command injection
     function validateWorkspacePath(folderPath) {
         const path = require('path');
-        
+
         // Must be absolute path
         if (!path.isAbsolute(folderPath)) {
             throw new Error('Path must be absolute');
         }
-        
+
         // Resolve to prevent traversal
         const resolved = path.resolve(folderPath);
-        
+
         // Check for suspicious characters (shell metacharacters)
         if (/[;&|`$(){}[\]<>]/.test(resolved)) {
             throw new Error('Invalid characters in path');
         }
-        
+
         return resolved;
     }
 
@@ -243,7 +321,7 @@ function setupRoutes(app) {
                 detached: true,
                 stdio: 'ignore'
             });
-            
+
             child.on('error', (err) => {
                 console.log(`[*] Antigravity not found, trying Windsurf...`);
                 const fallback = spawn('open', ['-a', 'Windsurf', folderPath], {
@@ -254,7 +332,7 @@ function setupRoutes(app) {
                 fallback.on('error', (e) => console.error('[!] Failed to open IDE:', e.message));
                 fallback.unref();
             });
-            
+
             child.on('exit', (code) => {
                 if (code !== 0 && code !== null) {
                     console.log(`[*] Antigravity exited with code ${code}, trying Windsurf...`);
@@ -267,7 +345,7 @@ function setupRoutes(app) {
                     fallback.unref();
                 }
             });
-            
+
             child.unref();
         } else {
             // Windows/Linux: use spawn instead of exec
@@ -276,12 +354,12 @@ function setupRoutes(app) {
                 detached: true,
                 stdio: 'ignore'
             });
-            
+
             child.on('error', (err) => {
                 console.error('[!] Failed to launch antigravity:', err.message);
                 // Don't crash the server, just log the error
             });
-            
+
             child.unref();
         }
 
@@ -442,8 +520,7 @@ function setupRoutes(app) {
     });
 
     // Git diff: unified diff (all files or specific file)
-    app.get('/api/workspaces/:name/git/diff', (req, res) => {
-        const { execSync } = require('child_process');
+    app.get('/api/workspaces/:name/git/diff', async (req, res) => {
         const inst = getInstanceByName(decodeURIComponent(req.params.name));
         if (!inst) return res.status(400).json({ error: 'Unknown workspace' });
         const cwd = uriToFsPath(inst.workspaceFolderUri);
@@ -451,15 +528,28 @@ function setupRoutes(app) {
 
         try {
             const file = req.query.file;
-            const cmd = file ? `git diff -- "${file}"` : 'git diff';
-            const diff = execSync(cmd, { cwd, encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 });
+            let args;
+            if (file) {
+                const validated = validateGitPath(file);
+                args = ['diff', '--', validated]; // Arguments as array, no shell interpolation
+            } else {
+                args = ['diff'];
+            }
+            const diff = await execGitSafe(args, cwd);
             res.json({ diff });
-        } catch (e) { res.status(500).json({ error: e.message }); }
+        } catch (e) {
+            if (e.message === 'OUTPUT_LIMIT_EXCEEDED') {
+                return res.status(413).json({ error: 'Output too large' });
+            }
+            if (e.message === 'GIT_COMMAND_FAILED') {
+                return res.status(500).json({ error: 'Git command failed' });
+            }
+            res.status(400).json({ error: e.message });
+        }
     });
 
     // Git show: original file content from HEAD
-    app.get('/api/workspaces/:name/git/show', (req, res) => {
-        const { execSync } = require('child_process');
+    app.get('/api/workspaces/:name/git/show', async (req, res) => {
         const inst = getInstanceByName(decodeURIComponent(req.params.name));
         if (!inst) return res.status(400).json({ error: 'Unknown workspace' });
         const cwd = uriToFsPath(inst.workspaceFolderUri);
@@ -468,13 +558,26 @@ function setupRoutes(app) {
         if (!file) return res.status(400).json({ error: 'file parameter required' });
 
         try {
-            const content = execSync(`git show HEAD:"${file}"`, { cwd, encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 });
+            const validated = validateGitPath(file);
+            const args = ['show', `HEAD:${validated}`]; // No shell, arguments as array
+            const content = await execGitSafe(args, cwd);
             res.json({ content });
         } catch (e) {
-            if (e.stderr?.includes('does not exist') || e.stderr?.includes('not exist') || e.status) {
-                return res.json({ content: null, error: 'File not in HEAD (new file)' });
+            if (e.message === 'OUTPUT_LIMIT_EXCEEDED') {
+                return res.status(413).json({ error: 'Output too large' });
             }
-            res.status(500).json({ error: e.message });
+            if (e.message === 'GIT_COMMAND_FAILED') {
+                // Check if this is specifically a "file not in HEAD" error (new/untracked file)
+                const stderr = e.stderr || '';
+                if (stderr.includes('does not exist') || stderr.includes('not exist in') ||
+                    stderr.includes('Path') && stderr.includes('does not exist')) {
+                    // This is expected for new files not yet committed
+                    return res.json({ content: null, error: 'File not in HEAD (new file)' });
+                }
+                // Other git failures (not a repo, git unavailable, permission errors, etc.)
+                return res.status(500).json({ error: 'Git command failed' });
+            }
+            res.status(400).json({ error: e.message });
         }
     });
 
@@ -494,23 +597,44 @@ function setupRoutes(app) {
             return res.status(403).json({ error: 'Access denied: path traversal not allowed' });
         }
 
+        // Reject absolute paths
+        if (file.startsWith('/') || /^[a-zA-Z]:/.test(file)) {
+            return res.status(403).json({ error: 'Access denied: absolute paths not allowed' });
+        }
+
         try {
             const fullPath = path.resolve(cwd, file);
-            const normalizedCwd = path.resolve(cwd);
-            // Security: ensure the file is within the workspace (case-insensitive on Windows)
+
+            // Security: Resolve real paths (follows symlinks) to prevent symlink traversal
+            let realCwd, realPath;
+            try {
+                realCwd = fs.realpathSync(cwd);
+                realPath = fs.realpathSync(fullPath);
+            } catch (e) {
+                if (e.code === 'ENOENT') {
+                    return res.json({ content: null, error: 'File not found' });
+                }
+                return res.status(403).json({ error: 'Access denied: invalid path' });
+            }
+
+            // Security: ensure the real file path is within the real workspace (case-insensitive on Windows)
             const isInside = process.platform === 'win32'
-                ? fullPath.toLowerCase().startsWith(normalizedCwd.toLowerCase())
-                : fullPath.startsWith(normalizedCwd);
+                ? realPath.toLowerCase() === realCwd.toLowerCase() ||
+                realPath.toLowerCase().startsWith(realCwd.toLowerCase() + path.sep)
+                : realPath === realCwd ||
+                realPath.startsWith(realCwd + path.sep);
+
             if (!isInside) {
                 return res.status(403).json({ error: 'Access denied: path outside workspace' });
             }
-            const content = fs.readFileSync(fullPath, 'utf-8');
+
+            const content = fs.readFileSync(realPath, 'utf-8');
             res.json({ content, path: file });
         } catch (e) {
             if (e.code === 'ENOENT') {
                 return res.json({ content: null, error: 'File not found' });
             }
-            res.status(500).json({ error: e.message });
+            res.status(500).json({ error: 'Failed to read file' });
         }
     });
 
@@ -906,57 +1030,76 @@ function setupRoutes(app) {
             const fs = require('fs');
             const path = require('path');
             let filePath = typeof req.body?.path === 'string' ? req.body.path : '';
+
             // Handle file:// URIs
             if (filePath.startsWith('file:///')) {
                 try { filePath = decodeURIComponent(new URL(filePath).pathname); } catch { filePath = decodeURIComponent(filePath.replace('file://', '')); }
                 // Windows: /C:/Users/... → C:/Users/...
                 if (/^\/[a-zA-Z]:/.test(filePath)) filePath = filePath.substring(1);
             }
+
             if (!filePath) return res.status(400).json({ error: 'Missing path parameter' });
 
-            // Resolve to absolute path — prevents ../ traversal
-            const normalized = path.resolve(filePath);
+            // Security: Resolve real path (follows symlinks) and verify it exists
+            let realPath;
+            try {
+                realPath = fs.realpathSync(filePath);
+            } catch (e) {
+                if (e.code === 'ENOENT') {
+                    return res.status(404).json({ error: 'File not found' });
+                }
+                return res.status(400).json({ error: 'Invalid file path' });
+            }
 
-            // Build allowed roots: workspace root + all active workspace folders
+            // Security: Only allow reading files within workspace directories
+            // Build allowed roots: defaultWorkspaceRoot (from settings) + all active workspace folders
             const { lsInstances, getSettings } = require('./config');
             const settings = getSettings();
             const allowedRoots = [];
+
             // 1. Default workspace root from settings
             if (settings.defaultWorkspaceRoot) {
-                allowedRoots.push(path.resolve(settings.defaultWorkspaceRoot));
+                try {
+                    allowedRoots.push(fs.realpathSync(settings.defaultWorkspaceRoot));
+                } catch { /* skip if root doesn't exist */ }
             }
-            // 2. All active workspace folder paths
+
+            // 2. All active workspace folder paths (resolved through symlinks)
             for (const inst of lsInstances) {
                 if (inst.workspaceFolderUri) {
-                    const wsPath = uriToFsPath(inst.workspaceFolderUri);
-                    if (wsPath) allowedRoots.push(path.resolve(wsPath));
+                    const fsPath = uriToFsPath(inst.workspaceFolderUri);
+                    if (fsPath) {
+                        try {
+                            allowedRoots.push(fs.realpathSync(fsPath));
+                        } catch { /* skip unreachable workspaces */ }
+                    }
                 }
             }
 
             // Deny if no workspace roots configured — nothing to allow
             if (allowedRoots.length === 0) {
-                return res.status(403).json({ error: 'Access denied — no workspace configured' });
+                return res.status(403).json({ error: 'Access denied: no workspace configured' });
             }
 
-            // File must exist before symlink resolution
-            if (!fs.existsSync(normalized)) return res.status(404).json({ error: 'File not found' });
-
-            // Resolve symlinks to real path — prevents symlink-to-outside-workspace bypass
-            const realPath = fs.realpathSync(normalized);
-
-            // Check: real path must be inside an allowed workspace root
-            // .gemini/ paths are allowed only when inside a workspace root (not arbitrary .gemini dirs)
-            const isAllowed = allowedRoots.some(root =>
-                realPath.startsWith(root + path.sep) || realPath === root
-            );
+            // Check if file is within any allowed workspace (case-insensitive on Windows)
+            const isAllowed = allowedRoots.some(root => {
+                const normalizedRoot = path.resolve(root);
+                return process.platform === 'win32'
+                    ? realPath.toLowerCase().startsWith(normalizedRoot.toLowerCase() + path.sep) ||
+                    realPath.toLowerCase() === normalizedRoot.toLowerCase()
+                    : realPath.startsWith(normalizedRoot + path.sep) ||
+                    realPath === normalizedRoot;
+            });
 
             if (!isAllowed) {
-                return res.status(403).json({ error: 'Access denied — path outside workspace' });
+                return res.status(403).json({ error: 'Access denied: file outside workspace' });
             }
 
             const content = fs.readFileSync(realPath, 'utf-8');
-            res.json({ content, path: realPath });
-        } catch (e) { res.status(500).json({ error: e.message }); }
+            res.json({ content, path: filePath });
+        } catch (e) {
+            res.status(500).json({ error: 'Failed to read file' });
+        }
     });
 
     // ── Workflows (slash commands from Antigravity IDE) ─────────────────────
