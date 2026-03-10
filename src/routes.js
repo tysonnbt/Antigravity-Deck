@@ -774,6 +774,7 @@ function setupRoutes(app) {
                 supportsImages: !!m.supportsImages,
                 isRecommended: !!m.isRecommended,
                 quota: m.quotaInfo?.remainingFraction ?? 1,
+                resetTime: m.quotaInfo?.resetTime || null,
             }));
             const defaultModel = data.defaultOverrideModelConfig?.modelOrAlias?.model || '';
             res.json({ models, defaultModel });
