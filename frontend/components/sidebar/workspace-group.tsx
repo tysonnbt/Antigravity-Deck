@@ -6,6 +6,7 @@ import { API_BASE } from '@/lib/config'
 import { authHeaders } from '@/lib/auth'
 import { ResourceBar } from './resource-bar'
 import type { WorkspaceResources } from '@/lib/cascade-api'
+import { useToast } from '@/hooks/use-toast'
 import {
     Collapsible,
     CollapsibleContent,
@@ -71,6 +72,7 @@ export function WorkspaceGroup({
     onToggleShowAll: () => void
 }) {
     const [deleteTarget, setDeleteTarget] = useState<ConvSummary | null>(null)
+    const { toast } = useToast()
 
     const visibleConvs = showAll ? data.conversations : data.conversations.slice(0, SHOW_LIMIT)
     const hasMore = !showAll && data.conversations.length > SHOW_LIMIT
@@ -82,6 +84,7 @@ export function WorkspaceGroup({
                 method: 'DELETE',
                 headers: authHeaders(),
             })
+            toast({ title: "Conversation deleted" })
         } catch (err) {
             console.error('Failed to delete conversation:', err)
         } finally {

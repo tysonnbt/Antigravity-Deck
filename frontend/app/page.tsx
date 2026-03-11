@@ -26,6 +26,7 @@ import { AgentLogsView } from '@/components/agent-logs-view';
 import { AgentBridgeView } from '@/components/agent-bridge-view';
 import { SourceControlView } from '@/components/source-control-view';
 import { ResourceMonitorView } from '@/components/resource-monitor-view';
+import { useToast } from '@/hooks/use-toast';
 
 // Lazy-load components that are hidden by default
 const AnalyticsPanel = dynamic(() => import('@/components/analytics-panel').then(m => ({ default: m.AnalyticsPanel })), { ssr: false });
@@ -43,6 +44,7 @@ function getStoredValue<T>(key: string, fallback: T): T {
 
 export default function Home() {
   const { connected, detected, steps, baseIndex, stepCount, loadingOlder, conversations, currentConvId, cascadeStatus, conversationsVersion, stepContentVersion, workspaceResources, selectConversation, lastUpdate, loadOlder } = useWebSocket();
+  const { toast } = useToast();
 
   const [showAnalytics, setShowAnalytics] = useState(() => getStoredValue('antigravity-show-analytics', false));
   const [showTimeline, setShowTimeline] = useState(() => {
@@ -262,8 +264,11 @@ export default function Home() {
 
   // Export
   const handleExport = useCallback(() => {
-    if (currentConvId && steps.length > 0) exportToMarkdown(steps, currentConvId);
-  }, [steps, currentConvId]);
+    if (currentConvId && steps.length > 0) {
+      exportToMarkdown(steps, currentConvId);
+      toast({ variant: "success", title: "Exported to clipboard" });
+    }
+  }, [steps, currentConvId, toast]);
 
   // Notifications
   const handleToggleNotifications = useCallback(() => {
