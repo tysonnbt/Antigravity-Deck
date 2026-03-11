@@ -252,11 +252,8 @@ export default function Home() {
     setWsVersion(v => v + 1);
   }, []);
 
-  // ChatView's "New Chat" button — go back to conversation list
-  const handleNewConversation = useCallback(() => {
-    selectConversation(null);
-    setNewChatMode(false);
-  }, [selectConversation]);
+  // ChatView's "New Chat" button — enter new chat mode directly
+  // Reuses handleNewChat logic: clear conversation + enable newChatMode
 
 
 
@@ -595,7 +592,7 @@ export default function Home() {
                 wsVersion={wsVersion}
                 cascadeStatus={cascadeStatus ?? undefined}
                 onCascadeCreated={handleCascadeCreated}
-                onNewConversation={handleNewConversation}
+                onNewConversation={handleNewChat}
                 showTimeline={showTimeline}
                 onSetShowTimeline={handleSetShowTimeline}
                 showAnalytics={showAnalytics}
