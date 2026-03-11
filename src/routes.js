@@ -131,11 +131,12 @@ function setupRoutes(app) {
         defaultModel: z.string().max(100).optional(),
     }).strict();
 
-    app.post('/api/settings', (req, res) => {
+    app.post('/api/settings', async (req, res) => {
         try {
             const validated = SettingsSchema.parse(req.body);
-            const { saveSettings } = require('./config');
+            const { saveSettings, flushSettingsNow } = require('./config');
             const updated = saveSettings(validated);
+            await flushSettingsNow();
             console.log(`[*] Settings updated:`, JSON.stringify(updated));
             res.json(updated);
         } catch (error) {
@@ -145,7 +146,8 @@ function setupRoutes(app) {
                     details: error.issues  // Zod v4 uses 'issues', not 'errors'
                 });
             }
-            throw error;
+            console.error('[*] Settings save failed:', error.message);
+            res.status(500).json({ error: 'Failed to persist settings' });
         }
     });
 
@@ -1433,17 +1435,19 @@ function setupRoutes(app) {
         res.json(getBridgeSettings());
     });
 
-    app.post('/api/agent-bridge/settings', (req, res) => {
+    app.post('/api/agent-bridge/settings', async (req, res) => {
         try {
             const validated = BridgeSettingsSchema.parse(req.body);
-            const { saveBridgeSettings } = require('./config');
+            const { saveBridgeSettings, flushBridgeSettingsNow } = require('./config');
             const updated = saveBridgeSettings(validated);
+            await flushBridgeSettingsNow();
             res.json(updated);
         } catch (error) {
             if (error instanceof z.ZodError) {
                 return res.status(400).json({ error: 'Invalid settings', details: error.issues });
             }
-            throw error;
+            console.error('[*] Bridge settings save failed:', error.message);
+            res.status(500).json({ error: 'Failed to persist bridge settings' });
         }
     });
 }
