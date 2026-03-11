@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { API_BASE } from '@/lib/config';
 import { authHeaders } from '@/lib/auth';
+import { useToast } from '@/hooks/use-toast';
 import { Play, Check, X, Loader2, Zap, FolderOpen, Keyboard, Bell, FileText, AlertTriangle } from 'lucide-react';
 
 interface WaitingStepProps {
@@ -17,6 +18,7 @@ interface WaitingStepProps {
 export const WaitingStep = memo(function WaitingStep({ step, originalIndex, cascadeId, onAccepted }: WaitingStepProps) {
     const [acting, setActing] = useState(false);
     const [result, setResult] = useState<'accepted' | 'rejected' | null>(null);
+    const { toast } = useToast();
 
     const stepType = (step.type || '').replace('CORTEX_STEP_TYPE_', '');
     const command = step.runCommand?.commandLine || step.runCommand?.command || '';
@@ -95,11 +97,19 @@ export const WaitingStep = memo(function WaitingStep({ step, originalIndex, casc
             if (res.ok || res.status === 404) {
                 setResult(action === 'accept' ? 'accepted' : 'rejected');
                 onAccepted?.();
+                toast({
+                    variant: action === 'accept' ? "success" : "default",
+                    title: action === 'accept' ? "Changes accepted" : "Changes rejected",
+                });
             }
         } catch (e) {
             console.log(`[WaitingStep] ${action} error (may be success):`, e);
             setResult(action === 'accept' ? 'accepted' : 'rejected');
             onAccepted?.();
+            toast({
+                variant: action === 'accept' ? "success" : "default",
+                title: action === 'accept' ? "Changes accepted" : "Changes rejected",
+            });
         } finally {
             setActing(false);
         }

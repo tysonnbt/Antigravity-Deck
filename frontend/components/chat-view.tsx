@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Settings, Folder, Zap, BarChart2, RefreshCcw, SendHorizontal, Square, Paperclip, GitBranch, Plus, X, ChevronDown, Activity, Download, Bell, BellOff, Rocket, ArrowDown as ArrowDownIcon, Camera, Brain, Image as ImageIcon, Star } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
+import { useToast } from '@/hooks/use-toast';
 
 // === Props ===
 interface ChatViewProps {
@@ -81,6 +82,7 @@ function generateThumbnail(base64: string, mimeType: string, maxSize = 128): Pro
 export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = false, onLoadOlder, currentConvId, currentWorkspace, wsVersion, cascadeStatus, onCascadeCreated, onNewConversation, showTimeline, onSetShowTimeline, showAnalytics, onToggleAnalytics, onExport, notificationsEnabled, onToggleNotifications }: ChatViewProps) {
     const [input, setInput] = useState('');
     const [sending, setSending] = useState(false);
+    const { toast } = useToast();
     // activeCascadeId: derived from currentConvId, with local override for new chats
     const [localCascadeId, setLocalCascadeId] = useState<string | null>(null);
     const [showSourceControl, setShowSourceControl] = useState(false);
@@ -346,15 +348,24 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
     // Cancel
     const handleCancel = useCallback(async () => {
         if (!activeCascadeId) return;
-        try { await cascadeCancel(activeCascadeId); } catch (e) { console.error('Cancel error:', e); }
-    }, [activeCascadeId]);
+        try {
+            await cascadeCancel(activeCascadeId);
+            toast({ title: "Cascade aborted" });
+        } catch (e) { console.error('Cancel error:', e); }
+    }, [activeCascadeId, toast]);
 
     // Accept/Reject interaction
     const handleInteract = useCallback(async (action: 'accept' | 'reject') => {
         if (!activeCascadeId) return;
-        try { await cascadeInteract(activeCascadeId, action); }
+        try {
+            await cascadeInteract(activeCascadeId, action);
+            toast({
+                variant: action === 'accept' ? "success" : "default",
+                title: action === 'accept' ? "Changes accepted" : "Changes rejected",
+            });
+        }
         catch (e) { console.error('Interact error:', e); }
-    }, [activeCascadeId]);
+    }, [activeCascadeId, toast]);
 
     // New chat
     const handleNewChat = useCallback(() => {
@@ -601,6 +612,7 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
                                                 const newVal = !autoAccept;
                                                 setAutoAccept(newVal);
                                                 setAutoAcceptState(newVal).catch(() => { });
+                                                toast({ title: `Auto-accept ${newVal ? 'enabled' : 'disabled'}` });
                                             }}
                                             className="cursor-pointer flex items-center justify-between"
                                         >
