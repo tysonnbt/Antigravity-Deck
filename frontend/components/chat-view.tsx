@@ -611,8 +611,14 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
                                                 e.preventDefault();
                                                 const newVal = !autoAccept;
                                                 setAutoAccept(newVal);
-                                                setAutoAcceptState(newVal).catch(() => { });
-                                                toast({ title: `Auto-accept ${newVal ? 'enabled' : 'disabled'}` });
+                                                setAutoAcceptState(newVal)
+                                                    .then(() => {
+                                                        toast({ title: `Auto-accept ${newVal ? 'enabled' : 'disabled'}` });
+                                                    })
+                                                    .catch(() => {
+                                                        setAutoAccept(!newVal);
+                                                        toast({ variant: "destructive", title: "Failed to update auto-accept" });
+                                                    });
                                             }}
                                             className="cursor-pointer flex items-center justify-between"
                                         >

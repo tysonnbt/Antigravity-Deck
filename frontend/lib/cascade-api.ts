@@ -254,6 +254,7 @@ export async function setAutoAcceptState(enabled: boolean): Promise<{ enabled: b
         headers: authHeaders(),
         body: JSON.stringify({ enabled }),
     });
+    if (!res.ok) throw new Error(`Failed to set auto-accept: ${res.status}`);
     return res.json();
 }
 
