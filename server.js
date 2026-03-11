@@ -8,7 +8,7 @@ const { init, startAutoRescan } = require('./src/detector');
 const { setupRoutes } = require('./src/routes');
 const { setupWebSocket, startPolling } = require('./src/cache');
 const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const morgan = require('morgan');
 const rfs = require('rotating-file-stream');
 const fs = require('fs');
@@ -136,7 +136,7 @@ const generalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
-  keyGenerator: (req) => req.headers['cf-connecting-ip'] || req.ip,
+  keyGenerator: (req) => req.headers['cf-connecting-ip'] || ipKeyGenerator(req),
 });
 
 const strictLimiter = rateLimit({
@@ -145,7 +145,7 @@ const strictLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many authentication attempts, please try again later.' },
-  keyGenerator: (req) => req.headers['cf-connecting-ip'] || req.ip,
+  keyGenerator: (req) => req.headers['cf-connecting-ip'] || ipKeyGenerator(req),
   skipSuccessfulRequests: true,
 });
 
