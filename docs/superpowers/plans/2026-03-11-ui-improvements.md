@@ -124,7 +124,7 @@ Inside the component function, add:
 const { toast } = useToast();
 ```
 
-- [ ] **Step 2: Add toast calls in handleSave**
+- [ ] **Step 2: Add toast calls in handleSave and remove saveMsg state**
 
 In `handleSave` (line 65-81), replace the existing `setSaveMsg` feedback with toasts. After `setSettings(updated)` at line 73:
 
@@ -141,7 +141,12 @@ In the catch block at line 76:
 }
 ```
 
-Remove the `setSaveMsg` calls and the `setTimeout` at lines 74-75 and 77. Also remove the `saveMsg` state variable and its JSX rendering if they're no longer needed.
+Remove the following `saveMsg`-related code that toasts replace:
+- Line 40: `const [saveMsg, setSaveMsg] = useState('');` — delete this state variable
+- Line 67: `setSaveMsg('');` — delete this reset call
+- Lines 74-75: `setSaveMsg('saved'); setTimeout(() => setSaveMsg(''), 2500);` — delete (replaced by toast)
+- Line 77: `setSaveMsg('error');` — delete (replaced by toast)
+- Lines 243-247: The entire `{saveMsg && (...)}` JSX block that renders the inline "Saved!" / "Error saving" feedback — delete
 
 - [ ] **Step 3: Verify settings save shows toast**
 
@@ -154,10 +159,11 @@ git add frontend/components/settings-view.tsx
 git commit -m "feat(ui): add toast notifications to settings save"
 ```
 
-### Task 4: Add toasts to chat-view.tsx (accept/reject, auto-accept, cancel)
+### Task 4: Add toasts to chat-view.tsx and waiting-step.tsx (accept/reject, auto-accept, cancel)
 
 **Files:**
 - Modify: `frontend/components/chat-view.tsx:347-357,598-604`
+- Modify: `frontend/components/chat/waiting-step.tsx:85-106`
 
 - [ ] **Step 1: Add toast import**
 
@@ -220,20 +226,62 @@ const handleCancel = useCallback(async () => {
 }, [activeCascadeId, toast]);
 ```
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Add toast to waiting-step.tsx (inline accept/reject)**
+
+This is the primary UI where users click Accept/Reject on individual steps. In `frontend/components/chat/waiting-step.tsx`, add import at top:
+
+```typescript
+import { useToast } from "@/hooks/use-toast";
+```
+
+Inside the component function, add:
+
+```typescript
+const { toast } = useToast();
+```
+
+In `handleAction` (line 85-106), add toast after the success check at line 96:
+
+```typescript
+if (res.ok || res.status === 404) {
+    setResult(action === 'accept' ? 'accepted' : 'rejected');
+    onAccepted?.();
+    toast({
+        variant: action === 'accept' ? "success" : "default",
+        title: action === 'accept' ? "Changes accepted" : "Changes rejected",
+    });
+}
+```
+
+Also in the catch block at line 99-102, add toast:
+
+```typescript
+} catch (e) {
+    console.log(`[WaitingStep] ${action} error (may be success):`, e);
+    setResult(action === 'accept' ? 'accepted' : 'rejected');
+    onAccepted?.();
+    toast({
+        variant: action === 'accept' ? "success" : "default",
+        title: action === 'accept' ? "Changes accepted" : "Changes rejected",
+    });
+}
+```
+
+- [ ] **Step 6: Commit**
 
 ```bash
-git add frontend/components/chat-view.tsx
+git add frontend/components/chat-view.tsx frontend/components/chat/waiting-step.tsx
 git commit -m "feat(ui): add toast to accept/reject, auto-accept toggle, and cascade abort"
 ```
 
-### Task 5: Add toasts to page.tsx (export, copy ID) and app-sidebar.tsx (conversations)
+### Task 5: Add toasts to page.tsx (export) and workspace-group.tsx (delete conversation)
 
 **Files:**
-- Modify: `frontend/app/page.tsx:264-282`
-- Modify: `frontend/components/app-sidebar.tsx`
+- Modify: `frontend/app/page.tsx:264-266`
+- Modify: `frontend/components/sidebar/workspace-group.tsx:78-90`
+- Modify: `frontend/components/app-sidebar.tsx:259-281`
 
-- [ ] **Step 1: Add toast to page.tsx for export and copy**
+- [ ] **Step 1: Add toast to page.tsx for export**
 
 In `frontend/app/page.tsx`, add import and hook:
 
@@ -254,17 +302,42 @@ const handleExport = useCallback(() => {
 }, [steps, currentConvId, toast]);
 ```
 
-In `handleCopyId` (line 278-283), add toast:
+Note: `handleCopyId` (line 278-283) is dead code — it is defined but never referenced in JSX or passed to children. Do NOT add toast to it. The actual copy-to-clipboard operations happen in `chat-area.tsx` and `markdown-renderer.tsx` via separate copy utilities — those are out of scope for v1.
+
+- [ ] **Step 2: Add toast to workspace-group.tsx for delete conversation**
+
+The delete conversation handler is in `frontend/components/sidebar/workspace-group.tsx` (NOT in `app-sidebar.tsx`). In `workspace-group.tsx`, add import at top:
 
 ```typescript
-const handleCopyId = useCallback((e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(id);
-    toast({ title: "Copied to clipboard" });
-}, [toast]);
+import { useToast } from "@/hooks/use-toast";
 ```
 
-- [ ] **Step 2: Add toast to app-sidebar.tsx for conversation CRUD**
+Inside the `WorkspaceGroup` component function, add:
+
+```typescript
+const { toast } = useToast();
+```
+
+In `handleConfirmDelete` (line 78-90), add toast after the delete API call succeeds:
+
+```typescript
+const handleConfirmDelete = async () => {
+    if (!deleteTarget) return
+    try {
+        await fetch(`${API_BASE}/api/cascade/${deleteTarget.id}`, {
+            method: 'DELETE',
+            headers: authHeaders(),
+        })
+        toast({ title: "Conversation deleted" });
+    } catch (err) {
+        console.error('Failed to delete conversation:', err)
+    } finally {
+        setDeleteTarget(null)
+    }
+}
+```
+
+- [ ] **Step 3: Add toast to app-sidebar.tsx for workspace creation**
 
 In `frontend/components/app-sidebar.tsx`, add import and hook:
 
@@ -274,23 +347,17 @@ import { useToast } from "@/hooks/use-toast";
 const { toast } = useToast();
 ```
 
-Find the create conversation handler (`handleCreateByName` around line 259-281). After `setShowCreateDialog(false)` at line 273:
+In `handleCreateByName` (line 259-281), after `setShowCreateDialog(false)` at line 273:
 
 ```typescript
 toast({ variant: "success", title: "Workspace created" });
 ```
 
-Find the delete conversation handler. After the delete API call succeeds:
-
-```typescript
-toast({ title: "Conversation deleted" });
-```
-
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
-git add frontend/app/page.tsx frontend/components/app-sidebar.tsx
-git commit -m "feat(ui): add toast to export, copy, and conversation CRUD"
+git add frontend/app/page.tsx frontend/components/sidebar/workspace-group.tsx frontend/components/app-sidebar.tsx
+git commit -m "feat(ui): add toast to export, workspace create, and conversation delete"
 ```
 
 ---
@@ -366,7 +433,7 @@ Find where `showChat` is false but a workspace is selected (around where `showCo
 )}
 ```
 
-Place this in the main content area, near the existing `showWelcome` block.
+Place this in the main content area at approximately line 532 — after the `showWelcome && detected && !activeWorkspace` block (line 519-531) and before the `{detected && showAccountInfo && <AccountInfoView />}` block.
 
 - [ ] **Step 3: Commit**
 
@@ -401,7 +468,7 @@ In `frontend/components/agent-logs-view.tsx`, find the empty state at lines 433-
 ) : (
 ```
 
-Ensure `ScrollText` is imported from `lucide-react`. If only `Activity` is currently imported, add `ScrollText`.
+Ensure `ScrollText` is imported from `lucide-react`. The existing import block (lines 7-10) imports `Activity, User, Bot, Wrench, Filter, Trash2, Wifi, WifiOff, ChevronDown, ChevronRight, Terminal, FileCode2, Search, Eye, Globe, Copy, Check` — add `ScrollText` to this import statement.
 
 - [ ] **Step 2: Update resource-monitor-view.tsx empty state**
 
@@ -526,7 +593,7 @@ Line 674 uses `h-5 w-5` which is too small. Add minimum tap area:
 <button className="... min-h-7 min-w-7 ..." aria-label="Remove image">
 ```
 
-Note: This button sits on an image thumbnail overlay, so use `min-h-7` (28px) as a compromise to not break the visual, since the thumbnail itself is the primary tap target.
+Note: This is a deliberate deviation from the spec's `min-h-9` target. This button sits as an absolute-positioned overlay on a ~56px image thumbnail, so 28px (`min-h-7`) is a compromise to avoid breaking the overlay layout. The thumbnail itself serves as the broader tap area.
 
 - [ ] **Step 4: Commit**
 
@@ -559,7 +626,7 @@ git add frontend/components/settings-view.tsx
 git commit -m "fix(a11y): improve text sizes in settings-view"
 ```
 
-### Task 12: Fix text sizes and aria-labels in app-sidebar.tsx
+### Task 12: Fix text sizes in app-sidebar.tsx
 
 **Files:**
 - Modify: `frontend/components/app-sidebar.tsx`
