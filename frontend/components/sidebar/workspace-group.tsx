@@ -80,11 +80,15 @@ export function WorkspaceGroup({
     const handleConfirmDelete = async () => {
         if (!deleteTarget) return
         try {
-            await fetch(`${API_BASE}/api/cascade/${deleteTarget.id}`, {
+            const res = await fetch(`${API_BASE}/api/cascade/${deleteTarget.id}`, {
                 method: 'DELETE',
                 headers: authHeaders(),
             })
-            toast({ title: "Conversation deleted" })
+            if (res.ok) {
+                toast({ title: "Conversation deleted" })
+            } else {
+                toast({ variant: "destructive", title: "Failed to delete conversation" })
+            }
         } catch (err) {
             console.error('Failed to delete conversation:', err)
         } finally {

@@ -266,7 +266,7 @@ export default function Home() {
   const handleExport = useCallback(() => {
     if (currentConvId && steps.length > 0) {
       exportToMarkdown(steps, currentConvId);
-      toast({ variant: "success", title: "Exported to clipboard" });
+      toast({ variant: "success", title: "Conversation exported" });
     }
   }, [steps, currentConvId, toast]);
 

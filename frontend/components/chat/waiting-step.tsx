@@ -106,10 +106,6 @@ export const WaitingStep = memo(function WaitingStep({ step, originalIndex, casc
             console.log(`[WaitingStep] ${action} error (may be success):`, e);
             setResult(action === 'accept' ? 'accepted' : 'rejected');
             onAccepted?.();
-            toast({
-                variant: action === 'accept' ? "success" : "default",
-                title: action === 'accept' ? "Changes accepted" : "Changes rejected",
-            });
         } finally {
             setActing(false);
         }
