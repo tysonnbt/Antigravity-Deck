@@ -223,7 +223,6 @@ async function runTunnel() {
 
     if (!QUIET) {
         console.log('\n\x1b[1m  🚀 Antigravity Deck — Starting with Cloudflare Tunnel\x1b[0m');
-        console.log(`  🔑 Auth Key: \x1b[33m${authKey}\x1b[0m\n`);
     }
 
     // Step 1: Start backend
@@ -359,7 +358,6 @@ async function runTunnel() {
         console.log('\n' + '='.repeat(60));
         console.log('\x1b[1m\x1b[32m  🌐 READY! Open this URL on any device:\x1b[0m');
         console.log(`\x1b[1m  👉 ${feUrl}\x1b[0m`);
-        console.log(`  🔑 Key: \x1b[33m${authKey}\x1b[0m`);
         console.log('='.repeat(60));
         console.log(`  Backend API: ${beUrl}`);
         console.log(`  Local:       http://localhost:${FE_PORT}`);
@@ -376,7 +374,6 @@ async function runTunnel() {
     const info = [
         `Frontend: ${feUrl || 'FAILED'}`,
         `Backend:  ${beUrl || 'FAILED'}`,
-        `Auth Key: ${authKey}`,
         `Local FE: http://localhost:${FE_PORT}`,
         `Local BE: http://localhost:${BE_PORT}`,
         `Started:  ${new Date().toISOString()}`,

@@ -65,7 +65,6 @@ async function main() {
     const authKey = process.env.AUTH_KEY || crypto.randomBytes(16).toString('hex');
 
     console.log('\n\x1b[1m  🚀 AntigravityChat — Named Tunnel (Fixed URL)\x1b[0m');
-    console.log(`  🔑 Auth Key: \x1b[33m${authKey}\x1b[0m\n`);
 
     // Step 1: Start backend
     log('*', `Starting backend on port ${BE_PORT}...`);
@@ -135,7 +134,6 @@ async function main() {
     console.log('\x1b[1m\x1b[32m  🌐 READY! Fixed URLs (never change):\x1b[0m');
     console.log(`\x1b[1m  👉 Frontend: ${FE_URL}\x1b[0m`);
     console.log(`\x1b[1m  🔗 Backend:  ${BE_URL}\x1b[0m`);
-    console.log(`  🔑 Auth Key: \x1b[33m${authKey}\x1b[0m`);
     console.log('='.repeat(60));
     console.log(`  Local FE: http://localhost:${FE_PORT}`);
     console.log(`  Local BE: http://localhost:${BE_PORT}`);
