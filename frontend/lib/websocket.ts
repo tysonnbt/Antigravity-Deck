@@ -195,28 +195,24 @@ export function useWebSocket() {
             setState(prev => {
                 if (data.conversationId && data.conversationId !== prev.currentConvId) return prev;
                 const newState = { ...prev, cascadeStatus: data.status as string };
-                // When cascade completes, bump conversationsVersion to refresh sidebar
-                // (summary/title/stepCount may have changed)
                 const isDone = data.status !== 'CASCADE_RUN_STATUS_RUNNING' &&
                                data.status !== 'CASCADE_RUN_STATUS_WAITING_FOR_USER';
                 if (isDone && prev.cascadeStatus && prev.cascadeStatus !== data.status) {
                     newState.conversationsVersion = prev.conversationsVersion + 1;
+                    // Single delayed re-sync of step content after LS finalizes (~5s)
+                    const convId = prev.currentConvId;
+                    if (convId) {
+                        setTimeout(() => {
+                            wsService?.send({ type: 'set_conversation', conversationId: convId });
+                        }, 5000);
+                    }
                 }
                 return newState;
             });
         });
 
         const offConvUpdated = wsService.on('conversations_updated', () => {
-            console.log('[WS] conversations_updated — refreshing sidebar + step content');
-            setState(prev => {
-                // Re-sync step content: re-send set_conversation to get fresh steps_init
-                // with finalized step data from backend cache
-                const convId = prev.currentConvId;
-                if (convId) {
-                    wsService?.send({ type: 'set_conversation', conversationId: convId });
-                }
-                return { ...prev, conversationsVersion: prev.conversationsVersion + 1 };
-            });
+            setState(prev => ({ ...prev, conversationsVersion: prev.conversationsVersion + 1 }));
         });
 
         const offResources = wsService.on('workspace_resources', (data) => {
