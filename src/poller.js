@@ -147,11 +147,14 @@ async function pollNow() {
 
                     // Post-completion polling: LS takes time to finalize content (summary, title, last steps).
                     // Schedule 5 extra polls at 1s intervals to catch late updates.
-                    const postPollInfo = { ...info };
+                    // IMPORTANT: only pass { inst } — omit stepCount so pollConversation
+                    // queries FRESH stepCount from LS each time, instead of using the stale
+                    // snapshot from status-change time.
+                    const postPollInst = info.inst || null;
                     for (let pp = 0; pp < 5; pp++) {
                         setTimeout(async () => {
                             try {
-                                await pollConversation(cascadeId, postPollInfo);
+                                await pollConversation(cascadeId, postPollInst ? { inst: postPollInst } : null);
                                 _broadcastAll({ type: 'conversations_updated' });
                             } catch { /* ignore — best effort */ }
                         }, (pp + 1) * 1000);
