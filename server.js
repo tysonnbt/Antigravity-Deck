@@ -185,7 +185,7 @@ app.get('/api/ws-url', (req, res) => {
 // === One-Time Password (OTP) for QR code auth ===
 // AUTH_KEY never appears in URLs — QR contains a short-lived OTP instead
 const otpStore = new Map(); // Map<otp, { expiresAt: number }>
-const OTP_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const OTP_TTL_MS = 60 * 1000; // 60 seconds
 const OTP_MAX_ENTRIES = 20; // prevent memory issues
 
 // Create OTP — localhost only (called by start-tunnel.js)
