@@ -153,9 +153,10 @@ async function pollNow() {
                     for (let pp = 0; pp < 5; pp++) {
                         setTimeout(async () => {
                             try {
+                                console.log(`[post-poll] ${cascadeId.substring(0, 8)} tick ${pp + 1}/5`);
                                 await pollConversation(cascadeId, postPollInst ? { inst: postPollInst } : null);
                                 _broadcastAll({ type: 'conversations_updated' });
-                            } catch { /* ignore — best effort */ }
+                            } catch (e) { console.log(`[post-poll] ${cascadeId.substring(0, 8)} tick ${pp + 1} error: ${e.message}`); }
                         }, (pp + 1) * 1000);
                     }
                 }
@@ -206,14 +207,19 @@ async function pollConversation(activeConvId, info) {
     if (fetchingSet.has(activeConvId)) return;
 
     try {
-        // Use pre-fetched info if available, otherwise query
+        // Build instance-specific API call function first (needed by both getStepCountAndStatus and step fetching)
+        const callFn = (info && info.inst)
+            ? (m, b) => callApiOnInstance(info.inst, m, b)
+            : (m, b) => callApi(m, b);
+
+        // Use pre-fetched info if available, otherwise query with correct LS instance
         let newStepCount, cascadeStatus, trajectoryId;
         if (info && info.stepCount !== undefined) {
             newStepCount = info.stepCount;
             cascadeStatus = info.status;
             trajectoryId = info.trajectoryId;
         } else {
-            const result = await getStepCountAndStatus(activeConvId);
+            const result = await getStepCountAndStatus(activeConvId, callFn);
             newStepCount = result.stepCount;
             cascadeStatus = result.status;
             trajectoryId = result.trajectoryId;
@@ -235,11 +241,6 @@ async function pollConversation(activeConvId, info) {
         const fetchTo = Math.max(newStepCount, cachedLen);
 
         if (fetchTo <= 0) return;
-
-        // Use instance-specific API call if info provides one
-        const callFn = (info && info.inst)
-            ? (m, b) => callApiOnInstance(info.inst, m, b)
-            : (m, b) => callApi(m, b);
 
         let freshSteps = [];
         try {
