@@ -24,7 +24,7 @@ const STEP_LOAD_CHUNK = 200;        // how many older steps to load on scroll-up
 // --- Persistent settings ---
 const SETTINGS_PATH = path.join(__dirname, '..', 'settings.json');
 const DEFAULT_SETTINGS = {
-    defaultWorkspaceRoot: path.join(os.homedir(), 'AntigravityWorkspaces'),
+    defaultWorkspaceRoot: '',
     defaultModel: 'MODEL_PLACEHOLDER_M26', // Claude Opus 4.6 (Thinking)
     activeProfile: null,   // string | null — currently active profile name for profile swap
     profilesDir: null,     // string | null — custom profiles directory (default: %APPDATA%/AntigravityDeck/profiles)
@@ -50,12 +50,9 @@ function loadSettings() {
         _settings = { ...DEFAULT_SETTINGS };
     }
 
-    // Auto-populate defaultWorkspaceRoot if empty/missing (new user onboarding)
-    if (!_settings.defaultWorkspaceRoot) {
-        _settings.defaultWorkspaceRoot = DEFAULT_SETTINGS.defaultWorkspaceRoot;
-        console.log(`[*] Auto-set defaultWorkspaceRoot: ${_settings.defaultWorkspaceRoot}`);
-        try { fs.writeFileSync(SETTINGS_PATH, JSON.stringify(_settings, null, 2), 'utf-8'); } catch { }
-    }
+    // If defaultWorkspaceRoot is empty, do NOT auto-populate it anymore.
+    // The frontend will receive empty string and launch the onboarding modal.
+    _settings.suggestedWorkspaceRoot = path.join(os.homedir(), 'AntigravityWorkspace');
 
     return _settings;
 }

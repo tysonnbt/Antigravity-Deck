@@ -319,6 +319,7 @@ function setupRoutes(app) {
     const SettingsSchema = z.object({
         autoAccept: z.boolean().optional(),
         defaultWorkspaceRoot: z.string().max(500).optional(),
+        suggestedWorkspaceRoot: z.string().max(500).optional(),
         defaultModel: z.string().max(100).optional(),
         activeProfile: z.string().max(100).nullable().optional(),
         profilesDir: z.string().max(500).nullable().optional(),
@@ -385,7 +386,7 @@ function setupRoutes(app) {
             })
             .sort((a, b) => a.name.localeCompare(b.name));
 
-        res.json({ root, folders: entries });
+        res.json({ root, folders: entries, suggestedWorkspaceRoot: settings.suggestedWorkspaceRoot || '' });
     });
 
     // Resource usage snapshot for all workspace PIDs
@@ -461,7 +462,9 @@ function setupRoutes(app) {
             folderPath = path.join(root, name);
         }
 
-        if (!folderPath) return res.status(400).json({ error: 'path or name is required' });
+        if (!folderPath) {
+            return res.status(400).json({ error: 'path or name is required, and defaultWorkspaceRoot must be configured' });
+        }
 
         // Validate path to prevent command injection
         try {
@@ -646,7 +649,9 @@ function setupRoutes(app) {
             folderPath = path.join(root, name);
         }
 
-        if (!folderPath) return res.status(400).json({ error: 'path or name is required' });
+        if (!folderPath) {
+            return res.status(400).json({ error: 'path or name is required, and defaultWorkspaceRoot must be configured' });
+        }
 
         try {
             folderPath = validateWorkspacePath(folderPath);
