@@ -85,7 +85,10 @@ async function detectPorts(pid) {
     return new Promise((resolve) => {
         let cmd;
         if (platform === 'win32') {
+<<<<<<< HEAD
             // netstat -ano: ~29ms vs PowerShell ~1250ms
+=======
+>>>>>>> b4aa671bb65dda919bfabd9f6545fe90e372cf73
             cmd = `netstat -ano`;
         } else {
             cmd = `lsof -iTCP -sTCP:LISTEN -P -n -p ${pid} 2>/dev/null`;

@@ -5,7 +5,11 @@ const path = require('path');
 const os = require('os');
 const fs = require('fs');
 const crypto = require('crypto');
+<<<<<<< HEAD
 const { exec, spawn } = require('child_process');
+=======
+const { execSync, exec, spawn } = require('child_process');
+>>>>>>> b4aa671bb65dda919bfabd9f6545fe90e372cf73
 const { promisify } = require('util');
 const https = require('https');
 const { lsInstances, platform } = require('./config');
@@ -54,6 +58,7 @@ function getExtensionPath() {
     return path.dirname(path.dirname(lsBin)); // up from bin/ to antigravity/
 }
 
+<<<<<<< HEAD
 // --- Get existing headless extension server port — ASYNC ---
 async function getExtensionServer() {
     try {
@@ -61,12 +66,22 @@ async function getExtensionServer() {
         if (platform === 'win32') {
             const ps = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
             const cmd = `Get-CimInstance Win32_Process | Where-Object { $_.Name -like '*language_server*' }  | Select-Object -First 1 -ExpandProperty CommandLine`;
+=======
+// --- Auto-detect extension server from running Antigravity IDE ---
+async function getExtensionServer() {
+    try {
+        let out;
+        if (platform === 'win32') {
+            const ps = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+            const cmd = `Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'language_server*' } | Select-Object -First 1 -ExpandProperty CommandLine`;
+>>>>>>> b4aa671bb65dda919bfabd9f6545fe90e372cf73
             const result = await execAsync(`"${ps}" -NoProfile -Command "${cmd}"`, { encoding: 'utf8', timeout: 10000 });
             out = (result.stdout || '').trim();
         } else {
             const result = await execAsync(`ps aux | grep 'language_server' | grep -v grep | head -1`, { encoding: 'utf8', timeout: 5000 });
             out = (result.stdout || '').trim();
         }
+<<<<<<< HEAD
         
         const portMatch = out.match(/--extension_server_port\s+(\d+)/);
         const csrfMatch = out.match(/--extension_server_csrf_token\s+([\w-]+)/);
@@ -75,6 +90,12 @@ async function getExtensionServer() {
                 port: parseInt(portMatch[1], 10),
                 csrf: csrfMatch[1]
             };
+=======
+        const portMatch = out.match(/--extension_server_port\s+(\d+)/);
+        const csrfMatch = out.match(/--extension_server_csrf_token\s+([\w-]+)/);
+        if (portMatch && csrfMatch) {
+            return { port: portMatch[1], csrf: csrfMatch[1] };
+>>>>>>> b4aa671bb65dda919bfabd9f6545fe90e372cf73
         }
     } catch { }
     return null;
