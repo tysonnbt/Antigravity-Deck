@@ -135,11 +135,15 @@ export function useWebSocket() {
             console.log('[WS] steps_init:', (data.steps as Step[])?.length, 'for', (data.conversationId as string)?.substring(0, 8), 'baseIndex:', data.baseIndex, 'stepCount:', data.stepCount);
             setState(prev => {
                 if (data.conversationId && data.conversationId !== prev.currentConvId) return prev;
+                const steps = (data.steps as Step[]) || [];
+                const baseIndex = (data.baseIndex as number) ?? 0;
+                // Skip if data is identical (avoids unnecessary re-render from 30s fallback)
+                if (prev.steps.length === steps.length && prev.baseIndex === baseIndex && !prev.loadingOlder) return prev;
                 return {
                     ...prev,
-                    steps: (data.steps as Step[]) || [],
-                    baseIndex: (data.baseIndex as number) ?? 0,
-                    stepCount: (data.stepCount as number) ?? ((data.steps as Step[])?.length || 0),
+                    steps,
+                    baseIndex,
+                    stepCount: (data.stepCount as number) ?? steps.length,
                     loadingOlder: false,
                     lastUpdate: new Date().toLocaleTimeString(),
                 };
