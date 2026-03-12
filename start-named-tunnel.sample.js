@@ -141,15 +141,6 @@ async function main() {
 
     await generateAndPrintQR();
 
-    // Graceful shutdown
-    const cleanup = () => {
-        log('*', 'Shutting down...');
-        [be, fe, tunnel].forEach(p => { try { p.kill(); } catch { } });
-        process.exit(0);
-    };
-    process.on('SIGINT', cleanup);
-    process.on('SIGTERM', cleanup);
-
     // Listen for R key to regenerate QR
     if (process.stdin.isTTY) {
         process.stdin.setRawMode(true);
@@ -163,6 +154,15 @@ async function main() {
             }
         });
     }
+
+    // Graceful shutdown
+    const cleanup = () => {
+        log('*', 'Shutting down...');
+        [be, fe, tunnel].forEach(p => { try { p.kill(); } catch { } });
+        process.exit(0);
+    };
+    process.on('SIGINT', cleanup);
+    process.on('SIGTERM', cleanup);
 }
 
 main().catch(e => { console.error(e); process.exit(1);});
