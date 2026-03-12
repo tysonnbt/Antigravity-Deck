@@ -1,5 +1,8 @@
 {
     "autoAccept": false,
     "defaultWorkspaceRoot": "",
-    "defaultModel": ""
+    "defaultModel": "",
+    "stepWarningLimit": 500,
+    "stepWarningFraction": 0.60,
+    "stepDangerFraction": 0.90
 }

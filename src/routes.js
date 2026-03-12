@@ -129,7 +129,14 @@ function setupRoutes(app) {
         autoAccept: z.boolean().optional(),
         defaultWorkspaceRoot: z.string().max(500).optional(),
         defaultModel: z.string().max(100).optional(),
-    }).strict();
+        // Step warning settings
+        stepWarningLimit: z.number().int().min(50).max(5000).optional(),
+        stepWarningFraction: z.number().min(0.1).max(0.99).optional(),
+        stepDangerFraction: z.number().min(0.1).max(0.99).optional(),
+    }).strict().refine(
+        d => !d.stepWarningFraction || !d.stepDangerFraction || d.stepWarningFraction < d.stepDangerFraction,
+        { message: 'stepWarningFraction must be less than stepDangerFraction' }
+    );
 
     app.post('/api/settings', (req, res) => {
         try {

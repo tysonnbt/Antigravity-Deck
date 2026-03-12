@@ -84,6 +84,10 @@ export interface WorkspaceFolder {
 export interface AppSettings {
     defaultWorkspaceRoot: string;
     defaultModel: string;
+    // Step warning settings
+    stepWarningLimit?: number;
+    stepWarningFraction?: number;
+    stepDangerFraction?: number;
     [key: string]: unknown;
 }
 

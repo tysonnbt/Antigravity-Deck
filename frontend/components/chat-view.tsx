@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { TokenUsage } from './token-usage';
+import { useStepWarning } from '@/lib/use-step-warning';
+import { ContextWarningBanner } from './context-warning-banner';
 import { cn } from '@/lib/utils';
 import { SourceControlView } from './source-control-view';
 import {
@@ -111,6 +113,9 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
     const [workflows, setWorkflows] = useState<WorkflowItem[]>([]);
     const [showWorkflows, setShowWorkflows] = useState(false);
     const [workflowQuery, setWorkflowQuery] = useState('');
+
+    // Step-count warning (uses real server stepCount, NOT steps.length)
+    const stepWarning = useStepWarning(activeCascadeId, stepCount);
     const wsPickerRef = useRef<HTMLDivElement>(null);
     const modelPickerRef = useRef<HTMLDivElement>(null);
 
@@ -661,6 +666,18 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
 
                             {/* Token usage display */}
                             {showTokens && <TokenUsage cascadeId={activeCascadeId} />}
+
+                            {/* Step warning banner */}
+                            {stepWarning.tier !== 'safe' && !stepWarning.dismissed && (
+                                <ContextWarningBanner
+                                    tier={stepWarning.tier}
+                                    pct={stepWarning.pct}
+                                    stepCount={stepWarning.stepCount}
+                                    limit={stepWarning.limit}
+                                    onDismiss={stepWarning.dismiss}
+                                    onNewChat={handleNewChat}
+                                />
+                            )}
 
                             {/* Image preview — multi-image horizontal list */}
                             {pendingImages.length > 0 && (

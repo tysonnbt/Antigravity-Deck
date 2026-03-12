@@ -20,6 +20,10 @@ const SETTINGS_PATH = path.join(__dirname, '..', 'settings.json');
 const DEFAULT_SETTINGS = {
     defaultWorkspaceRoot: path.join(os.homedir(), 'AntigravityWorkspaces'),
     defaultModel: 'MODEL_PLACEHOLDER_M26', // Claude Opus 4.6 (Thinking)
+    // Step-count warning thresholds
+    stepWarningLimit: 500,        // step budget per chat (matches STEP_WINDOW_SIZE)
+    stepWarningFraction: 0.60,    // amber warning at 60% (300 steps)
+    stepDangerFraction: 0.90,     // red warning at 90% (450 steps)
 };
 
 let _settings = null;

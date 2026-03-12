@@ -39,6 +39,10 @@ export function SettingsView() {
     const [saving, setSaving] = useState(false);
     const [saveMsg, setSaveMsg] = useState('');
     const [loading, setLoading] = useState(true);
+    // Step warning settings
+    const [stepLimit, setStepLimit] = useState(500);
+    const [stepWarningFrac, setStepWarningFrac] = useState(0.60);
+    const [stepDangerFrac, setStepDangerFrac] = useState(0.90);
 
 
     const loadAll = useCallback(async () => {
@@ -51,6 +55,9 @@ export function SettingsView() {
             setSettings(settingsData);
             setWorkspaceRoot(settingsData.defaultWorkspaceRoot || '');
             setDefaultModel(settingsData.defaultModel || '__api_default__');
+            setStepLimit(settingsData.stepWarningLimit as number ?? 500);
+            setStepWarningFrac(settingsData.stepWarningFraction as number ?? 0.60);
+            setStepDangerFrac(settingsData.stepDangerFraction as number ?? 0.90);
             setModels(modelsRes.models || []);
             setApiDefaultModel(modelsRes.defaultModel || '');
         } catch (e) {
@@ -69,6 +76,9 @@ export function SettingsView() {
             const updated = await updateSettings({
                 defaultWorkspaceRoot: workspaceRoot.trim(),
                 defaultModel: defaultModel === '__api_default__' ? '' : defaultModel,
+                stepWarningLimit: stepLimit,
+                stepWarningFraction: stepWarningFrac,
+                stepDangerFraction: stepDangerFrac,
             });
             setSettings(updated);
             setSaveMsg('saved');
@@ -83,7 +93,10 @@ export function SettingsView() {
     const realDefault = defaultModel === '__api_default__' ? '' : defaultModel;
     const hasChanges = settings && (
         workspaceRoot.trim() !== (settings.defaultWorkspaceRoot || '') ||
-        realDefault !== (settings.defaultModel || '')
+        realDefault !== (settings.defaultModel || '') ||
+        stepLimit !== (settings.stepWarningLimit as number ?? 500) ||
+        stepWarningFrac !== (settings.stepWarningFraction as number ?? 0.60) ||
+        stepDangerFrac !== (settings.stepDangerFraction as number ?? 0.90)
     );
 
     const geminiModels = models.filter(m => m.label.toLowerCase().includes('gemini'));
@@ -229,6 +242,71 @@ export function SettingsView() {
                             placeholder="C:\Users\you\Workspaces"
                             className="font-mono text-xs"
                         />
+                    </CardContent>
+                </Card>
+
+                {/* Chat Length Warning */}
+                <Card>
+                    <CardHeader className="pb-3">
+                        <CardTitle className="text-xs font-semibold">Chat Length Warning</CardTitle>
+                        <CardDescription className="text-[10px]">
+                            Set a step limit per chat. Warnings appear when the conversation gets long.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        {/* Step Limit */}
+                        <div className="space-y-1">
+                            <label className="text-[10px] text-muted-foreground">Step Limit</label>
+                            <div className="flex items-center gap-2">
+                                <Input
+                                    type="number"
+                                    value={stepLimit}
+                                    onChange={e => setStepLimit(Math.max(50, parseInt(e.target.value) || 500))}
+                                    min={50}
+                                    max={5000}
+                                    step={50}
+                                    className="font-mono text-xs w-24"
+                                />
+                                <span className="text-[10px] text-muted-foreground">steps</span>
+                            </div>
+                        </div>
+                        {/* Warning & Danger Fractions */}
+                        <div className="flex gap-4">
+                            <div className="space-y-1">
+                                <label className="text-[10px] text-amber-400/70">Warning at</label>
+                                <div className="flex items-center gap-1">
+                                    <Input
+                                        type="number"
+                                        value={Math.round(stepWarningFrac * 100)}
+                                        onChange={e => {
+                                            const v = Math.min(0.99, Math.max(0.1, (parseInt(e.target.value) || 60) / 100));
+                                            setStepWarningFrac(Math.min(v, stepDangerFrac - 0.01));
+                                        }}
+                                        min={10}
+                                        max={99}
+                                        className="font-mono text-xs w-16"
+                                    />
+                                    <span className="text-[10px] text-muted-foreground">%</span>
+                                </div>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] text-red-400/70">Danger at</label>
+                                <div className="flex items-center gap-1">
+                                    <Input
+                                        type="number"
+                                        value={Math.round(stepDangerFrac * 100)}
+                                        onChange={e => {
+                                            const v = Math.min(0.99, Math.max(0.1, (parseInt(e.target.value) || 90) / 100));
+                                            setStepDangerFrac(Math.max(v, stepWarningFrac + 0.01));
+                                        }}
+                                        min={10}
+                                        max={99}
+                                        className="font-mono text-xs w-16"
+                                    />
+                                    <span className="text-[10px] text-muted-foreground">%</span>
+                                </div>
+                            </div>
+                        </div>
                     </CardContent>
                 </Card>
 
