@@ -81,7 +81,7 @@ export function AuthGate({ children }: AuthGateProps) {
     if (authenticated) return <>{children}</>;
 
     return (
-        <div className="min-h-dvh bg-background flex items-center justify-center p-4">
+        <div className="min-h-dvh w-full bg-background flex items-center justify-center p-4">
             <Card className="w-full max-w-sm">
                 <CardHeader className="text-center pb-2">
                     <div className="mb-3"><Lock className="h-8 w-8 text-muted-foreground mx-auto" /></div>

@@ -603,6 +603,11 @@ function addLog(type, message) {
         const logPath = path.join(__dirname, '..', 'bridge.log');
         fs.appendFileSync(logPath, `${new Date().toISOString()} ${line}\n`);
     } catch { /* ignore write errors */ }
+    // Push status to all connected WS clients (replaces frontend polling)
+    try {
+        const { broadcastAll } = require('./ws');
+        broadcastAll({ type: 'bridge_status', ...getStatus() });
+    } catch { /* ws not ready yet */ }
 }
 
 // ── Exports ───────────────────────────────────────────────────────────────────

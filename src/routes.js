@@ -114,8 +114,199 @@ function setupRoutes(app) {
         res.json({ detected: lsInstances.length > 0, port: firstInst?.port || null });
     });
 
+    // Launch IDE — fire-and-forget, opens the Antigravity IDE application
+    // Security: no user input, rate-limited via strictLimiter in server.js, auth-protected
+    app.post('/api/launch-ide', (req, res) => {
+        const { platform } = require('./config');
+        console.log(`[*] Launch IDE requested (platform: ${platform})`);
+
+        try {
+            if (platform === 'darwin') {
+                // macOS: open Antigravity app
+                const child = spawn('open', ['-a', 'Antigravity'], {
+                    timeout: 10000,
+                    detached: true,
+                    stdio: 'ignore'
+                });
+                child.on('error', (e) => console.error('[!] Failed to open Antigravity:', e.message));
+                child.unref();
+            } else {
+                // Windows/Linux
+                const child = spawn('antigravity', [], {
+                    timeout: 10000,
+                    detached: true,
+                    stdio: 'ignore',
+                    shell: platform === 'win32',
+                });
+                child.on('error', (err) => console.error('[!] Failed to launch antigravity:', err.message));
+                child.unref();
+            }
+
+            res.json({ launched: true, platform });
+        } catch (e) {
+            console.error('[!] Launch IDE error:', e.message);
+            res.status(500).json({ error: 'Failed to launch IDE' });
+        }
+    });
+
+    // Kill IDE — terminate all Antigravity IDE processes
+    // Security: no user input, rate-limited via strictLimiter in server.js, auth-protected
+    app.post('/api/kill-ide', (req, res) => {
+        const { exec } = require('child_process');
+        const { platform, lsInstances } = require('./config');
+        console.log(`[*] Kill IDE requested (platform: ${platform}, active instances: ${lsInstances.length})`);
+
+        try {
+            if (platform === 'darwin') {
+                // macOS: kill Antigravity processes (case-insensitive)
+                exec('pkill -fi "antigravity" 2>/dev/null', {
+                    timeout: 10000,
+                }, (err) => {
+                    if (err && err.code !== 1) console.error('[!] Kill IDE error:', err.message);
+                });
+            } else if (platform === 'win32') {
+                // Windows: use PowerShell to find and kill Antigravity processes
+                const path = require('path');
+                const ps = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+                const cmd = `"${ps}" -NoProfile -Command "Get-Process | Where-Object { $_.ProcessName -match 'antigravity' } | Stop-Process -Force -ErrorAction SilentlyContinue"`;
+                exec(cmd, { timeout: 10000 }, (err) => {
+                    if (err) console.error('[!] Kill IDE error:', err.message);
+                });
+            } else {
+                // Linux
+                exec('pkill -fi "antigravity" 2>/dev/null', { timeout: 10000 }, () => {});
+            }
+
+            // Clear all LS instances since we killed the processes
+            const killedCount = lsInstances.length;
+            lsInstances.length = 0;
+
+            // Also kill any headless instances
+            try {
+                const { killAllHeadless } = require('./headless-ls');
+                if (killAllHeadless) killAllHeadless();
+            } catch { }
+
+            console.log(`[*] Kill IDE: cleared ${killedCount} LS instances`);
+            res.json({ killed: true, platform, instancesCleared: killedCount });
+        } catch (e) {
+            console.error('[!] Kill IDE error:', e.message);
+            res.status(500).json({ error: 'Failed to kill IDE' });
+        }
+    });
+
     // Clear cache for a specific conversation — see also app.delete('/api/cache/:id') below
     // (consolidated into single handler below)
+
+    // --- Profile Swap (switch Google accounts by renaming 3 IDE data folders) ---
+    const { listProfiles, getActiveProfile, swapProfile, createProfile, deleteProfile, getProfileMetadata, startAddAccount, cancelAddAccount } = require('./profile-manager');
+
+    app.get('/api/profiles', (req, res) => {
+        try {
+            const names = listProfiles();
+            const profiles = names.map(name => ({ name, meta: getProfileMetadata(name) }));
+            res.json({ profiles, active: getActiveProfile() });
+        } catch (e) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    app.get('/api/profiles/active', (req, res) => {
+        res.json({ active: getActiveProfile() });
+    });
+
+    app.post('/api/profiles/swap', (req, res) => {
+        const { targetProfile } = req.body || {};
+        if (!targetProfile) return res.status(400).json({ error: 'targetProfile required' });
+        swapProfile(targetProfile)
+            .then(result => res.json(result))
+            .catch(e => {
+                const status = e.message.includes('already in progress') ? 409
+                    : e.message.includes('not found') ? 404 : 500;
+                res.status(status).json({ error: e.message });
+            });
+    });
+
+    // Auto-create default profile from current IDE account (onboarding — only when 0 profiles exist)
+    app.post('/api/profiles/auto-onboard', (req, res) => {
+        const active = getActiveProfile();
+        const existing = listProfiles();
+        // Run onboard when: no profiles exist OR we're in "adding" state (activeProfile=null but profiles exist)
+        if (active && existing.length > 0) return res.json({ skipped: true, message: 'Profile already active', active });
+
+        const inst = getFirstActiveInstance();
+        if (!inst) return res.status(400).json({ error: 'IDE is not running. Open Antigravity IDE and login first.' });
+
+        Promise.all([
+            callApi('GetSubscriptionStatus', {}, inst).catch(() => null),
+            callApi('GetUserStatus', {}, inst).catch(() => null),
+        ]).then(([subStatus, userStatus]) => {
+            const email = subStatus?.user?.email || userStatus?.userStatus?.email;
+            if (!email) return res.status(400).json({ error: 'Could not detect IDE account. Make sure you are logged in.' });
+
+            const userName = subStatus?.user?.name || userStatus?.userStatus?.name;
+            const tierName = subStatus?.user?.userTier?.name || userStatus?.userStatus?.userTier?.name;
+            const planName = subStatus?.user?.planStatus?.planInfo?.planName || userStatus?.userStatus?.planStatus?.planInfo?.planName;
+            const autoName = email.split('@')[0].replace(/[^a-zA-Z0-9_-]/g, '-').substring(0, 30) || 'default';
+            const metadata = { userName: userName || null, email, tier: tierName || null, plan: planName || null, savedAt: new Date().toISOString() };
+            const result = createProfile(autoName, metadata);
+            res.json({ ...result, autoName });
+        }).catch(e => {
+            res.status(400).json({ error: e.message });
+        });
+    });
+
+    app.post('/api/profiles/create', (req, res) => {
+        const { name, force } = req.body || {};
+        if (!name) return res.status(400).json({ error: 'name required' });
+
+        // Try to fetch current user info from IDE for profile metadata
+        const inst = getFirstActiveInstance();
+        const metaPromise = inst
+            ? Promise.all([
+                callApi('GetSubscriptionStatus', {}, inst).catch(() => null),
+                callApi('GetUserStatus', {}, inst).catch(() => null),
+            ]).then(([subStatus, userStatus]) => ({
+                userName: subStatus?.user?.name || userStatus?.userStatus?.name || null,
+                email: subStatus?.user?.email || userStatus?.userStatus?.email || null,
+                tier: subStatus?.user?.userTier?.name || userStatus?.userStatus?.userTier?.name || null,
+                plan: subStatus?.user?.planStatus?.planInfo?.planName || userStatus?.userStatus?.planStatus?.planInfo?.planName || null,
+                savedAt: new Date().toISOString(),
+            })).catch(() => null)
+            : Promise.resolve(null);
+
+        metaPromise.then(metadata => {
+            const result = createProfile(name, metadata, { force: !!force });
+            res.json(result);
+        }).catch(e => {
+            const status = e.message.includes('already saved as profile') ? 409 : 400;
+            res.status(status).json({ error: e.message });
+        });
+    });
+
+    app.delete('/api/profiles/:name', (req, res) => {
+        try {
+            res.json(deleteProfile(req.params.name));
+        } catch (e) {
+            res.status(400).json({ error: e.message });
+        }
+    });
+
+    // Start "Add New Account" flow — saves current, launches fresh IDE for new login
+    app.post('/api/profiles/add-account', (req, res) => {
+        startAddAccount()
+            .then(result => res.json(result))
+            .catch(e => res.status(500).json({ error: e.message }));
+    });
+
+    // Cancel add account — restore previous profile
+    app.post('/api/profiles/cancel-add', (req, res) => {
+        const { previousProfile } = req.body || {};
+        if (!previousProfile) return res.status(400).json({ error: 'previousProfile required' });
+        cancelAddAccount(previousProfile)
+            .then(result => res.json(result))
+            .catch(e => res.status(500).json({ error: e.message }));
+    });
 
     // --- Settings ---
     app.get('/api/settings', (req, res) => {
@@ -129,6 +320,8 @@ function setupRoutes(app) {
         autoAccept: z.boolean().optional(),
         defaultWorkspaceRoot: z.string().max(500).optional(),
         defaultModel: z.string().max(100).optional(),
+        activeProfile: z.string().max(100).nullable().optional(),
+        profilesDir: z.string().max(500).nullable().optional(),
     }).strict();
 
     app.post('/api/settings', (req, res) => {
@@ -526,23 +719,26 @@ function setupRoutes(app) {
     }
 
     // Git status: list changed files with stats
-    app.get('/api/workspaces/:name/git/status', (req, res) => {
-        const { execSync } = require('child_process');
+    app.get('/api/workspaces/:name/git/status', async (req, res) => {
         const inst = getInstanceByName(decodeURIComponent(req.params.name));
         if (!inst) return res.status(400).json({ error: 'Unknown workspace' });
         const cwd = uriToFsPath(inst.workspaceFolderUri);
         if (!cwd) return res.status(400).json({ error: 'No workspace folder' });
 
         try {
-            try { execSync('git rev-parse --is-inside-work-tree', { cwd, encoding: 'utf-8' }); }
-            catch { return res.json({ files: [], error: 'Not a git repository' }); }
+            // Check if it's a git repository
+            try {
+                await execGitSafe(['rev-parse', '--is-inside-work-tree'], cwd);
+            } catch {
+                return res.json({ files: [], error: 'Not a git repository' });
+            }
 
-            const porcelain = execSync('git status --porcelain', { cwd, encoding: 'utf-8', maxBuffer: 5 * 1024 * 1024 }).trim();
+            const porcelain = (await execGitSafe(['status', '--porcelain'], cwd)).trim();
             if (!porcelain) return res.json({ files: [] });
 
             let numstatMap = {};
             try {
-                const numstat = execSync('git diff --numstat', { cwd, encoding: 'utf-8', maxBuffer: 5 * 1024 * 1024 }).trim();
+                const numstat = (await execGitSafe(['diff', '--numstat'], cwd)).trim();
                 numstat.split('\n').forEach(line => {
                     const [add, del, file] = line.split('\t');
                     if (file) numstatMap[file] = { additions: parseInt(add) || 0, deletions: parseInt(del) || 0 };
@@ -562,7 +758,12 @@ function setupRoutes(app) {
                 };
             });
             res.json({ files });
-        } catch (e) { res.status(500).json({ error: e.message }); }
+        } catch (e) {
+            if (e.message === 'OUTPUT_LIMIT_EXCEEDED') {
+                return res.status(413).json({ error: 'Output too large' });
+            }
+            res.status(500).json({ error: e.message });
+        }
     });
 
     // Git diff: unified diff (all files or specific file)
@@ -702,11 +903,25 @@ function setupRoutes(app) {
         }
 
         try {
-            const fullPath = path.resolve(cwd, subpath);
-            const normalizedCwd = path.resolve(cwd);
+            // Resolve symlinks to prevent symlink traversal attacks
+            let realCwd, realPath;
+            try {
+                realCwd = fs.realpathSync(cwd);
+                realPath = fs.realpathSync(path.resolve(cwd, subpath));
+            } catch (e) {
+                if (e.code === 'ENOENT') {
+                    return res.status(404).json({ error: 'Path not found' });
+                }
+                return res.status(403).json({ error: 'Access denied: invalid path' });
+            }
+
+            // Verify resolved path is within workspace
             const isInside = process.platform === 'win32'
-                ? fullPath.toLowerCase().startsWith(normalizedCwd.toLowerCase())
-                : fullPath.startsWith(normalizedCwd);
+                ? realPath.toLowerCase() === realCwd.toLowerCase() ||
+                  realPath.toLowerCase().startsWith(realCwd.toLowerCase() + path.sep)
+                : realPath === realCwd ||
+                  realPath.startsWith(realCwd + path.sep);
+            
             if (!isInside) {
                 return res.status(403).json({ error: 'Access denied: path outside workspace' });
             }
@@ -714,7 +929,7 @@ function setupRoutes(app) {
             // Hidden dirs to skip (always)
             const SKIP_DIRS = new Set(['node_modules', '.git', '.next', 'dist', 'build', '__pycache__', '.cache']);
 
-            const dirents = fs.readdirSync(fullPath, { withFileTypes: true });
+            const dirents = fs.readdirSync(realPath, { withFileTypes: true });
             const entries = dirents
                 .filter(d => {
                     if (!showHidden && d.name.startsWith('.')) return false;
@@ -727,7 +942,7 @@ function setupRoutes(app) {
                         const ext = path.extname(d.name).toLowerCase().slice(1);
                         entry.ext = ext || '';
                         try {
-                            const stat = fs.statSync(path.join(fullPath, d.name));
+                            const stat = fs.statSync(path.join(realPath, d.name));
                             entry.size = stat.size;
                         } catch { entry.size = 0; }
                     }
@@ -748,7 +963,9 @@ function setupRoutes(app) {
     // Available models for cascade
     app.get('/api/models', async (req, res) => {
         try {
-            const data = await callApi('GetCascadeModelConfigData', {}, resolveInst(req));
+            const inst = resolveInst(req);
+            if (!inst) return res.status(503).json({ error: 'IDE not connected' });
+            const data = await callApi('GetCascadeModelConfigData', {}, inst);
             const models = (data.clientModelConfigs || []).map(m => ({
                 label: m.label,
                 modelId: m.modelOrAlias?.model || m.modelOrAlias?.alias || '',
@@ -1066,6 +1283,7 @@ function setupRoutes(app) {
     app.get('/api/user/profile', async (req, res) => {
         try {
             const inst = resolveInst(req);
+            if (!inst) return res.status(503).json({ error: 'IDE not connected' });
             const [status, profile] = await Promise.all([
                 callApi('GetUserStatus', {}, inst),
                 callApi('GetProfileData', {}, inst)
@@ -1102,10 +1320,42 @@ function setupRoutes(app) {
     });
 
     // === Generic LS Proxy — call any method ===
+    // Security: Method whitelist to prevent arbitrary LS method invocation
+    const ALLOWED_LS_METHODS = new Set([
+        'GetCascadeModelConfigData',
+        'GetAllCascadeTrajectories',
+        'GetCascadeTrajectory',
+        'GetCascadeTrajectorySteps',
+        'GetCascadeTrajectoryGeneratorMetadata',
+        'HandleCascadeUserInteraction',
+        'CancelCascadeInvocation',
+        'DeleteCascadeTrajectory',
+        'GetUserStatus',
+        'GetProfileData',
+        'GetWorkspaceFolders',
+        'GetSettings',
+        'UpdateSettings',
+        'GetAvailableCascadePlugins',
+        'InstallCascadePlugin',
+        'UninstallCascadePlugin',
+        'StartCascadeInvocation',
+        'SendCascadeMessage',
+    ]);
+    
     app.post('/api/ls/:method', async (req, res) => {
         try {
+            const method = req.params.method;
+            
+            // Validate method against whitelist
+            if (!ALLOWED_LS_METHODS.has(method)) {
+                return res.status(403).json({ 
+                    error: 'Method not allowed',
+                    hint: 'This LS method is not in the allowed list for security reasons'
+                });
+            }
+            
             const inst = resolveInst(req);
-            const result = await callApi(req.params.method, req.body || {}, inst);
+            const result = await callApi(method, req.body || {}, inst);
             res.json(result);
         } catch (e) { res.status(500).json({ error: e.message }); }
     });

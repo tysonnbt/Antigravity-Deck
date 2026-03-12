@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { API_BASE } from '@/lib/config';
 import { authHeaders } from '@/lib/auth';
+import { wsService } from '@/lib/ws-service';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -87,7 +88,6 @@ export function AgentBridgeView() {
     const [error, setError] = useState<string | null>(null);
     const [settingsLoaded, setSettingsLoaded] = useState(false);
     const bottomRef = useRef<HTMLDivElement>(null);
-    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // Load persistent settings from backend
     const loadSettings = useCallback(async () => {
@@ -111,9 +111,14 @@ export function AgentBridgeView() {
 
     useEffect(() => {
         loadSettings();
-        fetchStatus();
-        pollRef.current = setInterval(fetchStatus, 3000);
-        return () => { if (pollRef.current) clearInterval(pollRef.current); };
+        fetchStatus(); // initial fetch only — subsequent updates via WebSocket
+
+        // Subscribe to real-time bridge status updates via existing WS
+        if (!wsService) return;
+        const off = wsService.on('bridge_status', (data) => {
+            setStatus(data as unknown as BridgeStatus);
+        });
+        return off;
     }, [loadSettings, fetchStatus]);
 
     useEffect(() => {

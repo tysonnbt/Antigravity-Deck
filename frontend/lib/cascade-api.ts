@@ -178,6 +178,16 @@ export async function killHeadlessWorkspace(pid: string): Promise<{ killed: bool
     return res.json();
 }
 
+// Kill all Antigravity/Windsurf IDE processes
+export async function killIde(): Promise<{ killed: boolean; platform: string; instancesCleared: number }> {
+    const res = await fetch(`${API_BASE}/api/kill-ide`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    });
+    if (!res.ok) throw new Error(`Kill IDE failed: ${res.status}`);
+    return res.json();
+}
+
 // List folders in default workspace root
 export async function getWorkspaceFolders(): Promise<{ root: string; folders: WorkspaceFolder[] }> {
     const res = await fetch(`${API_BASE}/api/workspaces/folders`, { headers: authHeaders() });
@@ -361,6 +371,82 @@ export async function loadOlderSteps(
         { headers: authHeaders() }
     );
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+}
+
+// === Profile Swap ===
+export interface ProfileMeta {
+    userName?: string | null;
+    email?: string | null;
+    tier?: string | null;
+    plan?: string | null;
+    savedAt?: string | null;
+}
+
+export interface ProfileEntry {
+    name: string;
+    meta: ProfileMeta | null;
+}
+
+export interface ProfileListResponse {
+    profiles: ProfileEntry[];
+    active: string | null;
+}
+
+export async function getProfiles(): Promise<ProfileListResponse> {
+    const res = await fetch(`${API_BASE}/api/profiles`, { headers: authHeaders() });
+    if (!res.ok) throw new Error(`Profiles failed: ${res.status}`);
+    return res.json();
+}
+
+export async function swapProfile(target: string): Promise<{ success: boolean; previousProfile: string; activeProfile: string; relaunched: boolean }> {
+    const res = await fetch(`${API_BASE}/api/profiles/swap`, {
+        method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetProfile: target }),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `Swap failed: ${res.status}`); }
+    return res.json();
+}
+
+export async function autoOnboardProfile(): Promise<{ created?: boolean; skipped?: boolean; message: string; autoName?: string; active?: string }> {
+    const res = await fetch(`${API_BASE}/api/profiles/auto-onboard`, {
+        method: 'POST', headers: authHeaders(),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `Onboard failed: ${res.status}`); }
+    return res.json();
+}
+
+export async function createProfileEntry(name: string, force = false): Promise<{ created: boolean; copied: number; message: string; warning?: string }> {
+    const res = await fetch(`${API_BASE}/api/profiles/create`, {
+        method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, force }),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `Create failed: ${res.status}`); }
+    return res.json();
+}
+
+export async function deleteProfileEntry(name: string): Promise<{ deleted: boolean; message: string }> {
+    const res = await fetch(`${API_BASE}/api/profiles/${encodeURIComponent(name)}`, {
+        method: 'DELETE', headers: authHeaders(),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `Delete failed: ${res.status}`); }
+    return res.json();
+}
+
+export async function startAddAccountFlow(): Promise<{ success: boolean; previousProfile: string; relaunched: boolean; message: string }> {
+    const res = await fetch(`${API_BASE}/api/profiles/add-account`, {
+        method: 'POST', headers: authHeaders(),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `Start add failed: ${res.status}`); }
+    return res.json();
+}
+
+export async function cancelAddAccountFlow(previousProfile: string): Promise<{ success: boolean; activeProfile: string; relaunched: boolean }> {
+    const res = await fetch(`${API_BASE}/api/profiles/cancel-add`, {
+        method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ previousProfile }),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `Cancel add failed: ${res.status}`); }
     return res.json();
 }
 

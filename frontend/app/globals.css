@@ -489,6 +489,9 @@
   bottom: 0;
   z-index: 50;
   overscroll-behavior: contain;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
   animation: slide-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
@@ -538,9 +541,49 @@
   }
 }
 
-/* Safe area insets for notched devices */
+/* Safe area insets for notched/PWA devices */
 @supports (padding: env(safe-area-inset-bottom)) {
   .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .safe-area-left {
+    padding-left: env(safe-area-inset-left);
+  }
+
+  .safe-area-right {
+    padding-right: env(safe-area-inset-right);
+  }
+
+  .safe-area-x {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* PWA safe area — ONLY in standalone mode (browser already handles safe areas) */
+@media (display-mode: standalone) {
+  /* Fixed desktop sidebar */
+  [data-slot="sidebar-container"] {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    left: env(safe-area-inset-left) !important;
+  }
+
+  /* Mobile Sheet sidebar */
+  [data-sidebar][data-mobile="true"] {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+  }
+
+  /* Main content column — shift entire area below notch, above home indicator */
+  .pwa-main-content {
+    padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
   }
 }

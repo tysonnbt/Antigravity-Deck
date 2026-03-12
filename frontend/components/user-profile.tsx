@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User, RefreshCw, Calendar, Clock, Zap } from 'lucide-react';
+import { ProfileSwitcher } from './profile-switcher';
 
 export function UserProfile() {
     const [user, setUser] = useState<any>(null);
@@ -105,6 +106,16 @@ export function AccountInfoView() {
 
     useEffect(() => { loadData(); }, [loadData]);
 
+    // Re-fetch when profile swap happens
+    useEffect(() => {
+        const handler = () => {
+            const attempts = [5000, 8000, 12000];
+            attempts.forEach(delay => setTimeout(() => loadData(), delay));
+        };
+        window.addEventListener('profile-swapped', handler);
+        return () => window.removeEventListener('profile-swapped', handler);
+    }, [loadData]);
+
     // Tick every minute for countdown
     useEffect(() => {
         const timer = setInterval(() => setNow(Date.now()), 60_000);
@@ -184,6 +195,9 @@ export function AccountInfoView() {
                         )}
                     </div>
                 </div>
+
+                {/* Profile Swap */}
+                <ProfileSwitcher />
 
                 {/* Model Usage */}
                 <div>

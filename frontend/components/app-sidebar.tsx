@@ -124,7 +124,7 @@ export function AppSidebar({
     }, [newWsName, wsData, folders])
 
     // Fetch user profile on mount and when connection is established
-    useEffect(() => {
+    const fetchUserProfile = useCallback(() => {
         if (!detected) {
             setUserProfile(null)
             return
@@ -142,6 +142,21 @@ export function AppSidebar({
             })
             .catch(() => { })
     }, [detected])
+
+    useEffect(() => {
+        fetchUserProfile()
+    }, [fetchUserProfile])
+
+    // Re-fetch profile when profile swap happens
+    useEffect(() => {
+        const handler = () => {
+            // Retry a few times — IDE takes ~5-10s to restart
+            const attempts = [5000, 8000, 12000];
+            attempts.forEach(delay => setTimeout(() => fetchUserProfile(), delay));
+        }
+        window.addEventListener('profile-swapped', handler)
+        return () => window.removeEventListener('profile-swapped', handler)
+    }, [fetchUserProfile])
 
     const loadAll = useCallback(async () => {
         try {

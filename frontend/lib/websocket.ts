@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Step, ConversationsResponse, TrajectorySummary } from './types';
 import { extractStepContent } from './step-utils';
-import { showNotification } from './notifications';
 import { API_BASE } from './config';
 import { authHeaders } from './auth';
 import { getCascadeStatus, getWorkspaceResources } from './cascade-api';
@@ -13,6 +12,7 @@ import { wsService } from './ws-service';
 interface WSState {
     connected: boolean;  // WebSocket connection to backend
     detected: boolean;   // Windsurf Language Server detected by backend
+    swapping: boolean;   // Profile swap in progress (suppress "Not Detected" UI)
     steps: Step[];
     baseIndex: number;        // server index of steps[0]
     stepCount: number;        // total steps known to server
@@ -35,6 +35,7 @@ export function useWebSocket() {
     const [state, setState] = useState<WSState>({
         connected: false,
         detected: false,
+        swapping: false,
         steps: [] as Step[],
         baseIndex: 0,
         stepCount: 0,
@@ -108,9 +109,18 @@ export function useWebSocket() {
         });
 
         const offStatus = wsService.on('status', (data) => {
-            console.log('[WS] status:', data.detected);
-            setState(prev => ({ ...prev, detected: !!data.detected }));
+            console.log('[WS] status:', data.detected, 'swapping:', data.swapping);
+            setState(prev => ({
+                ...prev,
+                detected: !!data.detected,
+                swapping: !!data.swapping,
+            }));
             if (data.detected) loadConversationsRef.current();
+        });
+
+        const offSwapComplete = wsService.on('swap_complete', (data) => {
+            console.log('[WS] swap_complete:', data.profile);
+            // Don't clear swapping yet — wait for detected=true from detector
         });
 
         const offStepsInit = wsService.on('steps_init', (data) => {
@@ -166,12 +176,6 @@ export function useWebSocket() {
                     lastUpdate: new Date().toLocaleTimeString(),
                 };
             });
-            // Desktop notification for agent responses when tab hidden
-            const notifySteps = ((data.steps as Step[]) || []).filter((s: Step) => s.type === 'CORTEX_STEP_TYPE_NOTIFY_USER');
-            if (notifySteps.length > 0) {
-                const content = extractStepContent(notifySteps[0]) || 'Agent needs your attention';
-                showNotification('AntigravityChat', content);
-            }
         });
 
         const offStepUpdated = wsService.on('step_updated', (data) => {
@@ -207,6 +211,7 @@ export function useWebSocket() {
             offOpen();
             offClose();
             offStatus();
+            offSwapComplete();
             offStepsInit();
             offStepsNew();
             offStepUpdated();

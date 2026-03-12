@@ -1,9 +1,9 @@
 "use client"
 
 import { useEffect, useState, useCallback, useMemo } from "react"
-import { getWorkspaceResources, killHeadlessWorkspace } from "@/lib/cascade-api"
+import { getWorkspaceResources, killHeadlessWorkspace, killIde } from "@/lib/cascade-api"
 import type { ResourceSnapshot, SystemResources, WorkspaceResources, ResourceHistoryPoint, SelfStats } from "@/lib/cascade-api"
-import { Cpu, MemoryStick, Activity, Monitor, HardDrive, Server, Box, Terminal, X, AlertTriangle } from "lucide-react"
+import { Cpu, MemoryStick, Activity, Monitor, HardDrive, Server, Box, Terminal, X, AlertTriangle, Power } from "lucide-react"
 import {
     AlertDialog,
     AlertDialogAction,
@@ -199,6 +199,8 @@ function getGradientColor(value: number): string {
 export function ResourceMonitorView() {
     const [snapshot, setSnapshot] = useState<ResourceSnapshot | null>(null)
     const [loading, setLoading] = useState(true)
+    const [showKillIde, setShowKillIde] = useState(false)
+    const [killingIde, setKillingIde] = useState(false)
 
 
     const fetchData = useCallback(async () => {
@@ -278,6 +280,18 @@ export function ResourceMonitorView() {
                         <p className="text-xs text-muted-foreground">
                             System: {system?.cpuCores || 0} cores • {system?.memTotalMB ? `${(system.memTotalMB / 1024).toFixed(1)} GB RAM` : '—'}
                         </p>
+                    </div>
+                    <div className="ml-auto">
+                        <button
+                            onClick={() => setShowKillIde(true)}
+                            disabled={killingIde || workspaceList.length === 0}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 hover:border-red-500/40 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                            {killingIde
+                                ? <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                : <Power className="w-3.5 h-3.5" />}
+                            Kill Antigravity
+                        </button>
                     </div>
                 </div>
 
@@ -467,6 +481,48 @@ export function ResourceMonitorView() {
                     Sampling every 5s • {historyData.length} / 60 history points
                 </div>
             </div>
+
+            {/* Kill IDE Confirmation Dialog */}
+            <AlertDialog open={showKillIde} onOpenChange={setShowKillIde}>
+                <AlertDialogContent className="sm:max-w-[420px]">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-red-400" />
+                            Kill Antigravity IDE
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will <span className="font-medium text-red-400">terminate all Antigravity/Windsurf IDE processes</span> on this machine.
+                            All active workspaces ({workspaceList.length}) and any running cascades will be stopped.
+                            <br /><br />
+                            You can relaunch the IDE from the welcome screen.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel className="text-xs">Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={async () => {
+                                setShowKillIde(false)
+                                setKillingIde(true)
+                                try {
+                                    await killIde()
+                                    // Give processes time to die, then refresh
+                                    setTimeout(() => {
+                                        fetchData()
+                                        setKillingIde(false)
+                                    }, 2000)
+                                } catch (e) {
+                                    console.error('Kill IDE failed:', e)
+                                    setKillingIde(false)
+                                }
+                            }}
+                            className="bg-red-500 hover:bg-red-600 text-white text-xs"
+                        >
+                            <Power className="h-3.5 w-3.5 mr-1" />
+                            Kill All Processes
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     )
 }

@@ -7,7 +7,9 @@ import { extractStepContent, exportToMarkdown } from '@/lib/step-utils';
 import { Timeline } from '@/components/timeline';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { MoreVertical, BarChart2, Download, Bell, BellOff, FolderSync, Star, WifiOff, FolderOpen } from 'lucide-react';
+import { MoreVertical, BarChart2, Download, Bell, BellOff, FolderSync, Star, WifiOff, FolderOpen, Rocket, Loader2, Check, Smartphone, Share2, X } from 'lucide-react';
+import { API_BASE } from '@/lib/config';
+import { authHeaders } from '@/lib/auth';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +29,8 @@ import { AgentBridgeView } from '@/components/agent-bridge-view';
 import { SourceControlView } from '@/components/source-control-view';
 import { ResourceMonitorView } from '@/components/resource-monitor-view';
 import { useToast } from '@/hooks/use-toast';
+import { notificationService } from '@/lib/notifications';
+import { usePwaInstall } from '@/hooks/use-pwa-install';
 
 // Lazy-load components that are hidden by default
 const AnalyticsPanel = dynamic(() => import('@/components/analytics-panel').then(m => ({ default: m.AnalyticsPanel })), { ssr: false });
@@ -42,8 +46,51 @@ function getStoredValue<T>(key: string, fallback: T): T {
   } catch { return fallback; }
 }
 
+/** Button to launch the Antigravity IDE from the welcome screen. */
+function LaunchIdeButton() {
+  const [state, setState] = useState<'idle' | 'launching' | 'launched'>('idle');
+
+  const handleLaunch = useCallback(async () => {
+    if (state !== 'idle') return;
+    setState('launching');
+    try {
+      await fetch(`${API_BASE}/api/launch-ide`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      });
+      setState('launched');
+      // Reset after 15s cooldown
+      setTimeout(() => setState('idle'), 15000);
+    } catch {
+      setState('idle');
+    }
+  }, [state]);
+
+  return (
+    <button
+      onClick={handleLaunch}
+      disabled={state !== 'idle'}
+      className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+        state === 'launched'
+          ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 cursor-default'
+          : state === 'launching'
+            ? 'bg-primary/10 text-primary border border-primary/30 cursor-wait'
+            : 'bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 hover:border-primary/50 cursor-pointer'
+      }`}
+    >
+      {state === 'launched' ? (
+        <><Check className="w-4 h-4" /> Launched — waiting for detection...</>
+      ) : state === 'launching' ? (
+        <><Loader2 className="w-4 h-4 animate-spin" /> Launching...</>
+      ) : (
+        <><Rocket className="w-4 h-4" /> Launch Antigravity</>
+      )}
+    </button>
+  );
+}
+
 export default function Home() {
-  const { connected, detected, steps, baseIndex, stepCount, loadingOlder, conversations, currentConvId, cascadeStatus, conversationsVersion, stepContentVersion, workspaceResources, selectConversation, lastUpdate, loadOlder } = useWebSocket();
+  const { connected, detected, swapping, steps, baseIndex, stepCount, loadingOlder, conversations, currentConvId, cascadeStatus, conversationsVersion, stepContentVersion, workspaceResources, selectConversation, lastUpdate, loadOlder } = useWebSocket();
   const { toast } = useToast();
 
   const [showAnalytics, setShowAnalytics] = useState(() => getStoredValue('antigravity-show-analytics', false));
@@ -54,8 +101,15 @@ export default function Home() {
     }
     return false;
   });
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+
+  // === PWA Notification service init ===
+  useEffect(() => {
+    notificationService?.init();
+  }, []);
+
+  // === PWA Install ===
+  const pwaInstall = usePwaInstall();
 
   // Persist showTimeline to localStorage
   const handleSetShowTimeline = useCallback((val: boolean) => {
@@ -254,11 +308,8 @@ export default function Home() {
     setWsVersion(v => v + 1);
   }, []);
 
-  // ChatView's "New Chat" button — go back to conversation list
-  const handleNewConversation = useCallback(() => {
-    selectConversation(null);
-    setNewChatMode(false);
-  }, [selectConversation]);
+  // ChatView's "New Chat" button — enter new chat mode directly
+  // Reuses handleNewChat logic: clear conversation + enable newChatMode
 
 
 
@@ -269,16 +320,6 @@ export default function Home() {
       toast({ variant: "success", title: "Conversation exported" });
     }
   }, [steps, currentConvId, toast]);
-
-  // Notifications
-  const handleToggleNotifications = useCallback(() => {
-    setNotificationsEnabled(prev => {
-      if (!prev && 'Notification' in window && Notification.permission !== 'granted') {
-        Notification.requestPermission();
-      }
-      return !prev;
-    });
-  }, []);
 
   // Copy conversation ID
   const handleCopyId = useCallback((e: React.MouseEvent, id: string) => {
@@ -392,7 +433,7 @@ export default function Home() {
         />
 
         {/* Main content */}
-        <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
+        <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden pwa-main-content">
           {/* Topbar */}
           <header className="flex items-center justify-between px-2 sm:px-4 h-11 bg-background border-b border-border flex-shrink-0">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -491,6 +532,24 @@ export default function Home() {
           {/* === Main panel content === */}
           {showWelcome && !detected && (
             <div className="flex-1 flex items-center justify-center">
+              {swapping ? (
+                <div className="text-center space-y-4 max-w-sm">
+                  <div className="flex items-center justify-center gap-3">
+                    <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
+                    <h2 className="text-xl font-semibold text-foreground/80">Switching Account...</h2>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Closing IDE, swapping profile, and relaunching. This takes ~10 seconds.
+                  </p>
+                  <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground/70">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400/75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400" />
+                    </span>
+                    <span>Waiting for Antigravity to restart...</span>
+                  </div>
+                </div>
+              ) : (
               <div className="text-center space-y-5 max-w-sm">
                 <div className="flex items-center justify-center gap-3">
                   <WifiOff className="w-8 h-8 text-muted-foreground/50" />
@@ -510,6 +569,7 @@ export default function Home() {
                     </li>
                   ))}
                 </ol>
+                <LaunchIdeButton />
                 <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground/70">
                   <span className="relative flex h-2 w-2">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400/75" />
@@ -518,6 +578,7 @@ export default function Home() {
                   <span>Detecting Antigravity Language Server...</span>
                 </div>
               </div>
+              )}
             </div>
           )}
 
@@ -600,14 +661,13 @@ export default function Home() {
                 wsVersion={wsVersion}
                 cascadeStatus={cascadeStatus ?? undefined}
                 onCascadeCreated={handleCascadeCreated}
-                onNewConversation={handleNewConversation}
+                onNewConversation={handleNewChat}
                 showTimeline={showTimeline}
                 onSetShowTimeline={handleSetShowTimeline}
                 showAnalytics={showAnalytics}
                 onToggleAnalytics={() => setShowAnalytics(v => !v)}
                 onExport={handleExport}
-                notificationsEnabled={notificationsEnabled}
-                onToggleNotifications={handleToggleNotifications}
+                onShowSettings={handleShowSettings}
               />
 
               {/* Step Detail Sheet */}
@@ -624,8 +684,33 @@ export default function Home() {
             </>
           )}
 
+
+          {/* PWA Install Banner */}
+          {pwaInstall.showBanner && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-blue-500/10 border-t border-blue-500/20 flex-shrink-0">
+              <Smartphone className="w-4 h-4 text-blue-400 flex-shrink-0" />
+              <span className="text-xs text-blue-300 flex-1">
+                {pwaInstall.isIOS
+                  ? <>Tap <Share2 className="w-3 h-3 inline" /> then &quot;Add to Home Screen&quot;</>
+                  : 'Install app for the best experience'
+                }
+              </span>
+              {pwaInstall.canInstall && (
+                <button
+                  onClick={pwaInstall.install}
+                  className="text-[10px] font-medium px-2.5 py-1 rounded-md bg-blue-500 text-white hover:bg-blue-400 transition-colors flex-shrink-0"
+                >
+                  Install
+                </button>
+              )}
+              <button onClick={pwaInstall.dismiss} className="text-blue-400/60 hover:text-blue-300 transition-colors flex-shrink-0">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           {/* Footer */}
-          <footer className="flex items-center justify-between px-2 sm:px-4 h-8 bg-background border-t border-border flex-shrink-0 text-[10px] text-muted-foreground/60 safe-area-bottom">
+          <footer className="flex items-center justify-between px-2 sm:px-4 h-8 bg-background border-t border-border flex-shrink-0 text-[10px] text-muted-foreground/60">
             <div className="flex items-center gap-2 sm:gap-3">
               <span><FolderSync className="w-3 h-3 inline-block mr-1" />Antigravity Deck v3</span>
               <span className="w-px h-3 bg-border hidden sm:block" />
