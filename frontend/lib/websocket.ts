@@ -219,13 +219,6 @@ export function useWebSocket() {
                                data.status !== 'CASCADE_RUN_STATUS_WAITING_FOR_USER';
                 if (isDone && prev.cascadeStatus && prev.cascadeStatus !== data.status) {
                     newState.conversationsVersion = prev.conversationsVersion + 1;
-                    // Single delayed re-sync of step content after LS finalizes (~5s)
-                    const convId = prev.currentConvId;
-                    if (convId) {
-                        setTimeout(() => {
-                            wsService?.send({ type: 'set_conversation', conversationId: convId });
-                        }, 5000);
-                    }
                 }
                 return newState;
             });
