@@ -125,14 +125,34 @@ export function useWebSocket() {
         });
 
         const offStepsInit = wsService.on('steps_init', (data) => {
-            console.log('[WS] steps_init:', (data.steps as Step[])?.length, 'for', (data.conversationId as string)?.substring(0, 8), 'baseIndex:', data.baseIndex, 'stepCount:', data.stepCount);
             setState(prev => {
                 if (data.conversationId && data.conversationId !== prev.currentConvId) return prev;
+                const incoming = (data.steps as Step[]) || [];
+                const incomingBase = (data.baseIndex as number) ?? 0;
+                const incomingCount = (data.stepCount as number) ?? incoming.length;
+
+                // If same base and length, merge — only update steps that actually changed
+                // This prevents full re-render when re-syncing after cascade completion
+                if (prev.baseIndex === incomingBase && prev.steps.length === incoming.length) {
+                    let anyChanged = false;
+                    const merged = prev.steps.map((oldStep, i) => {
+                        // Compare by stringified content (only for tail steps to save CPU)
+                        if (i >= incoming.length - 5 && JSON.stringify(oldStep) !== JSON.stringify(incoming[i])) {
+                            anyChanged = true;
+                            return incoming[i];
+                        }
+                        return oldStep;
+                    });
+                    if (!anyChanged) return prev; // Nothing changed — skip re-render entirely
+                    return { ...prev, steps: merged, stepCount: incomingCount, lastUpdate: new Date().toLocaleTimeString() };
+                }
+
+                // Different base/length — full replacement (initial load, conversation switch)
                 return {
                     ...prev,
-                    steps: (data.steps as Step[]) || [],
-                    baseIndex: (data.baseIndex as number) ?? 0,
-                    stepCount: (data.stepCount as number) ?? ((data.steps as Step[])?.length || 0),
+                    steps: incoming,
+                    baseIndex: incomingBase,
+                    stepCount: incomingCount,
                     lastUpdate: new Date().toLocaleTimeString(),
                 };
             });
