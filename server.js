@@ -171,6 +171,12 @@ app.use((req, res, next) => {
   next();
 });
 
+// Disable browser caching for API routes — always return 200 with fresh data
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
+
 // Public route — must be registered BEFORE auth middleware
 app.get('/api/ws-url', (req, res) => {
   res.json({ wsPort: Number(process.env.PORT || 3500) });
