@@ -140,24 +140,27 @@ async function pollNow() {
                     info.status !== 'CASCADE_RUN_STATUS_WAITING_FOR_USER';
                 if (wasActive && isNowDone) {
                     triggerBridgeRelay(cascadeId);
-                    // Final poll: fetch complete step content before stopping
-                    await pollConversation(cascadeId, info);
                     // Notify frontend to refresh conversation list (summary/title may have changed)
                     _broadcastAll({ type: 'conversations_updated' });
 
-                    // Post-completion polling: LS takes time to finalize content (summary, title, last steps).
-                    // Schedule 5 extra polls at 1s intervals to catch late updates.
-                    // IMPORTANT: only pass { inst } — omit stepCount so pollConversation
-                    // queries FRESH stepCount from LS each time.
-                    const postPollInst = info.inst || null;
-                    for (let pp = 0; pp < 5; pp++) {
+                    // Invalidate step cache: LS takes time to finalize step content after cascade completes.
+                    // Delete cache so next ensureCached (line ~170 below, or frontend set_conversation)
+                    // re-fetches ALL steps fresh from LS with complete finalized content.
+                    const postInst = info.inst || null;
+                    delete stepCache[cascadeId];
+                    console.log(`[post-done] ${cascadeId.substring(0, 8)} cache invalidated`);
+
+                    // Schedule backup re-fetch at +2s and +5s in case LS hasn't finalized yet
+                    [2000, 5000].forEach(delay => {
                         setTimeout(async () => {
                             try {
-                                await pollConversation(cascadeId, postPollInst ? { inst: postPollInst } : null);
+                                delete stepCache[cascadeId];
+                                await ensureCached(cascadeId, postInst);
                                 _broadcastAll({ type: 'conversations_updated' });
-                            } catch { /* ignore — best effort */ }
-                        }, (pp + 1) * 1000);
-                    }
+                                console.log(`[post-done] ${cascadeId.substring(0, 8)} re-fetched at +${delay}ms`);
+                            } catch (e) { console.log(`[post-done] re-fetch error: ${e.message}`); }
+                        }, delay);
+                    });
                 }
 
                 // Fast-cascade relay: first time seeing this cascade and it's already IDLE/DONE
