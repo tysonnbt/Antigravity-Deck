@@ -84,7 +84,9 @@ async function detectPorts(pid) {
     return new Promise((resolve) => {
         let cmd;
         if (platform === 'win32') {
-            cmd = `netstat -ano | findstr "${pid}" | findstr "LISTENING"`;
+            // Use PowerShell Get-NetTCPConnection — locale-independent (no reliance on "LISTENING" text)
+            const ps = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+            cmd = `"${ps}" -NoProfile -Command "Get-NetTCPConnection -OwningProcess ${pid} -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty LocalPort"`;
         } else {
             cmd = `lsof -iTCP -sTCP:LISTEN -P -n -p ${pid} 2>/dev/null`;
         }
@@ -95,8 +97,9 @@ async function detectPorts(pid) {
             stdout.split('\n').forEach(line => {
                 if (!line.trim()) return;
                 if (platform === 'win32') {
-                    const m = line.match(/:(\d+)\s+.*LISTENING/);
-                    if (m) ports.push(parseInt(m[1]));
+                    // Each line is just a port number from Get-NetTCPConnection
+                    const port = parseInt(line.trim(), 10);
+                    if (!isNaN(port)) ports.push(port);
                 } else {
                     const cols = line.trim().split(/\s+/);
                     if (cols.length >= 2 && cols[1] === String(pid)) {
