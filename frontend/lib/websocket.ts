@@ -201,6 +201,17 @@ export function useWebSocket() {
                                data.status !== 'CASCADE_RUN_STATUS_WAITING_FOR_USER';
                 if (isDone && prev.cascadeStatus && prev.cascadeStatus !== data.status) {
                     newState.conversationsVersion = prev.conversationsVersion + 1;
+                    // Re-sync step content: LS takes time to finalize last step content.
+                    // Re-send set_conversation after delays to get fresh steps_init with complete data.
+                    const convId = prev.currentConvId;
+                    if (convId && wsService) {
+                        [1000, 3000, 5000].forEach(delay => {
+                            setTimeout(() => {
+                                console.log(`[WS] post-completion re-sync ${delay}ms for ${convId.substring(0, 8)}`);
+                                wsService?.send({ type: 'set_conversation', conversationId: convId });
+                            }, delay);
+                        });
+                    }
                 }
                 return newState;
             });
