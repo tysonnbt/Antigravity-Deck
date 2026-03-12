@@ -11,7 +11,10 @@
     "tunnel:be": "cloudflared tunnel --url http://localhost:3500",
     "tunnel:fe": "cloudflared tunnel --url http://localhost:3000",
     "tunnel": "concurrently -n TUN-BE,TUN-FE -c green,yellow \"npm run tunnel:be\" \"npm run tunnel:fe\"",
-    "online": "node start-tunnel.js"
+    "online": "node start-tunnel.js",
+    "test": "node --test tests/*.test.js",
+    "test:unit": "node --test tests/config-persistence.test.js",
+    "test:integration": "node --test tests/settings-integration.test.js"
   },
   "dependencies": {
     "discord.js": "^14.25.1",
