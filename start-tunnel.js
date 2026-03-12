@@ -316,7 +316,29 @@ async function runTunnel() {
         tunFe.stderr?.on('data', handler);
     });
 
-    const qrUrl = feUrl ? `${feUrl}?key=${authKey}` : null;
+    // Generate OTP for QR code (AUTH_KEY never appears in URLs)
+    let qrUrl = null;
+    if (feUrl) {
+        try {
+            const http = require('http');
+            const otpResp = await new Promise((resolve, reject) => {
+                const req = http.request(`http://localhost:${BE_PORT}/api/auth/create-otp`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, timeout: 5000,
+                }, (res) => {
+                    let body = '';
+                    res.on('data', c => body += c);
+                    res.on('end', () => { try { resolve(JSON.parse(body)); } catch { reject(new Error('Invalid JSON')); } });
+                });
+                req.on('error', reject);
+                req.end();
+            });
+            qrUrl = `${feUrl}?otp=${otpResp.otp}`;
+            log('*', `✅ OTP generated (expires in ${otpResp.expiresIn}s)`);
+        } catch (e) {
+            log('*', `⚠️  OTP generation failed: ${e.message} — falling back to key URL`);
+            qrUrl = `${feUrl}?key=${authKey}`;
+        }
+    }
     if (QUIET) process.stdout.write('\r\x1b[K');
 
     if (feUrl) {
@@ -329,7 +351,7 @@ async function runTunnel() {
         console.log(`  Local:       http://localhost:${FE_PORT}`);
         console.log('='.repeat(60));
 
-        console.log('\n\x1b[1m  📱 Scan this QR code to open (auto-login):\x1b[0m\n');
+        console.log('\n\x1b[1m  📱 Scan this QR code to open (auto-login, one-time use):\x1b[0m\n');
         try {
             const qrcode = require('qrcode-terminal');
             qrcode.generate(qrUrl, { small: true }, (qr) => {
@@ -351,7 +373,7 @@ async function runTunnel() {
         `Frontend: ${feUrl || 'FAILED'}`,
         `Backend:  ${beUrl || 'FAILED'}`,
         `Auth Key: ${authKey}`,
-        `QR URL:   ${qrUrl || 'N/A'}`,
+        `QR URL:   ${qrUrl || 'N/A'} (one-time use, expires 5min)`,
         `Local FE: http://localhost:${FE_PORT}`,
         `Local BE: http://localhost:${BE_PORT}`,
         `Started:  ${new Date().toISOString()}`,

@@ -6,7 +6,7 @@
 'use client';
 
 import { getWsUrl } from './config';
-import { authWsUrl } from './auth';
+import { getAuthKey } from './auth';
 
 type WSListener = (data: Record<string, unknown>) => void;
 
@@ -46,14 +46,19 @@ class WebSocketService {
         }
         try {
             const wsBase = await getWsUrl();
-            const ws = new WebSocket(authWsUrl(wsBase));
+            // Connect WITHOUT auth key in URL — auth via message instead
+            const ws = new WebSocket(wsBase);
             this.ws = ws;
 
             ws.onopen = () => {
                 console.log('[WS-Service] connected');
                 this._connected = true;
+                // Authenticate via message (key never appears in URL/logs)
+                const key = getAuthKey();
+                if (key) {
+                    ws.send(JSON.stringify({ type: 'auth', key }));
+                }
                 // Subscribe to all events so backend sends messages for ALL conversations
-                // (needed for Live Logs which monitors all cascades)
                 ws.send(JSON.stringify({ type: 'subscribe_all' }));
                 this.emit('__ws_open', {});
             };
