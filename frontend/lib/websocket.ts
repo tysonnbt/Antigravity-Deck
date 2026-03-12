@@ -195,31 +195,26 @@ export function useWebSocket() {
             setState(prev => {
                 if (data.conversationId && data.conversationId !== prev.currentConvId) return prev;
                 const newState = { ...prev, cascadeStatus: data.status as string };
-                // When cascade completes, bump conversationsVersion to refresh sidebar
-                // (summary/title/stepCount may have changed)
                 const isDone = data.status !== 'CASCADE_RUN_STATUS_RUNNING' &&
                                data.status !== 'CASCADE_RUN_STATUS_WAITING_FOR_USER';
                 if (isDone && prev.cascadeStatus && prev.cascadeStatus !== data.status) {
                     newState.conversationsVersion = prev.conversationsVersion + 1;
-                    // Re-sync step content: LS takes time to finalize last step content.
-                    // Re-send set_conversation after delays to get fresh steps_init with complete data.
-                    const convId = prev.currentConvId;
-                    if (convId && wsService) {
-                        [1000, 3000, 5000].forEach(delay => {
-                            setTimeout(() => {
-                                console.log(`[WS] post-completion re-sync ${delay}ms for ${convId.substring(0, 8)}`);
-                                wsService?.send({ type: 'set_conversation', conversationId: convId });
-                            }, delay);
-                        });
-                    }
                 }
                 return newState;
             });
         });
 
         const offConvUpdated = wsService.on('conversations_updated', () => {
-            console.log('[WS] conversations_updated — refreshing sidebar');
-            setState(prev => ({ ...prev, conversationsVersion: prev.conversationsVersion + 1 }));
+            console.log('[WS] conversations_updated — refreshing sidebar + step content');
+            setState(prev => {
+                // Re-sync step content: re-send set_conversation to get fresh steps_init
+                // with finalized step data from backend cache
+                const convId = prev.currentConvId;
+                if (convId) {
+                    wsService?.send({ type: 'set_conversation', conversationId: convId });
+                }
+                return { ...prev, conversationsVersion: prev.conversationsVersion + 1 };
+            });
         });
 
         const offResources = wsService.on('workspace_resources', (data) => {
