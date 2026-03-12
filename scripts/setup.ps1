@@ -342,11 +342,42 @@ Write-Host ""
 Write-Host "  Press Ctrl+C to stop" -ForegroundColor DarkGray
 Write-Host ""
 
+# Cleanup function — kills node process tree + any remaining port listeners
+function Cleanup-All {
+    Write-Host ""
+    Write-Host "  Shutting down..." -ForegroundColor Yellow
+
+    # Kill the main node process tree
+    try {
+        if (-not $proc.HasExited) {
+            # taskkill /T kills the entire process tree (parent + children)
+            taskkill /PID $proc.Id /T /F 2>$null | Out-Null
+        }
+    } catch {}
+
+    # Kill anything still listening on the online ports
+    foreach ($port in @(9807, 9808)) {
+        $conns = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
+        foreach ($conn in $conns) {
+            Stop-Process -Id $conn.OwningProcess -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    # Also kill any orphaned cloudflared processes from our session
+    Get-Process -Name "cloudflared" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
+    Write-Host "  All processes stopped." -ForegroundColor Green
+    Write-Host ""
+}
+
+# Register cleanup for when script exits (Ctrl+C, terminal close, etc.)
+Register-EngineEvent PowerShell.Exiting -Action { Cleanup-All } -ErrorAction SilentlyContinue | Out-Null
+
 # Keep script alive — wait for the node process
 try {
     Wait-Process -Id $proc.Id
 }
 catch {
     # User pressed Ctrl+C
-    try { $proc.Kill() } catch {}
+    Cleanup-All
 }

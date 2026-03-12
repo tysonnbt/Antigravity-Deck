@@ -302,7 +302,33 @@ echo ""
 echo "  Press Ctrl+C to stop"
 echo ""
 
-# Keep script alive — wait for node process
-trap "kill $NODE_PID 2>/dev/null; exit 0" INT TERM
-wait $NODE_PID
+# Cleanup function — kills node process group + any remaining port listeners
+cleanup() {
+    echo ""
+    echo "  Shutting down..."
 
+    # Kill the entire process group (node + all children: backend, frontend, cloudflared)
+    kill -- -$NODE_PID 2>/dev/null || kill $NODE_PID 2>/dev/null
+
+    # Kill anything still on the online ports
+    for port in 9807 9808; do
+        if command -v lsof &>/dev/null; then
+            lsof -ti ":$port" 2>/dev/null | xargs kill -9 2>/dev/null
+        elif command -v fuser &>/dev/null; then
+            fuser -k "$port/tcp" 2>/dev/null
+        fi
+    done
+
+    # Kill orphaned cloudflared processes
+    pkill -f "cloudflared.*tunnel.*localhost" 2>/dev/null
+
+    echo "  All processes stopped."
+    echo ""
+    exit 0
+}
+
+# Register cleanup for Ctrl+C, terminal close, etc.
+trap cleanup INT TERM HUP EXIT
+
+# Keep script alive — wait for node process
+wait $NODE_PID
