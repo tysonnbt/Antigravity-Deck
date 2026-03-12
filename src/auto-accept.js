@@ -58,6 +58,18 @@ function validateFilePathInWorkspace(filePath) {
             }
         }
     }
+
+    // Fallback: include defaultWorkspaceRoot from settings
+    // (ensures validation works even before LS instances are detected)
+    const settings = getSettings();
+    if (settings.defaultWorkspaceRoot) {
+        try {
+            allowedRoots.push(fs.realpathSync(settings.defaultWorkspaceRoot));
+        } catch {
+            // Default root doesn't exist yet — add lexically
+            allowedRoots.push(path.resolve(settings.defaultWorkspaceRoot));
+        }
+    }
     
     if (allowedRoots.length === 0) {
         // No workspaces available - reject for safety
@@ -183,6 +195,43 @@ function buildInteraction(stepInfo, options = {}) {
                 }
             } else {
                 interaction.codeAction = { confirm: true };
+            }
+            break;
+        }
+        case 'VIEW_FILE':
+        case 'LIST_DIRECTORY':
+        case 'READ_URL_CONTENT':
+        case 'VIEW_CONTENT_CHUNK':
+        case 'SEARCH': {
+            // Read-only operations — always safe to accept, even outside workspace.
+            // VIEW_FILE outside workspace triggers BLOCK_REASON_OUTSIDE_WORKSPACE
+            // which causes WAITING status. Since reading is non-destructive, always allow.
+            let readPath = '';
+            if (step.viewFile?.absolutePathUri) readPath = step.viewFile.absolutePathUri;
+            else if (step.viewFile?.filePermissionRequest?.absolutePathUri) readPath = step.viewFile.filePermissionRequest.absolutePathUri;
+            else if (step.listDirectory?.directoryPathUri) readPath = step.listDirectory.directoryPathUri;
+            if (!readPath && step.metadata?.toolCall?.argumentsJson) {
+                try {
+                    const args = JSON.parse(step.metadata.toolCall.argumentsJson);
+                    readPath = args.AbsolutePath || args.DirectoryPath || args.SearchPath || args.Url || '';
+                } catch { }
+            }
+            if (readPath) {
+                // Convert to file:// URI if it's a raw path
+                let uri = readPath;
+                if (!uri.startsWith('file://')) {
+                    const normalized = uri.replace(/\\/g, '/');
+                    uri = 'file:///' + (normalized.startsWith('/') ? normalized.substring(1) : normalized);
+                }
+                interaction.filePermission = {
+                    allow: true,
+                    scope: 'PERMISSION_SCOPE_ONCE',
+                    absolutePathUri: uri,
+                };
+                console.log(`[AutoAccept] Read-only ${stepType}: ${readPath} (always allowed)`);
+            } else {
+                interaction.confirm = true;
+                console.log(`[AutoAccept] Read-only ${stepType}: no path found, generic confirm`);
             }
             break;
         }

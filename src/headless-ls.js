@@ -5,9 +5,12 @@ const path = require('path');
 const os = require('os');
 const fs = require('fs');
 const crypto = require('crypto');
-const { execSync, spawn } = require('child_process');
+const { exec, spawn } = require('child_process');
+const { promisify } = require('util');
 const https = require('https');
 const { lsInstances, platform } = require('./config');
+
+const execAsync = promisify(exec);
 
 // Track headless processes for cleanup: pid → { child, pipeServer, pipePath }
 const headlessProcesses = new Map();
@@ -51,29 +54,31 @@ function getExtensionPath() {
     return path.dirname(path.dirname(lsBin)); // up from bin/ to antigravity/
 }
 
-// --- Auto-detect extension server from running Antigravity IDE ---
-function getExtensionServer() {
+// --- Get existing headless extension server port — ASYNC ---
+async function getExtensionServer() {
     try {
+        let out = '';
         if (platform === 'win32') {
             const ps = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-            const cmd = `Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'language_server*' } | Select-Object -First 1 -ExpandProperty CommandLine`;
-            const out = execSync(`"${ps}" -NoProfile -Command "${cmd}"`, { encoding: 'utf8', timeout: 10000 }).trim();
-            const portMatch = out.match(/--extension_server_port\s+(\d+)/);
-            const csrfMatch = out.match(/--extension_server_csrf_token\s+([\w-]+)/);
-            if (portMatch && csrfMatch) {
-                return { port: portMatch[1], csrf: csrfMatch[1] };
-            }
+            const cmd = `Get-CimInstance Win32_Process | Where-Object { $_.Name -like '*language_server*' }  | Select-Object -First 1 -ExpandProperty CommandLine`;
+            const result = await execAsync(`"${ps}" -NoProfile -Command "${cmd}"`, { encoding: 'utf8', timeout: 10000 });
+            out = (result.stdout || '').trim();
         } else {
-            const out = execSync(`ps aux | grep 'language_server' | grep -v grep | head -1`, { encoding: 'utf8', timeout: 5000 }).trim();
-            const portMatch = out.match(/--extension_server_port\s+(\d+)/);
-            const csrfMatch = out.match(/--extension_server_csrf_token\s+([\w-]+)/);
-            if (portMatch && csrfMatch) {
-                return { port: portMatch[1], csrf: csrfMatch[1] };
-            }
+            const result = await execAsync(`ps aux | grep 'language_server' | grep -v grep | head -1`, { encoding: 'utf8', timeout: 5000 });
+            out = (result.stdout || '').trim();
+        }
+        
+        const portMatch = out.match(/--extension_server_port\s+(\d+)/);
+        const csrfMatch = out.match(/--extension_server_csrf_token\s+([\w-]+)/);
+        if (portMatch && csrfMatch) {
+            return {
+                port: parseInt(portMatch[1], 10),
+                csrf: csrfMatch[1]
+            };
         }
     } catch { }
     return null;
-}
+};
 
 // --- Protobuf hand-encoder (proto3 wire format) ---
 function encStr(fieldNum, val) {
@@ -122,12 +127,22 @@ async function waitForPorts(pid, timeoutMs = 15000) {
         try {
             let ports = [];
             if (platform === 'win32') {
-                const ps = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-                const cmd = `Get-NetTCPConnection -OwningProcess ${pid} -ErrorAction SilentlyContinue | Where-Object { $_.State -eq 'Listen' } | Select-Object -ExpandProperty LocalPort`;
-                const out = execSync(`"${ps}" -NoProfile -Command "${cmd}"`, { encoding: 'utf8', timeout: 5000 }).trim();
-                if (out) ports = out.split(/\r?\n/).map(p => p.trim()).filter(Boolean);
+                const { stdout } = await execAsync(`netstat -ano`, { encoding: 'utf8', timeout: 5000 });
+                const pidStr = String(pid);
+                for (const line of stdout.split('\n')) {
+                    if (!line.trim()) continue;
+                    const parts = line.trim().split(/\s+/);
+                    if (parts.length >= 4 && parts[parts.length - 1] === pidStr) {
+                        const addrPort = parts[1];
+                        if (addrPort) {
+                            const port = parseInt(addrPort.split(':').pop(), 10);
+                            if (!isNaN(port)) ports.push(port);
+                        }
+                    }
+                }
             } else {
-                const out = execSync(`lsof -iTCP -sTCP:LISTEN -a -p ${pid} -Fn 2>/dev/null | grep '^n' | sed 's/^n.*://'`, { encoding: 'utf8', timeout: 5000 }).trim();
+                const { stdout } = await execAsync(`lsof -iTCP -sTCP:LISTEN -a -p ${pid} -Fn 2>/dev/null | grep '^n' | sed 's/^n.*://'`, { encoding: 'utf8', timeout: 5000 });
+                const out = (stdout || '').trim();
                 if (out) ports = out.split('\n').map(p => p.trim()).filter(Boolean);
             }
             if (ports.length >= 2) return ports; // LS opens 2 ports: HTTPS + HTTP
@@ -193,7 +208,7 @@ async function launchHeadlessLS(folderPath) {
     }
 
     // 2. Get extension server from running IDE
-    const extServer = getExtensionServer();
+    const extServer = await getExtensionServer();
     if (!extServer) {
         throw new Error('No running Antigravity IDE found. Extension server is required for auth. Please open at least one workspace in Antigravity IDE first.');
     }

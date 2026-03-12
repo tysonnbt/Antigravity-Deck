@@ -6,11 +6,12 @@
   "scripts": {
     "setup": "npm install && npm install --prefix frontend && node -e \"const fs=require('fs');if(!fs.existsSync('settings.json'))fs.copyFileSync('settings.sample.json','settings.json');console.log('✅ Setup complete! Run: npm run dev')\"",
     "start": "node server.js",
-    "dev": "concurrently -n BE,FE -c cyan,magenta \"node --watch server.js\" \"npm run dev --prefix frontend\"",
-    "server": "node --watch server.js",
+    "dev": "npx concurrently -n BE,FE -c cyan,magenta \"node --watch server.js --port 3500 --no-auth\" \"npm run dev --prefix frontend\"",
+    "prod": "node start-tunnel.js --local",
+    "server": "node --watch server.js --port 3500",
     "tunnel:be": "cloudflared tunnel --url http://localhost:3500",
     "tunnel:fe": "cloudflared tunnel --url http://localhost:3000",
-    "tunnel": "concurrently -n TUN-BE,TUN-FE -c green,yellow \"npm run tunnel:be\" \"npm run tunnel:fe\"",
+    "tunnel": "npx concurrently -n TUN-BE,TUN-FE -c green,yellow \"npm run tunnel:be\" \"npm run tunnel:fe\"",
     "online": "node start-tunnel.js"
   },
   "dependencies": {

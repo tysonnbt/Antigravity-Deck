@@ -176,7 +176,8 @@ app.get('/api/ws-url', (req, res) => {
 });
 
 // Auth middleware — only active when AUTH_KEY env var is set
-const AUTH_KEY = process.env.AUTH_KEY || '';
+const isNoAuth = process.argv.includes('--no-auth');
+const AUTH_KEY = isNoAuth ? '' : (process.env.AUTH_KEY || '');
 if (AUTH_KEY) {
   console.log(`  🔒 Auth enabled (key length: ${AUTH_KEY.length})`);
   app.use('/api', (req, res, next) => {

@@ -319,6 +319,7 @@ function setupRoutes(app) {
     const SettingsSchema = z.object({
         autoAccept: z.boolean().optional(),
         defaultWorkspaceRoot: z.string().max(500).optional(),
+        suggestedWorkspaceRoot: z.string().max(500).optional(),
         defaultModel: z.string().max(100).optional(),
         activeProfile: z.string().max(100).nullable().optional(),
         profilesDir: z.string().max(500).nullable().optional(),
@@ -385,7 +386,7 @@ function setupRoutes(app) {
             })
             .sort((a, b) => a.name.localeCompare(b.name));
 
-        res.json({ root, folders: entries });
+        res.json({ root, folders: entries, suggestedWorkspaceRoot: settings.suggestedWorkspaceRoot || '' });
     });
 
     // Resource usage snapshot for all workspace PIDs
@@ -461,7 +462,9 @@ function setupRoutes(app) {
             folderPath = path.join(root, name);
         }
 
-        if (!folderPath) return res.status(400).json({ error: 'path or name is required' });
+        if (!folderPath) {
+            return res.status(400).json({ error: 'path or name is required, and defaultWorkspaceRoot must be configured' });
+        }
 
         // Validate path to prevent command injection
         try {
@@ -646,7 +649,9 @@ function setupRoutes(app) {
             folderPath = path.join(root, name);
         }
 
-        if (!folderPath) return res.status(400).json({ error: 'path or name is required' });
+        if (!folderPath) {
+            return res.status(400).json({ error: 'path or name is required, and defaultWorkspaceRoot must be configured' });
+        }
 
         try {
             folderPath = validateWorkspacePath(folderPath);
@@ -1115,6 +1120,7 @@ function setupRoutes(app) {
     app.post('/api/cascade/start', async (req, res) => {
         try {
             const inst = resolveInst(req);
+            if (!inst) return res.status(503).json({ error: 'No language server connected' });
             const cascadeId = await startCascade(inst);
             registerCascadeInstance(cascadeId, inst);
             res.json({ cascadeId });
@@ -1170,6 +1176,7 @@ function setupRoutes(app) {
     app.get('/api/cascade/:id/status', async (req, res) => {
         try {
             const inst = resolveInst(req);
+            if (!inst) return res.status(503).json({ error: 'No language server connected' });
             const data = await callApi('GetAllCascadeTrajectories', {}, inst);
             const traj = data.trajectorySummaries?.[req.params.id];
             if (!traj) return res.status(404).json({ error: 'Cascade not found' });
@@ -1273,9 +1280,11 @@ function setupRoutes(app) {
     // Token usage / generator metadata
     app.get('/api/cascade/:id/metadata', async (req, res) => {
         try {
+            const inst = resolveInst(req);
+            if (!inst) return res.status(503).json({ error: 'No language server connected' });
             res.json(await callApi('GetCascadeTrajectoryGeneratorMetadata', {
                 cascadeId: req.params.id,
-            }, resolveInst(req)));
+            }, inst));
         } catch (e) { res.status(500).json({ error: e.message }); }
     });
 

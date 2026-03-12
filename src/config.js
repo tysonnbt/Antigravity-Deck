@@ -7,7 +7,13 @@ const lsConfig = { port: null, csrfToken: null, detected: false, useTls: false }
 const lsInstances = []; // All detected LS instances: { pid, csrfToken, workspaceId, port, useTls, active }
 const platform = os.platform(); // 'darwin', 'win32', 'linux'
 
-const PORT = parseInt(process.env.PORT, 10) || 3500;
+let portOverride = null;
+const portIdx = process.argv.indexOf('--port');
+if (portIdx > -1 && process.argv[portIdx + 1]) {
+    portOverride = parseInt(process.argv[portIdx + 1], 10);
+}
+
+const PORT = portOverride || parseInt(process.env.PORT, 10) || 3500;
 const POLL_INTERVAL = 3000;
 const FAST_POLL_INTERVAL = 1000;  // Active cascade (running / waiting for user)
 const SLOW_POLL_INTERVAL = 5000;  // Idle
@@ -18,7 +24,7 @@ const STEP_LOAD_CHUNK = 200;        // how many older steps to load on scroll-up
 // --- Persistent settings ---
 const SETTINGS_PATH = path.join(__dirname, '..', 'settings.json');
 const DEFAULT_SETTINGS = {
-    defaultWorkspaceRoot: path.join(os.homedir(), 'AntigravityWorkspaces'),
+    defaultWorkspaceRoot: '',
     defaultModel: 'MODEL_PLACEHOLDER_M26', // Claude Opus 4.6 (Thinking)
     activeProfile: null,   // string | null — currently active profile name for profile swap
     profilesDir: null,     // string | null — custom profiles directory (default: %APPDATA%/AntigravityDeck/profiles)
@@ -43,6 +49,11 @@ function loadSettings() {
     } catch {
         _settings = { ...DEFAULT_SETTINGS };
     }
+
+    // If defaultWorkspaceRoot is empty, do NOT auto-populate it anymore.
+    // The frontend will receive empty string and launch the onboarding modal.
+    _settings.suggestedWorkspaceRoot = path.join(os.homedir(), 'AntigravityWorkspace');
+
     return _settings;
 }
 

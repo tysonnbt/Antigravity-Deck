@@ -80,26 +80,36 @@ async function detectLanguageServers() {
     });
 }
 
+// Try HTTPS first (LS typically uses self-signed cert), then fall back to HTTP
 async function detectPorts(pid) {
     return new Promise((resolve) => {
         let cmd;
         if (platform === 'win32') {
-            // Use PowerShell Get-NetTCPConnection — locale-independent (no reliance on "LISTENING" text)
-            const ps = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-            cmd = `"${ps}" -NoProfile -Command "Get-NetTCPConnection -OwningProcess ${pid} -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty LocalPort"`;
+            // netstat -ano: ~29ms vs PowerShell ~1250ms
+            cmd = `netstat -ano`;
         } else {
             cmd = `lsof -iTCP -sTCP:LISTEN -P -n -p ${pid} 2>/dev/null`;
         }
 
+        const { exec } = require('child_process');
         exec(cmd, { timeout: 5000 }, (err, stdout) => {
             if (err || !stdout.trim()) { resolve([]); return; }
             const ports = [];
+            const pidStr = String(pid);
             stdout.split('\n').forEach(line => {
                 if (!line.trim()) return;
                 if (platform === 'win32') {
-                    // Each line is just a port number from Get-NetTCPConnection
-                    const port = parseInt(line.trim(), 10);
-                    if (!isNaN(port)) ports.push(port);
+                    // "  TCP    0.0.0.0:42150    0.0.0.0:0    LISTENING    12345"
+                    // Or on some locales: "  TCP    0.0.0.0:42150    0.0.0.0:0    ĐANG NGHE    12345"
+                    // We just split by whitespace and check if the last token matches the PID
+                    const parts = line.trim().split(/\s+/);
+                    if (parts.length >= 4 && parts[parts.length - 1] === pidStr) {
+                        const addrPort = parts[1]; // "0.0.0.0:42150"
+                        if (addrPort) {
+                           const port = parseInt(addrPort.split(':').pop(), 10);
+                           if (!isNaN(port)) ports.push(port);
+                        }
+                    }
                 } else {
                     const cols = line.trim().split(/\s+/);
                     if (cols.length >= 2 && cols[1] === String(pid)) {
@@ -109,7 +119,7 @@ async function detectPorts(pid) {
                 }
             });
             ports.sort((a, b) => a - b);
-            resolve(ports);
+            resolve([...new Set(ports)]); // Return unique ports only
         });
     });
 }
