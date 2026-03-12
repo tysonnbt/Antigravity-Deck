@@ -84,9 +84,7 @@ async function detectPorts(pid) {
     return new Promise((resolve) => {
         let cmd;
         if (platform === 'win32') {
-            // Use PowerShell Get-NetTCPConnection — locale-independent (no reliance on "LISTENING" text)
-            const ps = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-            cmd = `"${ps}" -NoProfile -Command "Get-NetTCPConnection -OwningProcess ${pid} -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty LocalPort"`;
+            cmd = `netstat -ano`;
         } else {
             cmd = `lsof -iTCP -sTCP:LISTEN -P -n -p ${pid} 2>/dev/null`;
         }
@@ -94,16 +92,20 @@ async function detectPorts(pid) {
         exec(cmd, { timeout: 5000 }, (err, stdout) => {
             if (err || !stdout.trim()) { resolve([]); return; }
             const ports = [];
-            stdout.split('\n').forEach(line => {
+            const pidStr = String(pid);
+            stdout.split('\\n').forEach(line => {
                 if (!line.trim()) return;
                 if (platform === 'win32') {
-                    // Each line is just a port number from Get-NetTCPConnection
-                    const port = parseInt(line.trim(), 10);
-                    if (!isNaN(port)) ports.push(port);
+                    if (!line.includes('LISTENING')) return;
+                    const parts = line.trim().split(/\\s+/);
+                    if (parts.length >= 5 && parts[4] === pidStr) {
+                        const port = parseInt(parts[1].split(':').pop(), 10);
+                        if (!isNaN(port)) ports.push(port);
+                    }
                 } else {
-                    const cols = line.trim().split(/\s+/);
+                    const cols = line.trim().split(/\\s+/);
                     if (cols.length >= 2 && cols[1] === String(pid)) {
-                        const m = line.match(/:(\d+)\s+\(LISTEN\)/);
+                        const m = line.match(/:(\\d+)\\s+\\(LISTEN\\)/);
                         if (m) ports.push(parseInt(m[1]));
                     }
                 }
