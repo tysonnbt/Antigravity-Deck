@@ -95,6 +95,42 @@ async function main() {
     // Wait a bit then print info
     await new Promise(r => setTimeout(r, 5000));
 
+    // --- Reusable QR generation function (OTP — AUTH_KEY never in URL) ---
+    async function generateAndPrintQR() {
+        let qrUrl = null;
+        try {
+            const http = require('http');
+            const otpResp = await new Promise((resolve, reject) => {
+                const req = http.request(`http://localhost:${BE_PORT}/api/auth/create-otp`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, timeout: 5000,
+                }, (res) => {
+                    let body = '';
+                    res.on('data', c => body += c);
+                    res.on('end', () => { try { resolve(JSON.parse(body)); } catch { reject(new Error('Invalid JSON')); } });
+                });
+                req.on('error', reject);
+                req.end();
+            });
+            qrUrl = `${FE_URL}?otp=${otpResp.otp}`;
+            log('*', `✅ New OTP generated (expires in ${otpResp.expiresIn}s)`);
+        } catch (e) {
+            log('*', `⚠️  OTP generation failed: ${e.message} — falling back to key URL`);
+            qrUrl = `${FE_URL}?key=${authKey}`;
+        }
+        console.log('\n\x1b[1m  📱 Scan QR (auto-login, expires 60s):\x1b[0m\n');
+        try {
+            const qrcode = require('qrcode-terminal');
+            qrcode.generate(qrUrl, { small: true }, (qr) => {
+                console.log(qr.split('\n').map(l => '    ' + l).join('\n'));
+                console.log(`\n  🔗 ${qrUrl}`);
+                console.log('\n  Press \x1b[1mR\x1b[0m to generate a new QR code, Ctrl+C to stop\n');
+            });
+        } catch {
+            console.log(`  🔗 ${qrUrl}`);
+            console.log('\n  Press \x1b[1mR\x1b[0m to generate a new QR code, Ctrl+C to stop\n');
+        }
+    }
+
     console.log('\n' + '='.repeat(60));
     console.log('\x1b[1m\x1b[32m  🌐 READY! Fixed URLs (never change):\x1b[0m');
     console.log(`\x1b[1m  👉 Frontend: ${FE_URL}\x1b[0m`);
@@ -103,7 +139,23 @@ async function main() {
     console.log('='.repeat(60));
     console.log(`  Local FE: http://localhost:${FE_PORT}`);
     console.log(`  Local BE: http://localhost:${BE_PORT}`);
-    console.log('='.repeat(60) + '\n');
+    console.log('='.repeat(60));
+
+    await generateAndPrintQR();
+
+    // Listen for R key to regenerate QR
+    if (process.stdin.isTTY) {
+        process.stdin.setRawMode(true);
+        process.stdin.resume();
+        process.stdin.on('data', async (data) => {
+            const key = data.toString().toLowerCase();
+            if (key === 'r') {
+                await generateAndPrintQR();
+            } else if (key === '\x03') { // Ctrl+C
+                cleanup();
+            }
+        });
+    }
 
     // Graceful shutdown
     const cleanup = () => {
