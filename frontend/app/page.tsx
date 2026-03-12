@@ -28,8 +28,10 @@ import { AgentLogsView } from '@/components/agent-logs-view';
 import { AgentBridgeView } from '@/components/agent-bridge-view';
 import { SourceControlView } from '@/components/source-control-view';
 import { ResourceMonitorView } from '@/components/resource-monitor-view';
+import { WorkspaceOnboardModal } from '@/components/workspace-onboard-modal';
 import { notificationService } from '@/lib/notifications';
 import { usePwaInstall } from '@/hooks/use-pwa-install';
+import { getSettings } from '@/lib/cascade-api';
 
 
 // Lazy-load components that are hidden by default
@@ -154,6 +156,10 @@ export default function Home() {
   // Bumped when sidebar creates a workspace, so panels refresh their lists
   const [wsVersion, setWsVersion] = useState(0);
 
+  // === Workspace Onboarding ===
+  const [showWorkspaceOnboard, setShowWorkspaceOnboard] = useState(false);
+  const [suggestedWorkspaceRoot, setSuggestedWorkspaceRoot] = useState('');
+
   // Auto-bump wsVersion when backend discovers new conversations
   useEffect(() => {
     if (conversationsVersion > 0) setWsVersion(v => v + 1);
@@ -177,6 +183,14 @@ export default function Home() {
     if (storedConvId) {
       selectConversation(storedConvId);
     }
+    // Check if onboarding is needed
+    getSettings().then(settings => {
+      if (!settings.defaultWorkspaceRoot) {
+        setSuggestedWorkspaceRoot((settings as any).suggestedWorkspaceRoot || '');
+        setShowWorkspaceOnboard(true);
+      }
+    }).catch(console.error);
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // run once on mount
 
@@ -721,6 +735,16 @@ export default function Home() {
             </div>
           </footer>
         </div>{/* end main content */}
+
+        <WorkspaceOnboardModal
+          open={showWorkspaceOnboard}
+          suggestedRoot={suggestedWorkspaceRoot}
+          onCompleted={(root) => {
+            setShowWorkspaceOnboard(false);
+            // Optionally force a refresh to pick up the new workspace root
+            setWsVersion(v => v + 1);
+          }}
+        />
       </div>
     </AuthGate>
   );
