@@ -35,10 +35,15 @@ function findCloudflared() {
 }
 const CLOUDFLARED = findCloudflared();
 
+const logStream = fs.createWriteStream(path.join(__dirname, '.tunnel.log'), { flags: 'a' });
 function log(tag, msg) {
-    const colors = { BE: '\x1b[36m', FE: '\x1b[35m', 'TUN-BE': '\x1b[32m', 'TUN-FE': '\x1b[33m', '*': '\x1b[1m' };
-    const reset = '\x1b[0m';
-    console.log(`${colors[tag] || ''}[${tag}]${reset} ${msg}`);
+    const timestamp = new Date().toISOString();
+    logStream.write(`[${timestamp}] [${tag}] ${msg}\n`);
+    
+    // Only print important system messages to console
+    if (tag === '*') {
+        console.log(`\x1b[1m[*]\x1b[0m ${msg}`);
+    }
 }
 
 // Extract Cloudflare tunnel URL from process output
@@ -86,8 +91,7 @@ async function main() {
         env: { ...process.env, PORT: String(BE_PORT), AUTH_KEY: authKey, QUIET_POLL: '1' }
     });
 
-    // Wait for backend to be ready
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    // Start backend tunnel immediately
 
     // Step 2: Start backend tunnel
     log('*', 'Starting Cloudflare tunnel for backend...');
@@ -131,8 +135,7 @@ async function main() {
         env: { ...process.env, NEXT_PUBLIC_BACKEND_URL: beUrl, BACKEND_PORT: String(BE_PORT), NEXT_PUBLIC_BACKEND_PORT: String(BE_PORT) }
     });
 
-    // Wait for frontend to be ready
-    await new Promise(resolve => setTimeout(resolve, 8000));
+    // Start frontend tunnel immediately
 
     // Step 4: Start frontend tunnel
     log('*', 'Starting Cloudflare tunnel for frontend...');
