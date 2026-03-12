@@ -7,7 +7,7 @@
     "setup": "npm install && npm install --prefix frontend && node -e \"const fs=require('fs');if(!fs.existsSync('settings.json'))fs.copyFileSync('settings.sample.json','settings.json');console.log('✅ Setup complete! Run: npm run dev')\"",
     "start": "node server.js",
     "dev": "concurrently -n BE,FE -c cyan,magenta \"node --watch server.js\" \"npm run dev --prefix frontend\"",
-    "prod": "npm run build --prefix frontend && concurrently -n BE,FE -c cyan,magenta \"node server.js\" \"npm run start --prefix frontend\"",
+    "prod": "node start-tunnel.js --local",
     "server": "node --watch server.js",
     "tunnel:be": "cloudflared tunnel --url http://localhost:3500",
     "tunnel:fe": "cloudflared tunnel --url http://localhost:3000",

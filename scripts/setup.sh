@@ -184,109 +184,14 @@ if [ ! -f "settings.json" ]; then
     echo "  📝 Created settings.json from sample"
 fi
 
-# === Build frontend (production) ===
-need_build=false
 
-case "$scenario" in
-    "fresh")
-        need_build=true
-        ;;
-    "updated")
-        # Rebuild if any frontend source files changed
-        if echo "$updated_files" | grep -q "^frontend/"; then
-            need_build=true
-        fi
-        ;;
-    "up-to-date")
-        # Build if .next folder is missing
-        if [ ! -d "frontend/.next" ]; then
-            need_build=true
-        fi
-        ;;
-esac
+# === Launch ===
+echo ""
+echo "  Starting Antigravity Deck..."
+echo ""
 
-if $need_build; then
-    echo ""
-    echo "  🔨 Building frontend (production)..."
-    export BACKEND_PORT=9807
-    npm run build --prefix frontend
-    echo "  ✅ Frontend build complete"
+if $cf_found; then
+    node start-tunnel.js --quiet --build
 else
-    echo "  ✅ Frontend build — no changes"
+    node start-tunnel.js --local --build
 fi
-
-# === Summary ===
-echo ""
-echo "  ─────────────────────────────────────"
-case "$scenario" in
-    "fresh")      echo "  🎉 Fresh install complete!" ;;
-    "updated")    echo "  🔄 Updated and ready!" ;;
-    "up-to-date") echo "  ⚡ Already up to date!" ;;
-esac
-echo "  ─────────────────────────────────────"
-echo ""
-
-# === Launch (BE=9807, FE=9808) ===
-
-# Kill any existing processes on our ports
-for port in 9807 9808; do
-    pids=""
-    if command -v lsof &>/dev/null; then
-        pids=$(lsof -ti ":$port" 2>/dev/null)
-    elif command -v fuser &>/dev/null; then
-        pids=$(fuser "$port/tcp" 2>/dev/null | tr -s ' ')
-    fi
-    if [ -n "$pids" ]; then
-        for p in $pids; do
-            echo "  [!] Killing stale process on port $port (PID $p)"
-            kill -9 "$p" 2>/dev/null
-        done
-        sleep 1
-    fi
-done
-
-# Start backend on port 9807
-export NODE_ENV=production
-export PORT=9807
-export BACKEND_PORT=9807
-node server.js &
-BE_PID=$!
-
-echo "  Starting Antigravity Deck (production)..."
-echo "  Backend:  http://localhost:9807"
-echo "  Frontend: http://localhost:9808"
-
-if ! $cf_found; then
-    if [[ "$(uname)" == "Darwin" ]]; then
-        echo "  (Install cloudflared for remote access: brew install cloudflared)"
-    else
-        echo "  (Install cloudflared for remote access: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)"
-    fi
-fi
-
-echo ""
-echo "  Press Ctrl+C to stop"
-echo ""
-
-# Cleanup function — kills backend + any remaining port listeners
-cleanup() {
-    echo ""
-    echo "  Shutting down..."
-    kill $BE_PID 2>/dev/null
-    for port in 9807 9808; do
-        if command -v lsof &>/dev/null; then
-            lsof -ti ":$port" 2>/dev/null | xargs kill -9 2>/dev/null
-        elif command -v fuser &>/dev/null; then
-            fuser -k "$port/tcp" 2>/dev/null
-        fi
-    done
-    pkill -f "cloudflared.*tunnel.*localhost" 2>/dev/null
-    echo "  All processes stopped."
-    echo ""
-    exit 0
-}
-
-trap cleanup INT TERM HUP EXIT
-
-# Start frontend production server on port 9808
-cd frontend && BACKEND_PORT=9807 npx next start --port 9808

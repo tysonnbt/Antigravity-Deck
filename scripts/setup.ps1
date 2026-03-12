@@ -217,115 +217,13 @@ if (-not (Test-Path "settings.json")) {
     Write-Host "  [OK] Created settings.json from sample" -ForegroundColor Green
 }
 
-# === Build frontend (production) ===
-$needBuild = $false
-
-switch ($scenario) {
-    "fresh" {
-        $needBuild = $true
-    }
-    "updated" {
-        # Rebuild if any frontend source files changed
-        $feSourceChanged = $updatedFiles | Where-Object {
-            $_ -like "frontend/*" -and $_ -notlike "frontend/node_modules/*"
-        }
-        if ($feSourceChanged) {
-            $needBuild = $true
-        }
-    }
-    "up-to-date" {
-        # Build if .next folder is missing (user may have deleted it)
-        if (-not (Test-Path "frontend\.next")) {
-            $needBuild = $true
-        }
-    }
-}
-
-if ($needBuild) {
-    Write-Host ""
-    Write-Host "  [i] Building frontend (production)..." -ForegroundColor Cyan
-    $env:BACKEND_PORT = "9807"
-    npm run build --prefix frontend
-    Write-Host "  [OK] Frontend build complete" -ForegroundColor Green
-}
-else {
-    Write-Host "  [OK] Frontend build -- no changes" -ForegroundColor Green
-}
-
-# === Summary ===
+# === Launch ===
 Write-Host ""
-Write-Host "  ======================================" -ForegroundColor DarkGray
-switch ($scenario) {
-    "fresh"      { Write-Host "  Fresh install complete!" -ForegroundColor Green }
-    "updated"    { Write-Host "  Updated and ready!" -ForegroundColor Green }
-    "up-to-date" { Write-Host "  Already up to date!" -ForegroundColor Green }
-}
-Write-Host "  ======================================" -ForegroundColor DarkGray
+Write-Host "  Starting Antigravity Deck..." -ForegroundColor Green
 Write-Host ""
 
-# === Launch (BE=9807, FE=9808) ===
-
-# Kill any existing processes on our ports
-$ports = @(9807, 9808)
-foreach ($port in $ports) {
-    $existing = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
-    if ($existing) {
-        foreach ($conn in $existing) {
-            $procId = $conn.OwningProcess
-            $procName = (Get-Process -Id $procId -ErrorAction SilentlyContinue).ProcessName
-            Write-Host "  [!] Killing stale process on port $port (PID $procId, $procName)" -ForegroundColor Yellow
-            Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
-        }
-        Start-Sleep -Seconds 1
-    }
-}
-
-# Start backend on port 9807
-$env:NODE_ENV = "production"
-$env:PORT = "9807"
-$env:BACKEND_PORT = "9807"
-$beProc = Start-Process -FilePath "node" -ArgumentList "server.js" -NoNewWindow -PassThru
-
-Write-Host "  Starting Antigravity Deck (production)..." -ForegroundColor Green
-Write-Host "  Backend:  http://localhost:9807" -ForegroundColor DarkGray
-Write-Host "  Frontend: http://localhost:9808" -ForegroundColor DarkGray
-
-if (-not $cfFound) {
-    Write-Host "  (Install cloudflared for remote access: winget install cloudflare.cloudflared)" -ForegroundColor DarkGray
-}
-
-Write-Host ""
-Write-Host "  Press Ctrl+C to stop" -ForegroundColor DarkGray
-Write-Host ""
-
-# Cleanup function — kills backend + any remaining port listeners
-function Cleanup-All {
-    Write-Host ""
-    Write-Host "  Shutting down..." -ForegroundColor Yellow
-    try {
-        if ($beProc -and -not $beProc.HasExited) {
-            taskkill /PID $beProc.Id /T /F 2>$null | Out-Null
-        }
-    } catch {}
-    foreach ($port in @(9807, 9808)) {
-        $conns = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
-        foreach ($conn in $conns) {
-            Stop-Process -Id $conn.OwningProcess -Force -ErrorAction SilentlyContinue
-        }
-    }
-    Get-Process -Name "cloudflared" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-    Write-Host "  All processes stopped." -ForegroundColor Green
-    Write-Host ""
-}
-
-Register-EngineEvent PowerShell.Exiting -Action { Cleanup-All } -ErrorAction SilentlyContinue | Out-Null
-
-# Start frontend production server on port 9808
-try {
-    Push-Location frontend
-    $env:BACKEND_PORT = "9807"
-    npx next start --port 9808
-}
-catch {
-    Cleanup-All
+if ($cfFound) {
+    node start-tunnel.js --quiet --build
+} else {
+    node start-tunnel.js --local --build
 }
