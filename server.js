@@ -182,6 +182,52 @@ app.get('/api/ws-url', (req, res) => {
   res.json({ wsPort: Number(process.env.PORT || 3500) });
 });
 
+// === One-Time Password (OTP) for QR code auth ===
+// AUTH_KEY never appears in URLs — QR contains a short-lived OTP instead
+const otpStore = new Map(); // Map<otp, { expiresAt: number }>
+const OTP_TTL_MS = 60 * 1000; // 60 seconds
+const OTP_MAX_ENTRIES = 20; // prevent memory issues
+
+// Create OTP — localhost only (called by start-tunnel.js)
+app.post('/api/auth/create-otp', (req, res) => {
+  const ip = req.ip || req.socket.remoteAddress || '';
+  const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+  if (!isLocal) return res.status(403).json({ error: 'Localhost only' });
+
+  const otp = crypto.randomUUID();
+  otpStore.set(otp, { expiresAt: Date.now() + OTP_TTL_MS });
+
+  // Cleanup expired entries
+  for (const [k, v] of otpStore) {
+    if (Date.now() > v.expiresAt) otpStore.delete(k);
+  }
+  // Cap max entries
+  if (otpStore.size > OTP_MAX_ENTRIES) {
+    const oldest = otpStore.keys().next().value;
+    otpStore.delete(oldest);
+  }
+
+  res.json({ otp, expiresIn: OTP_TTL_MS / 1000 });
+});
+
+// Exchange OTP for AUTH_KEY — public (no auth required)
+app.post('/api/auth/exchange', express.json(), (req, res) => {
+  const AUTH_KEY_VAL = process.env.AUTH_KEY || '';
+  if (!AUTH_KEY_VAL) return res.status(400).json({ error: 'Auth not configured' });
+
+  const { otp } = req.body || {};
+  if (!otp) return res.status(400).json({ error: 'Missing otp' });
+
+  const entry = otpStore.get(otp);
+  if (!entry || Date.now() > entry.expiresAt) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
+  otpStore.delete(otp); // single-use
+  console.log(`[Auth] OTP exchanged successfully (otp: ${otp.substring(0, 8)}...)`);
+  res.json({ authKey: AUTH_KEY_VAL });
+});
+
 // Auth middleware — only active when AUTH_KEY env var is set
 const isNoAuth = process.argv.includes('--no-auth');
 const AUTH_KEY = isNoAuth ? '' : (process.env.AUTH_KEY || '');
@@ -189,7 +235,7 @@ if (AUTH_KEY) {
   console.log(`  🔒 Auth enabled (key length: ${AUTH_KEY.length})`);
   app.use('/api', (req, res, next) => {
     // Skip auth for public endpoints
-    if (req.path === '/ws-url' || req.path === '/status') {
+    if (req.path === '/ws-url' || req.path === '/status' || req.path === '/auth/exchange') {
       return next();
     }
     

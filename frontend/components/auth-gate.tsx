@@ -24,28 +24,50 @@ export function AuthGate({ children }: AuthGateProps) {
             return;
         }
 
-        // Auto-auth from URL ?key= param (QR code scanning)
+        // Auto-auth from URL params (QR code scanning)
         const urlParams = new URLSearchParams(window.location.search);
-        const urlKey = urlParams.get('key');
-        if (urlKey) {
-            // Strip key from URL immediately (security: don't leave in browser history)
+        const urlOtp = urlParams.get('otp');
+        const urlKey = urlParams.get('key'); // legacy fallback
+
+        if (urlOtp || urlKey) {
+            // Strip auth params from URL immediately (security: don't leave in browser history)
             const cleanUrl = new URL(window.location.href);
+            cleanUrl.searchParams.delete('otp');
             cleanUrl.searchParams.delete('key');
             window.history.replaceState({}, '', cleanUrl.toString());
 
-            // Validate key against backend
             setChecking(true);
-            fetch(`${API_BASE}/api/settings`, {
-                headers: { 'X-Auth-Key': urlKey.trim() }
-            }).then(res => {
-                if (res.ok) {
-                    setAuthKey(urlKey.trim());
-                    setAuthenticated(true);
-                }
-                // If invalid, fall through to show auth gate
-            }).catch(() => {
-                // Network error — show auth gate
-            }).finally(() => setChecking(false));
+
+            if (urlOtp) {
+                // OTP flow: exchange one-time token for real AUTH_KEY
+                fetch(`${API_BASE}/api/auth/exchange`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ otp: urlOtp }),
+                }).then(res => {
+                    if (!res.ok) throw new Error('OTP invalid');
+                    return res.json();
+                }).then(data => {
+                    if (data.authKey) {
+                        setAuthKey(data.authKey);
+                        setAuthenticated(true);
+                    }
+                }).catch(() => {
+                    setError('QR code expired or already used');
+                }).finally(() => setChecking(false));
+            } else if (urlKey) {
+                // Legacy flow: validate key directly against backend
+                fetch(`${API_BASE}/api/settings`, {
+                    headers: { 'X-Auth-Key': urlKey.trim() }
+                }).then(res => {
+                    if (res.ok) {
+                        setAuthKey(urlKey.trim());
+                        setAuthenticated(true);
+                    }
+                }).catch(() => {
+                    // Network error — show auth gate
+                }).finally(() => setChecking(false));
+            }
             return;
         }
 

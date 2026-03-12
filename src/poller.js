@@ -354,7 +354,7 @@ async function pollConversation(activeConvId, info) {
                 type: 'steps_new',
                 conversationId: activeConvId,
                 steps: newStepsToAdd,
-                total: cache.steps.length,
+                total: (cache.baseIndex || 0) + cache.steps.length,
                 baseIndex: cache.baseIndex || 0,
             }, activeConvId);
             console.log(`[WS] broadcast steps_new: ${newStepsToAdd.length} steps for ${activeConvId.substring(0, 8)} (total: ${cache.steps.length})`);

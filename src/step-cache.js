@@ -6,7 +6,7 @@ const { callApi } = require('./api');
 const { countBinarySteps, decodeBinarySteps } = require('./protobuf');
 
 const stepCache = {};       // { convId: { steps: [], stepCount: N, baseIndex: M } }
-const fetchingSet = new Set(); // per-conversation fetching lock
+const fetchingSet = new Map(); // per-conversation fetching lock: convId → Promise
 
 // --- Step count ---
 
@@ -122,29 +122,42 @@ async function fetchAllSteps(convId, totalSteps, inst = null, fromIndex = 0) {
 }
 
 // --- Ensure cached ---
+// Uses a Promise-based lock: if another call is already fetching the same conversation,
+// subsequent callers await the same Promise instead of returning with empty cache.
 
 async function ensureCached(convId, inst = null) {
     if (stepCache[convId]) return;
-    if (fetchingSet.has(convId)) return; // per-conversation lock
     if (lsInstances.length === 0) {
         console.log(`[!] ensureCached skipped — LS not configured yet`);
         return; // Don't cache empty — will retry after init
     }
-    fetchingSet.add(convId);
 
+    // Wait if another call is already fetching this conversation
+    if (fetchingSet.has(convId)) {
+        await fetchingSet.get(convId);
+        return;
+    }
+
+    const fetchPromise = (async () => {
+        try {
+            const callFn = inst ? (m, b) => callApi(m, b, inst) : null;
+            const stepCount = await getStepCountAndStatus(convId, callFn).then(r => r.stepCount);
+            console.log(`[*] Loading ${convId.substring(0, 8)} (stepCount: ${stepCount}, batches: ${Math.ceil(stepCount / BATCH_SIZE)})...`);
+
+            // Only fetch the tail window (last STEP_WINDOW_SIZE steps)
+            const baseIndex = Math.max(0, stepCount - STEP_WINDOW_SIZE);
+            const { steps, hasGaps } = await fetchAllSteps(convId, stepCount, inst, baseIndex);
+            stepCache[convId] = { steps, stepCount, baseIndex };
+            console.log(`[✓] Cached ${steps.length}/${stepCount} steps (window from ${baseIndex})${hasGaps ? ' (with gaps)' : ''}`);
+        } catch (e) {
+            console.log(`[!] Load error: ${e.message}`);
+            // Don't cache empty on error — will retry on next set_conversation
+        }
+    })();
+
+    fetchingSet.set(convId, fetchPromise);
     try {
-        const callFn = inst ? (m, b) => callApi(m, b, inst) : null;
-        const stepCount = await getStepCountAndStatus(convId, callFn).then(r => r.stepCount);
-        console.log(`[*] Loading ${convId.substring(0, 8)} (stepCount: ${stepCount}, batches: ${Math.ceil(stepCount / BATCH_SIZE)})...`);
-
-        // Only fetch the tail window (last STEP_WINDOW_SIZE steps)
-        const baseIndex = Math.max(0, stepCount - STEP_WINDOW_SIZE);
-        const { steps, hasGaps } = await fetchAllSteps(convId, stepCount, inst, baseIndex);
-        stepCache[convId] = { steps, stepCount, baseIndex };
-        console.log(`[✓] Cached ${steps.length}/${stepCount} steps (window from ${baseIndex})${hasGaps ? ' (with gaps)' : ''}`);
-    } catch (e) {
-        console.log(`[!] Load error: ${e.message}`);
-        // Don't cache empty on error — will retry on next set_conversation
+        await fetchPromise;
     } finally {
         fetchingSet.delete(convId);
     }

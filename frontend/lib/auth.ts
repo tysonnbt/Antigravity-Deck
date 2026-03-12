@@ -30,6 +30,8 @@ export function authHeaders(extra: Record<string, string> = {}): Record<string, 
 }
 
 // Build WebSocket URL with auth key as query param
+// DEPRECATED: Auth is now via message after connect (see ws-service.ts)
+// Kept for backward compatibility with older clients
 export function authWsUrl(baseUrl: string): string {
     const key = getAuthKey();
     if (!key) return baseUrl;
