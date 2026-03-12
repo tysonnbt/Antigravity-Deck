@@ -5,6 +5,7 @@ import { getWorkspaces, createWorkspace, createHeadlessWorkspace, getWorkspaceFo
 import type { Workspace, WorkspaceFolder, WorkspaceResources, ResourceSnapshot } from "@/lib/cascade-api"
 import { cn } from "@/lib/utils"
 import { useTheme } from "@/lib/theme"
+import { useToast } from "@/hooks/use-toast"
 import { PluginManager } from "./plugin-manager"
 import { API_BASE } from "@/lib/config"
 import { authHeaders } from "@/lib/auth"
@@ -89,6 +90,7 @@ export function AppSidebar({
 }: AppSidebarProps) {
     const { isDark, toggle: toggleTheme } = useTheme()
     const { isMobile } = useSidebar()
+    const { toast } = useToast()
 
     const [wsData, setWsData] = useState<WorkspaceData[]>([])
     const [folders, setFolders] = useState<WorkspaceFolder[]>([])
@@ -287,6 +289,7 @@ export function AppSidebar({
             onWorkspaceCreated?.()
             setShowCreateDialog(false)
             setHeadlessMode(false)
+            toast({ variant: "success", title: "Workspace created" })
         } catch (e) {
             const msg = e instanceof Error ? e.message : "Failed to create workspace"
             setCreateError(msg)

@@ -5,6 +5,7 @@ import { authHeaders } from '@/lib/auth';
 import { getSettings, updateSettings } from '@/lib/cascade-api';
 import type { AppSettings } from '@/lib/cascade-api';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 import { Check, X, Sparkles, CircleDot, Bot, Settings, Globe, Camera, Star, Bell } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
@@ -40,8 +41,8 @@ export function SettingsView() {
     const [workspaceRoot, setWorkspaceRoot] = useState('');
     const [defaultModel, setDefaultModel] = useState('');
     const [saving, setSaving] = useState(false);
-    const [saveMsg, setSaveMsg] = useState('');
     const [loading, setLoading] = useState(true);
+    const { toast } = useToast();
 
     // === Push notification settings (localStorage, not server) ===
     const [notiSettings, setNotiSettings] = useState<NotificationSettings>(() =>
@@ -84,17 +85,15 @@ export function SettingsView() {
 
     const handleSave = async () => {
         setSaving(true);
-        setSaveMsg('');
         try {
             const updated = await updateSettings({
                 defaultWorkspaceRoot: workspaceRoot.trim(),
                 defaultModel: defaultModel === '__api_default__' ? '' : defaultModel,
             });
             setSettings(updated);
-            setSaveMsg('saved');
-            setTimeout(() => setSaveMsg(''), 2500);
+            toast({ variant: "success", title: "Settings saved" });
         } catch {
-            setSaveMsg('error');
+            toast({ variant: "destructive", title: "Failed to save settings" });
         } finally {
             setSaving(false);
         }
@@ -372,12 +371,7 @@ export function SettingsView() {
                     >
                         {saving ? 'Saving…' : 'Save Settings'}
                     </Button>
-                    {saveMsg && (
-                        <span className={cn("text-xs font-medium flex items-center gap-1", saveMsg === 'saved' ? "text-emerald-500" : "text-destructive")}>
-                            {saveMsg === 'saved' ? <><Check className="h-3 w-3" /> Saved!</> : <><X className="h-3 w-3" /> Error saving</>}
-                        </span>
-                    )}
-                    {hasChanges && !saveMsg && (
+                    {hasChanges && (
                         <span className="text-[10px] text-amber-500 flex items-center gap-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
                             Unsaved changes
