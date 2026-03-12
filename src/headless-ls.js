@@ -67,6 +67,7 @@ async function getExtensionServer() {
             const result = await execAsync(`ps aux | grep 'language_server' | grep -v grep | head -1`, { encoding: 'utf8', timeout: 5000 });
             out = (result.stdout || '').trim();
         }
+        
         const portMatch = out.match(/--extension_server_port\s+(\d+)/);
         const csrfMatch = out.match(/--extension_server_csrf_token\s+([\w-]+)/);
         if (portMatch && csrfMatch) {
