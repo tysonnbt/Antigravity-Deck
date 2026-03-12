@@ -640,6 +640,7 @@ export default function Home() {
                 showAnalytics={showAnalytics}
                 onToggleAnalytics={() => setShowAnalytics(v => !v)}
                 onExport={handleExport}
+                onShowSettings={handleShowSettings}
               />
 
               {/* Step Detail Sheet */}
