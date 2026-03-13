@@ -10,12 +10,17 @@ const clientConvMap = new Map(); // Map<ws, convId> — per-client conversation 
 
 function setupWebSocket(wss, { ensureCached, stepCache }) {
     wss.on('connection', (ws, req) => {
-        // Auth check for WebSocket (skip for localhost connections — same policy as HTTP)
+        // Mark alive for server-side heartbeat (see server.js WS_PING_INTERVAL)
+        ws.isAlive = true;
+        ws.on('pong', () => { ws.isAlive = true; });
+
+        // Auth check for WebSocket (skip for localhost + Tailscale — same policy as HTTP)
         const authKey = process.env.AUTH_KEY || '';
         if (authKey) {
             const ip = req.socket.remoteAddress || '';
             const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
-            if (!isLocal) {
+            const isTailscale = /^(::ffff:)?100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(ip);
+            if (!isLocal && !isTailscale) {
                 const url = new URL(req.url, 'http://localhost');
                 const key = url.searchParams.get('auth_key');
                 if (key !== authKey) {
@@ -30,7 +35,10 @@ function setupWebSocket(wss, { ensureCached, stepCache }) {
         ws.on('message', async (raw) => {
             try {
                 const msg = JSON.parse(raw.toString());
-                if (msg.type === 'set_conversation') {
+                if (msg.type === 'ping') {
+                    // Keepalive response — used by frontend to detect stale connections
+                    sendToOne(ws, { type: 'pong' });
+                } else if (msg.type === 'set_conversation') {
                     clientConvMap.set(ws, msg.conversationId);
                     console.log(`[WS] set_conversation → ${msg.conversationId?.substring(0, 8)}, clients: ${clientConvMap.size}`);
                     await ensureCached(msg.conversationId, getInstanceForCascade(msg.conversationId));

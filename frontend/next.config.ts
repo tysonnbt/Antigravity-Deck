@@ -9,6 +9,15 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   // devIndicators: false — enabled in dev so devs know it's not production
 
+  // Allow Tailscale and LAN IPs to access Next.js dev server
+  // Next.js requires exact origins (no wildcards)
+  allowedDevOrigins: [
+    'http://100.88.146.127:3000',  // Tailscale IP
+    'http://100.88.146.127',       // Tailscale IP (no port)
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+  ],
+
   // Allow long-running backend responses (e.g. workspace create waits up to 30s for LS detection)
   experimental: {
     proxyTimeout: 60_000, // 60s proxy timeout (default is ~30s)

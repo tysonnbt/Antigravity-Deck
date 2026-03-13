@@ -19,6 +19,21 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
+// Server-side WS heartbeat — keeps Tailscale/VPN connections alive
+// Without this, idle TCP sockets get silently dropped by Tailscale relay
+const WS_PING_INTERVAL = 30000; // 30s between pings
+const wsHeartbeat = setInterval(() => {
+  wss.clients.forEach(ws => {
+    if (ws.isAlive === false) {
+      console.log('[WS] terminating unresponsive client');
+      return ws.terminate();
+    }
+    ws.isAlive = false;
+    ws.ping(); // ws library ping frame (not JSON)
+  });
+}, WS_PING_INTERVAL);
+wss.on('close', () => clearInterval(wsHeartbeat));
+
 // Security Headers - Helmet.js
 app.use(helmet({
   contentSecurityPolicy: {
@@ -193,11 +208,11 @@ if (AUTH_KEY) {
       return next();
     }
     
-    // Localhost bypass only if explicitly enabled (disabled by default for security)
+    // Auto-bypass auth for localhost and Tailscale (trusted networks)
     const ip = req.ip || req.socket.remoteAddress || '';
     const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
-    const allowLocalBypass = process.env.ALLOW_LOCALHOST_BYPASS === 'true';
-    if (isLocal && allowLocalBypass) return next();
+    const isTailscale = /^(::ffff:)?100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(ip);
+    if (isLocal || isTailscale) return next();
 
     const key = req.headers['x-auth-key'] || req.query.auth_key;
     
@@ -230,13 +245,13 @@ if (AUTH_KEY) {
 
 // Routes & WebSocket
 setupRoutes(app);
-setupWebSocket(wss);
+setupWebSocket(wss, wsHeartbeat);
 
 // Connect logger → broadcast app_log events to Live Logs viewers
 logger.connect(require('./src/ws').broadcastToGlobal);
 
 // Start
-server.listen(PORT, async () => {
+server.listen(PORT, '0.0.0.0', async () => {
   console.log(`\n  💬 Antigravity Deck (API) running at http://localhost:${PORT}\n`);
   // Initialize Web Push VAPID keys
   try {
