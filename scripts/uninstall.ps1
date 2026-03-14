@@ -14,7 +14,7 @@ Write-Host ""
 if (-not (Test-Path $INSTALL_DIR)) {
     Write-Host "  [i] Nothing to uninstall -- directory not found." -ForegroundColor Yellow
     Write-Host ""
-    exit 0
+    return
 }
 
 # --- Kill processes with open handles inside the install dir ---
@@ -101,7 +101,7 @@ Start-Sleep -Seconds 1
 if (-not (Test-Path $INSTALL_DIR)) {
     Write-Host "  [OK] Antigravity Deck has been removed." -ForegroundColor Green
     Write-Host ""
-    exit 0
+    return
 }
 
 # Attempt 2: robocopy mirror + rd
@@ -118,7 +118,7 @@ Start-Sleep -Seconds 1
 if (-not (Test-Path $INSTALL_DIR)) {
     Write-Host "  [OK] Antigravity Deck has been removed." -ForegroundColor Green
     Write-Host ""
-    exit 0
+    return
 }
 
 # Attempt 3: Schedule deletion on next reboot via registry

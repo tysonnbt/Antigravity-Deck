@@ -86,7 +86,7 @@ if ($missing.Count -gt 0) {
     Write-Host ""
     Write-Host "  Install the missing tools and run this script again." -ForegroundColor Yellow
     Write-Host ""
-    exit 1
+    return
 }
 
 Write-Host ""
