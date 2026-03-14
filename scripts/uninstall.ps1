@@ -85,27 +85,53 @@ if ($killed.Count -gt 0) {
 
 Write-Host ""
 
+# --- Make sure this shell is not inside the install dir (would cause a lock) ---
+if ((Get-Location).Path -like "$INSTALL_DIR*") {
+    Set-Location $env:TEMP
+}
+
 # --- Delete the install directory ---
 Write-Host "  [i] Removing $INSTALL_DIR ..." -ForegroundColor Cyan
 
-try {
-    Remove-Item -Recurse -Force $INSTALL_DIR -ErrorAction Stop
+# Attempt 1: cmd /c rd — bypasses PowerShell file locks
+$rd = Start-Process "cmd.exe" -ArgumentList "/c rd /s /q `"$INSTALL_DIR`"" -Wait -PassThru -WindowStyle Hidden
+Start-Sleep -Seconds 1
+
+if (-not (Test-Path $INSTALL_DIR)) {
     Write-Host "  [OK] Antigravity Deck has been removed." -ForegroundColor Green
+    Write-Host ""
+    exit 0
+}
+
+# Attempt 2: robocopy mirror then remove
+Write-Host "  [!] Trying robocopy mirror..." -ForegroundColor Yellow
+$emptyDir = Join-Path $env:TEMP "ag_empty_$([System.Guid]::NewGuid().ToString('N'))"
+New-Item -ItemType Directory -Path $emptyDir | Out-Null
+Start-Process "robocopy.exe" -ArgumentList "`"$emptyDir`" `"$INSTALL_DIR`" /MIR /NFL /NDL /NJH /NJS /NC /NS /NP" -Wait -WindowStyle Hidden
+Remove-Item -Recurse -Force $emptyDir -ErrorAction SilentlyContinue
+Start-Process "cmd.exe" -ArgumentList "/c rd /s /q `"$INSTALL_DIR`"" -Wait -WindowStyle Hidden
+Start-Sleep -Seconds 1
+
+if (-not (Test-Path $INSTALL_DIR)) {
+    Write-Host "  [OK] Antigravity Deck has been removed." -ForegroundColor Green
+    Write-Host ""
+    exit 0
+}
+
+# Attempt 3: Schedule deletion on next Windows reboot
+Write-Host "  [!] Files still locked — scheduling deletion on next reboot..." -ForegroundColor Yellow
+try {
+    $regPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager"
+    $existing = (Get-ItemProperty -Path $regPath -Name "PendingFileRenameOperations" -ErrorAction SilentlyContinue).PendingFileRenameOperations
+    $newEntry = "\??\$INSTALL_DIR", ""
+    if ($existing) { $newEntry = $existing + $newEntry }
+    Set-ItemProperty -Path $regPath -Name "PendingFileRenameOperations" -Value $newEntry -ErrorAction Stop
+    Write-Host "  [OK] Scheduled. The folder will be deleted automatically on next reboot." -ForegroundColor Green
+    Write-Host "       Please restart your PC to complete uninstall." -ForegroundColor DarkGray
 } catch {
-    Write-Host "  [!] Standard removal failed. Trying robocopy trick..." -ForegroundColor Yellow
-
-    $emptyDir = Join-Path $env:TEMP "ag_empty_$([System.Guid]::NewGuid().ToString('N'))"
-    New-Item -ItemType Directory -Path $emptyDir | Out-Null
-    robocopy $emptyDir $INSTALL_DIR /MIR /NFL /NDL /NJH /NJS /NC /NS /NP 2>$null | Out-Null
-    Remove-Item -Recurse -Force $emptyDir 2>$null
-    Remove-Item -Recurse -Force $INSTALL_DIR 2>$null
-
-    if (Test-Path $INSTALL_DIR) {
-        Write-Host "  [!] Could not fully remove. Some files may still be locked." -ForegroundColor Red
-        Write-Host "      Try closing all terminals, IDE windows, and rerun this script." -ForegroundColor Yellow
-    } else {
-        Write-Host "  [OK] Antigravity Deck has been removed." -ForegroundColor Green
-    }
+    Write-Host "  [!] Could not schedule reboot deletion (run as Administrator to enable this)." -ForegroundColor Red
+    Write-Host "      Manual fix: close all Explorer windows and terminals, then run:" -ForegroundColor Yellow
+    Write-Host "      cmd /c rd /s /q `"$INSTALL_DIR`"" -ForegroundColor White
 }
 
 Write-Host ""
