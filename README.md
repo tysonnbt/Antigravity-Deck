@@ -109,16 +109,16 @@ curl -sL https://raw.githubusercontent.com/tysonnbt/Antigravity-Deck/main/script
 
 ### 🗑️ Uninstall
 
-To remove Antigravity Deck, simply delete the install folder:
+To remove Antigravity Deck (stops any running instance automatically):
 
 **Windows:**
 ```powershell
-Remove-Item -Recurse -Force "$env:LOCALAPPDATA\AntigravityDeck"
+irm https://raw.githubusercontent.com/tysonnbt/Antigravity-Deck/main/scripts/uninstall.ps1 | iex
 ```
 
 **macOS / Linux:**
 ```bash
-rm -rf ~/.antigravity-deck
+curl -sL https://raw.githubusercontent.com/tysonnbt/Antigravity-Deck/main/scripts/uninstall.sh | bash
 ```
 
 ### Local Development

@@ -12,7 +12,7 @@ Write-Host "  Install location: $INSTALL_DIR" -ForegroundColor DarkGray
 Write-Host ""
 
 if (-not (Test-Path $INSTALL_DIR)) {
-    Write-Host "  [i] Nothing to uninstall — directory not found." -ForegroundColor Yellow
+    Write-Host "  [i] Nothing to uninstall -- directory not found." -ForegroundColor Yellow
     Write-Host ""
     exit 0
 }
@@ -22,7 +22,7 @@ Write-Host "  [i] Checking for running processes..." -ForegroundColor Cyan
 
 $killed = @()
 
-# Method 1: Find node/antigravity processes whose command line references the install dir
+# Method 1: Find node processes whose command line references the install dir
 $procs = Get-WmiObject Win32_Process -Filter "Name = 'node.exe'" 2>$null
 foreach ($proc in $procs) {
     try {
@@ -35,7 +35,7 @@ foreach ($proc in $procs) {
     } catch { }
 }
 
-# Method 2: Also catch any child processes started from that dir
+# Method 2: Kill child processes (next-server, cloudflared) referencing install dir
 $allProcs = @("node.exe", "next-server.exe", "cloudflared.exe")
 foreach ($procName in $allProcs) {
     $procs2 = Get-WmiObject Win32_Process -Filter "Name = '$procName'" 2>$null
@@ -53,9 +53,9 @@ foreach ($procName in $allProcs) {
     }
 }
 
-# Method 3: Use handle64/handle.exe (Sysinternals) if available
+# Method 3: Sysinternals handle.exe if available
 $handleTool = $null
-foreach ($path in @("handle64.exe", "handle.exe", "$env:SystemRoot\System32\handle64.exe")) {
+foreach ($path in @("handle64.exe", "handle.exe")) {
     if (Get-Command $path -ErrorAction SilentlyContinue) {
         $handleTool = $path
         break
@@ -85,27 +85,57 @@ if ($killed.Count -gt 0) {
 
 Write-Host ""
 
+# --- Make sure this shell is not CWD inside the install dir ---
+if ((Get-Location).Path -like "$INSTALL_DIR*") {
+    Set-Location $env:TEMP
+}
+
 # --- Delete the install directory ---
 Write-Host "  [i] Removing $INSTALL_DIR ..." -ForegroundColor Cyan
 
-try {
-    Remove-Item -Recurse -Force $INSTALL_DIR -ErrorAction Stop
+# Attempt 1: cmd /c rd -- bypasses PowerShell file locks
+$rdArgs = '/c rd /s /q "' + $INSTALL_DIR + '"'
+Start-Process "cmd.exe" -ArgumentList $rdArgs -Wait -WindowStyle Hidden
+Start-Sleep -Seconds 1
+
+if (-not (Test-Path $INSTALL_DIR)) {
     Write-Host "  [OK] Antigravity Deck has been removed." -ForegroundColor Green
+    Write-Host ""
+    exit 0
+}
+
+# Attempt 2: robocopy mirror + rd
+Write-Host "  [!] Trying robocopy mirror..." -ForegroundColor Yellow
+$emptyDir = Join-Path $env:TEMP ("ag_empty_" + [System.Guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Path $emptyDir | Out-Null
+$roboArgs = '"' + $emptyDir + '" "' + $INSTALL_DIR + '" /MIR /NFL /NDL /NJH /NJS /NC /NS /NP'
+Start-Process "robocopy.exe" -ArgumentList $roboArgs -Wait -WindowStyle Hidden
+Remove-Item -Recurse -Force $emptyDir -ErrorAction SilentlyContinue
+$rdArgs2 = '/c rd /s /q "' + $INSTALL_DIR + '"'
+Start-Process "cmd.exe" -ArgumentList $rdArgs2 -Wait -WindowStyle Hidden
+Start-Sleep -Seconds 1
+
+if (-not (Test-Path $INSTALL_DIR)) {
+    Write-Host "  [OK] Antigravity Deck has been removed." -ForegroundColor Green
+    Write-Host ""
+    exit 0
+}
+
+# Attempt 3: Schedule deletion on next reboot via registry
+Write-Host "  [!] Files still locked -- scheduling deletion on next reboot..." -ForegroundColor Yellow
+try {
+    $regPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager"
+    $existing = (Get-ItemProperty -Path $regPath -Name "PendingFileRenameOperations" -ErrorAction SilentlyContinue).PendingFileRenameOperations
+    $newEntry = "\??\$INSTALL_DIR", ""
+    if ($existing) { $newEntry = $existing + $newEntry }
+    Set-ItemProperty -Path $regPath -Name "PendingFileRenameOperations" -Value $newEntry -ErrorAction Stop
+    Write-Host "  [OK] Scheduled. The folder will be deleted automatically on next reboot." -ForegroundColor Green
+    Write-Host "       Please restart your PC to complete uninstall." -ForegroundColor DarkGray
 } catch {
-    Write-Host "  [!] Standard removal failed. Trying robocopy trick..." -ForegroundColor Yellow
-
-    $emptyDir = Join-Path $env:TEMP "ag_empty_$([System.Guid]::NewGuid().ToString('N'))"
-    New-Item -ItemType Directory -Path $emptyDir | Out-Null
-    robocopy $emptyDir $INSTALL_DIR /MIR /NFL /NDL /NJH /NJS /NC /NS /NP 2>$null | Out-Null
-    Remove-Item -Recurse -Force $emptyDir 2>$null
-    Remove-Item -Recurse -Force $INSTALL_DIR 2>$null
-
-    if (Test-Path $INSTALL_DIR) {
-        Write-Host "  [!] Could not fully remove. Some files may still be locked." -ForegroundColor Red
-        Write-Host "      Try closing all terminals, IDE windows, and rerun this script." -ForegroundColor Yellow
-    } else {
-        Write-Host "  [OK] Antigravity Deck has been removed." -ForegroundColor Green
-    }
+    Write-Host "  [!] Could not schedule reboot deletion (run as Administrator to enable this)." -ForegroundColor Red
+    Write-Host "      Manual fix: close all Explorer windows and terminals, then run:" -ForegroundColor Yellow
+    $manualCmd = 'cmd /c rd /s /q "' + $INSTALL_DIR + '"'
+    Write-Host "      $manualCmd" -ForegroundColor White
 }
 
 Write-Host ""
