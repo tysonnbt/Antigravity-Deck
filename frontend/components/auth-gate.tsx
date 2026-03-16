@@ -19,12 +19,8 @@ export function AuthGate({ children }: AuthGateProps) {
 
     // Client-side auth check after hydration (avoids SSR mismatch)
     useEffect(() => {
-        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-            setAuthenticated(true);
-            return;
-        }
-
-        // Auto-auth from URL ?key= param (QR code scanning)
+        // Extract ?key= from URL first — must run before any early returns
+        // so that localhost:9808/?key=... correctly saves the key
         const urlParams = new URLSearchParams(window.location.search);
         const urlKey = urlParams.get('key');
         if (urlKey) {
@@ -32,28 +28,35 @@ export function AuthGate({ children }: AuthGateProps) {
             const cleanUrl = new URL(window.location.href);
             cleanUrl.searchParams.delete('key');
             window.history.replaceState({}, '', cleanUrl.toString());
+            // Save key to localStorage so all subsequent API calls use it
+            setAuthKey(urlKey.trim());
+        }
 
-            // Validate key against backend
-            setChecking(true);
-            fetch(`${API_BASE}/api/settings`, {
-                headers: { 'X-Auth-Key': urlKey.trim() }
-            }).then(res => {
-                if (res.ok) {
-                    setAuthKey(urlKey.trim());
-                    setAuthenticated(true);
-                }
-                // If invalid, fall through to show auth gate
-            }).catch(() => {
-                // Network error — show auth gate
-            }).finally(() => setChecking(false));
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            setAuthenticated(true);
             return;
         }
 
-        // Check existing saved key
-        if (getAuthKey()) {
-            setAuthenticated(true);
+        const savedKey = urlKey || getAuthKey();
+        if (!savedKey) {
+            // No key anywhere — show login form
+            return;
         }
+
+        // Validate key against backend (remote access)
+        setChecking(true);
+        fetch(`${API_BASE}/api/settings`, {
+            headers: { 'X-Auth-Key': savedKey.trim() }
+        }).then(res => {
+            if (res.ok) {
+                setAuthenticated(true);
+            }
+            // If invalid, fall through to show auth gate
+        }).catch(() => {
+            // Network error — show auth gate
+        }).finally(() => setChecking(false));
     }, []);
+
 
     const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
