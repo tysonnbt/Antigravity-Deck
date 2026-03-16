@@ -1,10 +1,11 @@
 'use client';
-import { memo, useState } from 'react';
+import { memo, useState, useEffect } from 'react';
 import { Step } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
-import { ImagePlus, Download, Maximize2, X } from 'lucide-react';
+import { ImagePlus, Download, Maximize2, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { API_BASE } from '@/lib/config';
+import { authHeaders } from '@/lib/auth';
 
 interface GeneratedImageStepProps {
     step: Step;
@@ -14,6 +15,8 @@ interface GeneratedImageStepProps {
 export const GeneratedImageStep = memo(function GeneratedImageStep({ step, originalIndex }: GeneratedImageStepProps) {
     const [expanded, setExpanded] = useState(false);
     const [imageError, setImageError] = useState(false);
+    const [imageSrc, setImageSrc] = useState<string>('');
+    const [loading, setLoading] = useState(false);
 
     const gi = step.generateImage || {};
     const imageName = gi.imageName || 'Generated Image';
@@ -21,13 +24,31 @@ export const GeneratedImageStep = memo(function GeneratedImageStep({ step, origi
     const modelName = gi.modelName || '';
     const uri = gi.generatedMedia?.uri || '';
 
-    // Build image URL via the secure /api/file/serve endpoint
-    const imageUrl = uri ? `${API_BASE}/api/file/serve?path=${encodeURIComponent(uri)}` : '';
+    // Fetch image via POST — keeps file:// URI out of the URL so Cloudflare WAF won't block it
+    useEffect(() => {
+        if (!uri) return;
+        let cancelled = false;
+        setLoading(true);
+        setImageError(false);
+        setImageSrc('');
+        fetch(`${API_BASE}/api/file/serve`, {
+            method: 'POST',
+            headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: uri }),
+        })
+            .then(r => r.ok ? r.json() : Promise.reject(r.status))
+            .then(({ data, mimeType }) => {
+                if (!cancelled) setImageSrc(`data:${mimeType};base64,${data}`);
+            })
+            .catch(() => { if (!cancelled) setImageError(true); })
+            .finally(() => { if (!cancelled) setLoading(false); });
+        return () => { cancelled = true; };
+    }, [uri]);
 
     const handleDownload = () => {
-        if (!imageUrl) return;
+        if (!imageSrc) return;
         const a = document.createElement('a');
-        a.href = imageUrl;
+        a.href = imageSrc;
         a.download = `${imageName}.png`;
         a.click();
     };
@@ -51,10 +72,15 @@ export const GeneratedImageStep = memo(function GeneratedImageStep({ step, origi
                     </div>
 
                     {/* Image */}
-                    {imageUrl && !imageError ? (
+                    {loading ? (
+                        <div className="flex items-center justify-center py-12 text-muted-foreground/60 text-sm gap-2">
+                            <Loader2 className="h-5 w-5 animate-spin opacity-50" />
+                            <span>Loading image…</span>
+                        </div>
+                    ) : imageSrc && !imageError ? (
                         <div className="relative group">
                             <img
-                                src={imageUrl}
+                                src={imageSrc}
                                 alt={prompt || imageName}
                                 className="w-full max-h-[500px] object-contain bg-black/20 cursor-pointer"
                                 onClick={() => setExpanded(true)}
@@ -106,7 +132,7 @@ export const GeneratedImageStep = memo(function GeneratedImageStep({ step, origi
             </div>
 
             {/* Lightbox overlay */}
-            {expanded && imageUrl && (
+            {expanded && imageSrc && (
                 <div
                     className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm cursor-pointer"
                     onClick={() => setExpanded(false)}
@@ -120,7 +146,7 @@ export const GeneratedImageStep = memo(function GeneratedImageStep({ step, origi
                         <X className="h-6 w-6" />
                     </Button>
                     <img
-                        src={imageUrl}
+                        src={imageSrc}
                         alt={prompt || imageName}
                         className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
                         onClick={(e) => e.stopPropagation()}
@@ -131,3 +157,4 @@ export const GeneratedImageStep = memo(function GeneratedImageStep({ step, origi
     );
 });
 GeneratedImageStep.displayName = 'GeneratedImageStep';
+

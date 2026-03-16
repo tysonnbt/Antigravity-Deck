@@ -130,6 +130,91 @@ module.exports = function setupFilesRoutes(app) {
         }
     });
 
+    // POST /api/file/serve — binary image serving for Cloudflare tunnel compatibility
+    // Uses POST so the file path is in the request body (not query string) — Cloudflare WAF
+    // blocks file:// URIs and Windows paths (backslashes) in GET query params.
+    // Returns base64-encoded image data as JSON: { data, mimeType }
+    // Security: same workspace allowlist + MIME type whitelist as GET version
+    app.post('/api/file/serve', (req, res) => {
+        try {
+            let filePath = typeof req.body?.path === 'string' ? req.body.path : '';
+            // Handle file:// URIs
+            if (filePath.startsWith('file:///')) {
+                try { filePath = decodeURIComponent(new URL(filePath).pathname); } catch { filePath = decodeURIComponent(filePath.replace('file://', '')); }
+                if (/^\/[a-zA-Z]:/.test(filePath)) filePath = filePath.substring(1);
+            }
+            if (!filePath) return res.status(400).json({ error: 'Missing path parameter' });
+
+            // MIME whitelist — only serve image types
+            const ALLOWED_MIME = {
+                '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+                '.gif': 'image/gif', '.webp': 'image/webp',
+                '.bmp': 'image/bmp', '.ico': 'image/x-icon',
+            };
+            const ext = path.extname(filePath).toLowerCase();
+            if (!ALLOWED_MIME[ext]) {
+                return res.status(403).json({ error: 'File type not allowed' });
+            }
+
+            // Resolve real path (follows symlinks)
+            let realPath;
+            try {
+                realPath = fs.realpathSync(filePath);
+            } catch (e) {
+                if (e.code === 'ENOENT') return res.status(404).json({ error: 'File not found' });
+                return res.status(400).json({ error: 'Invalid file path' });
+            }
+
+            // Build allowed roots (same as GET /api/file/serve)
+            const { lsInstances, getSettings } = require('../config');
+            const settings = getSettings();
+            const allowedRoots = [];
+            if (settings.defaultWorkspaceRoot) {
+                try { allowedRoots.push(fs.realpathSync(settings.defaultWorkspaceRoot)); } catch { }
+            }
+            for (const inst of lsInstances) {
+                if (inst.workspaceFolderUri) {
+                    const fsPath = uriToFsPath(inst.workspaceFolderUri);
+                    if (fsPath) { try { allowedRoots.push(fs.realpathSync(fsPath)); } catch { } }
+                }
+            }
+            const geminiBrainDir = path.join(os.homedir(), '.gemini', 'antigravity', 'brain');
+            try { allowedRoots.push(fs.realpathSync(geminiBrainDir)); } catch { }
+
+            if (allowedRoots.length === 0) {
+                return res.status(403).json({ error: 'Access denied: no workspace configured' });
+            }
+
+            // Verify file is within allowed roots
+            const isAllowed = allowedRoots.some(root => {
+                const normalizedRoot = path.resolve(root);
+                return process.platform === 'win32'
+                    ? realPath.toLowerCase().startsWith(normalizedRoot.toLowerCase() + path.sep) ||
+                    realPath.toLowerCase() === normalizedRoot.toLowerCase()
+                    : realPath.startsWith(normalizedRoot + path.sep) ||
+                    realPath === normalizedRoot;
+            });
+
+            if (!isAllowed) {
+                return res.status(403).json({ error: 'Access denied: file outside workspace' });
+            }
+
+            // Check file size (max 50MB)
+            const stat = fs.statSync(realPath);
+            if (stat.size > 50 * 1024 * 1024) {
+                return res.status(413).json({ error: 'File too large' });
+            }
+
+            // Read and return as base64 JSON (no file path in URL — bypasses Cloudflare WAF)
+            const data = fs.readFileSync(realPath).toString('base64');
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Cache-Control', 'public, max-age=3600');
+            res.json({ data, mimeType: ALLOWED_MIME[ext] });
+        } catch (e) {
+            res.status(500).json({ error: 'Failed to serve file' });
+        }
+    });
+
     // GET /api/file/serve — binary file serving for images/media
     // Security: same workspace allowlist as POST /api/file/read + MIME type whitelist
     app.get('/api/file/serve', (req, res) => {
