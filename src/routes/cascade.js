@@ -6,6 +6,7 @@ const { getAutoAccept, setAutoAccept, buildAcceptPayload } = require('../cache')
 const { startCascade, sendMessage } = require('../cascade'); // startAndSend is NOT used — intentionally omitted
 const { registerCascadeInstance } = require('../poller');
 const { resolveInst } = require('./route-helpers');
+const { validate, validateCascadeId, sendMessageSchema, submitMessageSchema } = require('../validation');
 
 // Security: Method whitelist to prevent arbitrary LS method invocation
 const ALLOWED_LS_METHODS = new Set([
@@ -42,12 +43,9 @@ module.exports = function setupCascadeRoutes(app) {
     });
 
     // Send a message to an existing cascade (non-blocking — fires stream, returns immediately)
-    app.post('/api/cascade/send', async (req, res) => {
+    app.post('/api/cascade/send', validate(sendMessageSchema), async (req, res) => {
         try {
             const { cascadeId, message, modelId, images, imageBase64 } = req.body;
-            if (!cascadeId || !message) {
-                return res.status(400).json({ error: 'cascadeId and message are required' });
-            }
             // Fire-and-forget: start the stream but don't await completion
             // Polling will pick up the AI's response steps in real-time
             const opts = { modelId };
@@ -63,12 +61,9 @@ module.exports = function setupCascadeRoutes(app) {
     });
 
     // Start a new cascade and send a message (non-blocking)
-    app.post('/api/cascade/submit', async (req, res) => {
+    app.post('/api/cascade/submit', validate(submitMessageSchema), async (req, res) => {
         try {
             const { message, modelId, images, imageBase64 } = req.body;
-            if (!message) {
-                return res.status(400).json({ error: 'message is required' });
-            }
             // Start cascade synchronously, then fire-and-forget the message
             const inst = resolveInst(req);
             const cascadeId = await startCascade(inst);
@@ -85,7 +80,7 @@ module.exports = function setupCascadeRoutes(app) {
     });
 
     // Cascade run status
-    app.get('/api/cascade/:id/status', async (req, res) => {
+    app.get('/api/cascade/:id/status', validateCascadeId, async (req, res) => {
         try {
             const inst = resolveInst(req);
             if (!inst) return res.status(503).json({ error: 'No language server connected' });
@@ -105,7 +100,7 @@ module.exports = function setupCascadeRoutes(app) {
     // Accept or reject pending code changes
     // HandleCascadeUserInteraction is a streaming RPC — use fire-and-forget
     // Searches ALL LS instances to find the one that owns this cascade
-    app.post('/api/cascade/:id/accept', async (req, res) => {
+    app.post('/api/cascade/:id/accept', validateCascadeId, async (req, res) => {
         const { lsInstances } = require('../config');
         const cascadeId = req.params.id;
         const isReject = !!req.body?.reject;
@@ -169,7 +164,7 @@ module.exports = function setupCascadeRoutes(app) {
     });
 
     // Cancel active cascade invocation
-    app.post('/api/cascade/:id/cancel', async (req, res) => {
+    app.post('/api/cascade/:id/cancel', validateCascadeId, async (req, res) => {
         try {
             const inst = resolveInst(req);
             const result = await callApi('CancelCascadeInvocation', {
@@ -190,7 +185,7 @@ module.exports = function setupCascadeRoutes(app) {
     });
 
     // Token usage / generator metadata
-    app.get('/api/cascade/:id/metadata', async (req, res) => {
+    app.get('/api/cascade/:id/metadata', validateCascadeId, async (req, res) => {
         try {
             const inst = resolveInst(req);
             if (!inst) return res.status(503).json({ error: 'No language server connected' });
@@ -217,7 +212,7 @@ module.exports = function setupCascadeRoutes(app) {
     });
 
     // Delete a cascade conversation
-    app.delete('/api/cascade/:id', async (req, res) => {
+    app.delete('/api/cascade/:id', validateCascadeId, async (req, res) => {
         try {
             await callApi('DeleteCascadeTrajectory', { cascadeId: req.params.id }, resolveInst(req));
             const { cleanupCascade } = require('../cleanup');

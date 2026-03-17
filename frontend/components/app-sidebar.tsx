@@ -48,6 +48,7 @@ import { Settings, User, Plug, Book, Globe, Moon, Sun, Plus, FolderOpen, FolderP
 import { WorkspaceGroup } from "./sidebar/workspace-group"
 import type { ConvSummary, WorkspaceData } from "./sidebar/workspace-group"
 import { SystemResourceSummary } from "./sidebar/system-resource-summary"
+import { useViewContext } from "@/lib/view-context"
 
 interface AppSidebarProps {
     currentConvId: string | null
@@ -56,12 +57,8 @@ interface AppSidebarProps {
     detected: boolean
     onSelectConversation: (convId: string | null, wsName: string) => void
     onSelectWorkspace: (wsName: string) => void
-    onShowAccountInfo: () => void
-    onShowSettings: () => void
-    onShowLogs: () => void
-    onShowBridge: () => void
-    onShowSourceControl: () => void
-    onShowResources: () => void
+    /** Clears conversation selection + active workspace (for nav to global panels) */
+    onClearNavigation: () => void
     onGoHome: () => void
     activeWorkspace: string | null
     workspaceResources?: ResourceSnapshot | null
@@ -75,12 +72,7 @@ export function AppSidebar({
     detected,
     onSelectConversation,
     onSelectWorkspace,
-    onShowAccountInfo,
-    onShowSettings,
-    onShowLogs,
-    onShowBridge,
-    onShowSourceControl,
-    onShowResources,
+    onClearNavigation,
     onGoHome,
     activeWorkspace,
     workspaceResources,
@@ -89,6 +81,34 @@ export function AppSidebar({
 }: AppSidebarProps) {
     const { isDark, toggle: toggleTheme } = useTheme()
     const { isMobile } = useSidebar()
+    const {
+        resetPanels, setShowAccountInfo, setShowSettings, setShowLogs,
+        setShowBridge, setShowSourceControl, setShowResources,
+    } = useViewContext()
+
+    const onShowAccountInfo = useCallback(() => {
+        onClearNavigation(); resetPanels(); setShowAccountInfo(true);
+    }, [onClearNavigation, resetPanels, setShowAccountInfo])
+
+    const onShowSettings = useCallback(() => {
+        onClearNavigation(); resetPanels(); setShowSettings(true);
+    }, [onClearNavigation, resetPanels, setShowSettings])
+
+    const onShowLogs = useCallback(() => {
+        onClearNavigation(); resetPanels(); setShowLogs(true);
+    }, [onClearNavigation, resetPanels, setShowLogs])
+
+    const onShowBridge = useCallback(() => {
+        onClearNavigation(); resetPanels(); setShowBridge(true);
+    }, [onClearNavigation, resetPanels, setShowBridge])
+
+    const onShowSourceControl = useCallback(() => {
+        onClearNavigation(); resetPanels(); setShowSourceControl(true);
+    }, [onClearNavigation, resetPanels, setShowSourceControl])
+
+    const onShowResources = useCallback(() => {
+        onClearNavigation(); resetPanels(); setShowResources(true);
+    }, [onClearNavigation, resetPanels, setShowResources])
 
     const [wsData, setWsData] = useState<WorkspaceData[]>([])
     const [folders, setFolders] = useState<WorkspaceFolder[]>([])

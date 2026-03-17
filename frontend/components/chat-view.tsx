@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { TokenUsage } from './token-usage';
 import { cn } from '@/lib/utils';
-import { SourceControlView } from './source-control-view';
+import { SourceControlView } from './source-control';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -24,6 +24,7 @@ import {
 import { Settings, Folder, Zap, BarChart2, RefreshCcw, SendHorizontal, Square, Paperclip, GitBranch, Plus, X, ChevronDown, Activity, Download, Bell, BellOff, Rocket, ArrowDown as ArrowDownIcon, Camera, Brain, Image as ImageIcon, Star } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { notificationService, NOTIFICATION_SETTINGS_CHANGED } from '@/lib/notifications';
+import { useViewContext } from '@/lib/view-context';
 
 // === Props ===
 interface ChatViewProps {
@@ -38,12 +39,7 @@ interface ChatViewProps {
     cascadeStatus?: string;
     onCascadeCreated: (cascadeId: string) => void;
     onNewConversation: () => void;
-    showTimeline: boolean;
-    onSetShowTimeline: (val: boolean) => void;
-    showAnalytics: boolean;
-    onToggleAnalytics: () => void;
     onExport: () => void;
-    onShowSettings?: () => void;
 }
 
 // === Classification ===
@@ -78,7 +74,8 @@ function generateThumbnail(base64: string, mimeType: string, maxSize = 128): Pro
 }
 
 // === Main Chat View ===
-export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = false, onLoadOlder, currentConvId, currentWorkspace, wsVersion, cascadeStatus, onCascadeCreated, onNewConversation, showTimeline, onSetShowTimeline, showAnalytics, onToggleAnalytics, onExport, onShowSettings }: ChatViewProps) {
+export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = false, onLoadOlder, currentConvId, currentWorkspace, wsVersion, cascadeStatus, onCascadeCreated, onNewConversation, onExport }: ChatViewProps) {
+    const { showTimeline, handleSetShowTimeline: onSetShowTimeline, showAnalytics, toggleAnalytics: onToggleAnalytics, showSettings, setShowSettings } = useViewContext();
     const [input, setInput] = useState('');
     const [sending, setSending] = useState(false);
     // activeCascadeId: derived from currentConvId, with local override for new chats
@@ -528,14 +525,12 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
                             >
                                 Enable
                             </button>
-                            {onShowSettings && (
-                                <button
-                                    className="text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors whitespace-nowrap"
-                                    onClick={onShowSettings}
-                                >
-                                    Settings
-                                </button>
-                            )}
+                            <button
+                                className="text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors whitespace-nowrap"
+                                onClick={() => setShowSettings(true)}
+                            >
+                                Settings
+                            </button>
                             <button
                                 className="text-muted-foreground/40 hover:text-muted-foreground transition-colors"
                                 onClick={() => {

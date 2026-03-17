@@ -6,11 +6,10 @@
 const { lsConfig, lsInstances, POLL_INTERVAL, FAST_POLL_INTERVAL, SLOW_POLL_INTERVAL, STEP_WINDOW_SIZE } = require('./config');
 const { callApi, callApiOnInstance } = require('./api');
 const { countBinarySteps, decodeBinarySteps } = require('./protobuf');
-// NOTE: ws.js is NOT imported at top level to avoid circular dependency:
-//   cache.js → ws.js → poller.js → ws.js
-// Instead, broadcast/broadcastAll are lazy-loaded inside functions that need them.
-function _broadcast(data, targetConvId) { return require('./ws').broadcast(data, targetConvId); }
-function _broadcastAll(data) { return require('./ws').broadcastAll(data); }
+// Event bus: decouples broadcast from WS module to eliminate circular dependency
+const bus = require('./event-bus');
+function _broadcast(data, targetConvId) { bus.emit('broadcast', data, targetConvId); }
+function _broadcastAll(data) { bus.emit('broadcastAll', data); }
 const { stepCache, getStepCountAndStatus, ensureCached, detectApiStartIndex, fetchingSet } = require('./step-cache');
 const { handleAutoAccept, startAutoAcceptPolling } = require('./auto-accept');
 
@@ -60,6 +59,11 @@ function startPolling() {
     console.log(`[*] Polling every ${POLL_INTERVAL / 1000}s (global — all running conversations)`);
     // Start dedicated auto-accept polling (checks ALL running cascades, not just UI-viewed)
     startAutoAcceptPolling();
+}
+
+function stopPolling() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    if (sseAbortController) { sseAbortController.abort(); sseAbortController = null; }
 }
 
 // --- Poll tick: discover ALL running conversations across ALL LS instances ---
@@ -403,7 +407,7 @@ async function pollConversation(activeConvId, info) {
             }
         }
 
-    } catch (e) { }
+    } catch (e) { console.error(`[poll] pollConversation error for ${activeConvId?.substring(0, 8)}:`, e.message); }
 }
 
 // --- SSE Stream: Subscribe to real-time cascade status changes ---
@@ -519,7 +523,7 @@ function startSSE() {
 }
 
 module.exports = {
-    startPolling, startSSE, getInstanceForCascade, registerCascadeInstance,
+    startPolling, stopPolling, startSSE, getInstanceForCascade, registerCascadeInstance,
     // Exposed for cleanup.js — not for general use
     _knownConvIds: knownConvIds,
     _lastCascadeStatusMap: lastCascadeStatusMap,

@@ -334,6 +334,10 @@ function startAutoRescan() {
     rescanTimer = setTimeout(rescanLoop, lsInstances.length === 0 ? FAST_RESCAN_INTERVAL : NORMAL_RESCAN_INTERVAL);
 }
 
+function stopAutoRescan() {
+    if (rescanTimer) { clearTimeout(rescanTimer); rescanTimer = null; }
+}
+
 async function rescanLoop() {
     await rescanNow();
     rescanTimer = setTimeout(rescanLoop, lsInstances.length === 0 ? FAST_RESCAN_INTERVAL : NORMAL_RESCAN_INTERVAL);
@@ -456,5 +460,5 @@ function getFirstActiveInstance() {
     return lsInstances.find(i => i.active) || lsInstances[0] || null;
 }
 
-module.exports = { detectLanguageServers, detectPorts, findApiPort, init, switchToInstance, startAutoRescan, getInstanceByName, getFirstActiveInstance };
+module.exports = { detectLanguageServers, detectPorts, findApiPort, init, switchToInstance, startAutoRescan, stopAutoRescan, getInstanceByName, getFirstActiveInstance };
 

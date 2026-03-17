@@ -341,7 +341,11 @@ function startResourceMonitor() {
     }, 2000);
 }
 
-module.exports = { startResourceMonitor, getResourceSnapshot };
+function stopResourceMonitor() {
+    if (monitorTimer) { clearInterval(monitorTimer); monitorTimer = null; }
+}
+
+module.exports = { startResourceMonitor, stopResourceMonitor, getResourceSnapshot };
 
 /**
  * Find the frontend Next.js process PID.

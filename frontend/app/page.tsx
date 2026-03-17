@@ -1,22 +1,14 @@
 'use client';
 
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { useWebSocket } from '@/lib/websocket';
-import { extractStepContent, exportToMarkdown } from '@/lib/step-utils';
+import { exportToMarkdown } from '@/lib/step-utils';
 import { Timeline } from '@/components/timeline';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
-import { MoreVertical, BarChart2, Download, Bell, BellOff, FolderSync, Star, WifiOff, FolderOpen, Rocket, Loader2, Check, Smartphone, Share2, X } from 'lucide-react';
+import { FolderSync, Star, WifiOff, FolderOpen, Rocket, Loader2, Check, Smartphone, Share2, X } from 'lucide-react';
 import { API_BASE } from '@/lib/config';
 import { authHeaders } from '@/lib/auth';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { ChatView } from '@/components/chat-view';
 import { AppSidebar } from '@/components/app-sidebar';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -26,13 +18,14 @@ import { SettingsView } from '@/components/settings-view';
 import { AuthGate } from '@/components/auth-gate';
 import { AgentLogsView } from '@/components/agent-logs-view';
 import { AgentBridgeView } from '@/components/agent-bridge-view';
-import { SourceControlView } from '@/components/source-control-view';
+import { SourceControlView } from '@/components/source-control';
 import { ResourceMonitorView } from '@/components/resource-monitor-view';
 import { WorkspaceOnboardModal } from '@/components/workspace-onboard-modal';
 import { notificationService } from '@/lib/notifications';
 import { initAppLogger } from '@/lib/app-logger';
 import { usePwaInstall } from '@/hooks/use-pwa-install';
 import { getSettings } from '@/lib/cascade-api';
+import { ViewProvider, useViewContext } from '@/lib/view-context';
 
 
 // Lazy-load components that are hidden by default
@@ -93,16 +86,23 @@ function LaunchIdeButton() {
 }
 
 export default function Home() {
+  return (
+    <ViewProvider>
+      <HomeInner />
+    </ViewProvider>
+  );
+}
+
+function HomeInner() {
   const { connected, detected, swapping, steps, baseIndex, stepCount, loadingOlder, conversations, currentConvId, cascadeStatus, conversationsVersion, stepContentVersion, workspaceResources, selectConversation, lastUpdate, loadOlder } = useWebSocket();
 
-  const [showAnalytics, setShowAnalytics] = useState(() => getStoredValue('antigravity-show-analytics', false));
-  const [showTimeline, setShowTimeline] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('showTimeline');
-      return saved !== null ? saved === 'true' : false;
-    }
-    return false;
-  });
+  const {
+    showAnalytics, showTimeline, showSettings, showLogs, showBridge,
+    showSourceControl, showResources, showAccountInfo, newChatMode,
+    setShowSourceControl, setNewChatMode,
+    resetPanels,
+  } = useViewContext();
+
   const [showShortcuts, setShowShortcuts] = useState(false);
 
   // === PWA Notification service init + App Logger ===
@@ -114,47 +114,8 @@ export default function Home() {
   // === PWA Install ===
   const pwaInstall = usePwaInstall();
 
-  // Persist showTimeline to localStorage
-  const handleSetShowTimeline = useCallback((val: boolean) => {
-    setShowTimeline(val);
-    localStorage.setItem('showTimeline', String(val));
-  }, []);
-
-  // Listen for localStorage changes (e.g. from Settings view)
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === 'showTimeline' && e.newValue !== null) {
-        setShowTimeline(e.newValue === 'true');
-      }
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
-
-  // === Mobile sidebar state ===
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarClosing, setSidebarClosing] = useState(false);
-
-  const handleCloseSidebar = useCallback(() => {
-    setSidebarClosing(true);
-    setTimeout(() => { setSidebarOpen(false); setSidebarClosing(false); }, 200);
-  }, []);
-
   // === Active workspace name — which workspace the user is "in" ===
   const [activeWorkspace, setActiveWorkspace] = useState<string | null>(() => getStoredValue('antigravity-active-workspace', null));
-  // NEW: When true, show ChatView in "new chat" mode (no conversation yet)
-  const [newChatMode, setNewChatMode] = useState(false);
-  // NEW: When true, show AccountInfoView in main panel
-  const [showAccountInfo, setShowAccountInfo] = useState(() => getStoredValue('antigravity-show-account-info', false));
-  // NEW: When true, show SettingsView in main panel
-  const [showSettings, setShowSettings] = useState(() => getStoredValue('antigravity-show-settings', false));
-  // NEW: When true, show AgentLogsView in main panel
-  const [showLogs, setShowLogs] = useState(() => getStoredValue('antigravity-show-logs', false));
-  // NEW: When true, show Agent Bridge in main panel
-  const [showBridge, setShowBridge] = useState(() => getStoredValue('antigravity-show-bridge', false));
-  // NEW: When true, show Source Control / IDE view in main panel
-  const [showSourceControl, setShowSourceControl] = useState(false);
-  const [showResources, setShowResources] = useState(false);
   // Bumped when sidebar creates a workspace, so panels refresh their lists
   const [wsVersion, setWsVersion] = useState(0);
 
@@ -169,11 +130,6 @@ export default function Home() {
 
   // === Persist navigation state to localStorage ===
   useEffect(() => { localStorage.setItem('antigravity-active-workspace', JSON.stringify(activeWorkspace)); }, [activeWorkspace]);
-  useEffect(() => { localStorage.setItem('antigravity-show-settings', JSON.stringify(showSettings)); }, [showSettings]);
-  useEffect(() => { localStorage.setItem('antigravity-show-account-info', JSON.stringify(showAccountInfo)); }, [showAccountInfo]);
-  useEffect(() => { localStorage.setItem('antigravity-show-logs', JSON.stringify(showLogs)); }, [showLogs]);
-  useEffect(() => { localStorage.setItem('antigravity-show-bridge', JSON.stringify(showBridge)); }, [showBridge]);
-  useEffect(() => { localStorage.setItem('antigravity-show-analytics', JSON.stringify(showAnalytics)); }, [showAnalytics]);
 
   // Persist currentConvId and restore on mount
   useEffect(() => {
@@ -204,17 +160,6 @@ export default function Home() {
   const [bookmarkedSteps, setBookmarkedSteps] = useState<Set<number>>(new Set());
 
 
-  // Helper to reset all panel states
-  const resetPanels = useCallback(() => {
-    setNewChatMode(false);
-    setShowAccountInfo(false);
-    setShowSettings(false);
-    setShowLogs(false);
-    setShowBridge(false);
-    setShowSourceControl(false);
-    setShowResources(false);
-  }, []);
-
   // === Sidebar: click workspace → show conversation list ===
   const handleSelectWorkspace = useCallback((wsName: string) => {
     setActiveWorkspace(wsName);
@@ -240,7 +185,7 @@ export default function Home() {
     selectConversation(null);
     resetPanels();
     setNewChatMode(true);
-  }, [selectConversation, resetPanels]);
+  }, [selectConversation, resetPanels, setNewChatMode]);
 
   // === Start conversation from sidebar (new chat button) ===
   const handleStartConversation = useCallback(() => {
@@ -251,82 +196,31 @@ export default function Home() {
     } else {
       setActiveWorkspace(null);
     }
-  }, [selectConversation, activeWorkspace, resetPanels]);
+  }, [selectConversation, activeWorkspace, resetPanels, setNewChatMode]);
 
-  // === Show account info in main panel ===
-  const handleShowAccountInfo = useCallback(() => {
+  // === Clear navigation — used by sidebar before switching to global panels ===
+  const handleClearNavigation = useCallback(() => {
     selectConversation(null);
-    resetPanels();
     setActiveWorkspace(null);
-    setShowAccountInfo(true);
-  }, [selectConversation, resetPanels]);
-
-  // === Show settings in main panel ===
-  const handleShowSettings = useCallback(() => {
-    selectConversation(null);
-    resetPanels();
-    setActiveWorkspace(null);
-    setShowSettings(true);
-  }, [selectConversation, resetPanels]);
-
-  // === Show Live Logs ===
-  const handleShowLogs = useCallback(() => {
-    selectConversation(null);
-    resetPanels();
-    setActiveWorkspace(null);
-    setShowLogs(true);
-  }, [selectConversation, resetPanels]);
-
-  // === Show Agent Bridge ===
-  const handleShowBridge = useCallback(() => {
-    selectConversation(null);
-    resetPanels();
-    setActiveWorkspace(null);
-    setShowBridge(true);
-  }, [selectConversation, resetPanels]);
-
-  // === Show Source Control / IDE ===
-  const handleShowSourceControl = useCallback(() => {
-    selectConversation(null);
-    resetPanels();
-    setShowSourceControl(true);
-  }, [selectConversation, resetPanels]);
-
-  // === Show Resources ===
-  const handleShowResources = useCallback(() => {
-    selectConversation(null);
-    resetPanels();
-    setActiveWorkspace(null);
-    setShowResources(true);
-  }, [selectConversation, resetPanels]);
+  }, [selectConversation]);
 
   // === Go Home — reset all navigation state to welcome screen ===
   const handleGoHome = useCallback(() => {
     selectConversation(null);
     setActiveWorkspace(null);
-    setNewChatMode(false);
-    setShowAccountInfo(false);
-    setShowSettings(false);
-    setShowLogs(false);
-    setShowBridge(false);
-    setShowResources(false);
-  }, [selectConversation]);
+    resetPanels();
+  }, [selectConversation, resetPanels]);
 
   // When CascadePanel creates a new cascade, track it
   const handleCascadeCreated = useCallback((cascadeId: string) => {
     setNewChatMode(false);
     selectConversation(cascadeId);
-  }, [selectConversation]);
+  }, [selectConversation, setNewChatMode]);
 
   // Bidirectional sync: bumped when any component creates/changes workspaces
   const handleWorkspaceCreated = useCallback(() => {
     setWsVersion(v => v + 1);
   }, []);
-
-  // ChatView's "New Chat" button — enter new chat mode directly
-  // Reuses handleNewChat logic: clear conversation + enable newChatMode
-
-
 
   // Export
   const handleExport = useCallback(() => {
@@ -433,12 +327,7 @@ export default function Home() {
           workspaceResources={workspaceResources}
           onSelectWorkspace={handleSelectWorkspace}
           onSelectConversation={handleSelectConversation}
-          onShowAccountInfo={handleShowAccountInfo}
-          onShowSettings={handleShowSettings}
-          onShowLogs={handleShowLogs}
-          onShowBridge={handleShowBridge}
-          onShowSourceControl={handleShowSourceControl}
-          onShowResources={handleShowResources}
+          onClearNavigation={handleClearNavigation}
           onGoHome={handleGoHome}
           onWorkspaceCreated={handleWorkspaceCreated}
           wsVersion={wsVersion}
@@ -674,12 +563,7 @@ export default function Home() {
                 cascadeStatus={cascadeStatus ?? undefined}
                 onCascadeCreated={handleCascadeCreated}
                 onNewConversation={handleNewChat}
-                showTimeline={showTimeline}
-                onSetShowTimeline={handleSetShowTimeline}
-                showAnalytics={showAnalytics}
-                onToggleAnalytics={() => setShowAnalytics(v => !v)}
                 onExport={handleExport}
-                onShowSettings={handleShowSettings}
               />
 
               {/* Step Detail Sheet */}

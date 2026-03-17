@@ -200,17 +200,17 @@ if (AUTH_KEY) {
     if (isLocal && allowLocalBypass) return next();
 
     const key = req.headers['x-auth-key'] || req.query.auth_key;
-    
-    // Timing-safe comparison to prevent timing attacks
-    if (!key || key.length !== AUTH_KEY.length) {
+    if (!key) {
       return res.status(401).json({ error: 'Unauthorized — invalid or missing auth key' });
     }
-    
+
+    // Timing-safe comparison: hash both keys to fixed length before comparing,
+    // preventing key length leakage via early-exit on length mismatch.
     try {
-      const keyBuffer = Buffer.from(key);
-      const authBuffer = Buffer.from(AUTH_KEY);
-      
-      if (!crypto.timingSafeEqual(keyBuffer, authBuffer)) {
+      const keyHash = crypto.createHash('sha256').update(String(key)).digest();
+      const authHash = crypto.createHash('sha256').update(AUTH_KEY).digest();
+
+      if (!crypto.timingSafeEqual(keyHash, authHash)) {
         return res.status(401).json({ error: 'Unauthorized — invalid or missing auth key' });
       }
     } catch (e) {
@@ -227,6 +227,9 @@ if (AUTH_KEY) {
 } else {
   console.log('  ⚠️  No AUTH_KEY set — API is open (safe for local dev)');
 }
+
+// Graceful shutdown
+const { onShutdown, shutdown } = require('./src/shutdown');
 
 // Routes & WebSocket
 setupRoutes(app);
@@ -249,6 +252,24 @@ server.listen(PORT, async () => {
   const { startResourceMonitor } = require('./src/resource-monitor');
   startResourceMonitor();
   startAutoRescan();
+
+  // Register shutdown handlers for all timers and connections
+  const { stopPolling } = require('./src/poller');
+  const { stopAutoAcceptPolling } = require('./src/auto-accept');
+  const { stopAutoRescan } = require('./src/detector');
+  const { stopResourceMonitor } = require('./src/resource-monitor');
+
+  onShutdown('Polling', stopPolling);
+  onShutdown('Auto-accept polling', stopAutoAcceptPolling);
+  onShutdown('Auto-rescan', stopAutoRescan);
+  onShutdown('Resource monitor', stopResourceMonitor);
+  onShutdown('WebSocket clients', () => {
+    wss.clients.forEach(ws => ws.close(1001, 'Server shutting down'));
+  });
+
+  // Wire up OS signals
+  process.on('SIGTERM', () => shutdown('SIGTERM', server));
+  process.on('SIGINT', () => shutdown('SIGINT', server));
 
   // Auto-start Agent Bridge if configured in settings.json
   const { getSettings } = require('./src/config');
