@@ -48,5 +48,16 @@ export async function getWsUrl(): Promise<string> {
 }
 
 
+/**
+ * Agent WebSocket URL — derived from UI WS URL by appending /agent path.
+ * Example: ws://localhost:3500 → ws://localhost:3500/ws/agent
+ */
+export async function getAgentWsUrl(): Promise<string> {
+    const uiWsUrl = await getWsUrl();
+    // getWsUrl() returns e.g. "ws://localhost:3500" (no path)
+    // Agent WS is at /ws/agent
+    return `${uiWsUrl}/ws/agent`;
+}
+
 // Legacy sync export (used as initial value — overridden when getWsUrl() resolves)
 export const WS_URL = '';
