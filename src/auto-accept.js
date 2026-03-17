@@ -3,9 +3,9 @@
 
 const { lsInstances, getSettings, saveSettings } = require('./config');
 const { callApi, callApiOnInstance, callApiFireAndForgetOnInstance } = require('./api');
-// NOTE: ws.js is NOT imported at top level to avoid circular dependency
-// (cache.js → ws.js → poller.js → auto-accept.js → ws.js)
-function _broadcast(data, targetConvId) { return require('./ws').broadcast(data, targetConvId); }
+// Event bus: decouples broadcast from WS module to eliminate circular dependency
+const bus = require('./event-bus');
+function _broadcast(data, targetConvId) { bus.emit('broadcast', data, targetConvId); }
 const { detectApiStartIndex } = require('./step-cache');
 const fs = require('fs');
 const path = require('path');
@@ -419,6 +419,10 @@ function startAutoAcceptPolling() {
     autoAcceptTimer = setInterval(autoAcceptPollNow, AUTO_ACCEPT_POLL_MS);
 }
 
+function stopAutoAcceptPolling() {
+    if (autoAcceptTimer) { clearInterval(autoAcceptTimer); autoAcceptTimer = null; }
+}
+
 async function autoAcceptPollNow() {
     if (!autoAcceptEnabled || lsInstances.length === 0) return;
     if (isAutoAcceptRunning) return; // Prevent concurrent runs
@@ -476,11 +480,11 @@ async function autoAcceptPollNow() {
                                         break;
                                     }
                                 }
-                            } catch { }
+                            } catch (e) { console.error(`[AutoAccept] Binary fallback error for ${cascadeId.substring(0, 8)}:`, e.message); }
                         }
-                    } catch { }
+                    } catch (e) { console.error(`[AutoAccept] Step fetch error for ${cascadeId.substring(0, 8)}:`, e.message); }
                 }
-            } catch { }
+            } catch (e) { console.error(`[AutoAccept] Instance poll error for ${inst.workspaceName}:`, e.message); }
         }
     } finally {
         isAutoAcceptRunning = false;
@@ -495,4 +499,5 @@ module.exports = {
     handleAutoAccept,
     handleAutoAcceptDirect,
     startAutoAcceptPolling,
+    stopAutoAcceptPolling,
 };

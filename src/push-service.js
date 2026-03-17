@@ -61,9 +61,11 @@ function loadSubscriptions() {
 }
 
 function persistSubscriptions(subs) {
-    _subsCache = subs; // update cache
+    // Write to disk FIRST — only update in-memory cache after successful write.
+    // This prevents cache corruption if the write fails.
     try {
         fs.writeFileSync(SUBSCRIPTIONS_PATH, JSON.stringify(subs, null, 2), 'utf-8');
+        _subsCache = subs;
     } catch (e) {
         console.error('[Push] Failed to save subscriptions:', e.message);
     }

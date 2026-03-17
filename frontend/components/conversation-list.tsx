@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { API_BASE } from '@/lib/config';
 import { authHeaders } from '@/lib/auth';
 import { cn } from '@/lib/utils';
@@ -29,6 +29,7 @@ export function ConversationList({ workspaceName, wsVersion, onSelectConversatio
     const [conversations, setConversations] = useState<ConvSummary[]>([]);
     const [loading, setLoading] = useState(true);
     const [workspace, setWorkspace] = useState<Workspace | null>(null);
+    const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const loadConversations = useCallback(async () => {
         setLoading(true);
@@ -63,8 +64,15 @@ export function ConversationList({ workspaceName, wsVersion, onSelectConversatio
     }, [loadConversations, wsVersion]);
 
     useEffect(() => {
+        // Clear previous interval before setting new one to prevent stacking
+        // on rapid workspace switches
+        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
         const interval = setInterval(loadConversations, 15000);
-        return () => clearInterval(interval);
+        pollIntervalRef.current = interval;
+        return () => {
+            clearInterval(interval);
+            pollIntervalRef.current = null;
+        };
     }, [loadConversations]);
 
     const formatTime = (iso: string) => {

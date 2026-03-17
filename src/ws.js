@@ -3,6 +3,8 @@
 
 const { lsInstances } = require('./config');
 const { getInstanceForCascade } = require('./poller');
+const { wsMessageSchema } = require('./validation');
+const bus = require('./event-bus');
 
 const viewers = new Set();
 const globalViewers = new Set(); // clients that want ALL events (Live Logs)
@@ -29,7 +31,13 @@ function setupWebSocket(wss, { ensureCached, stepCache }) {
 
         ws.on('message', async (raw) => {
             try {
-                const msg = JSON.parse(raw.toString());
+                const parsed = JSON.parse(raw.toString());
+                const validated = wsMessageSchema.safeParse(parsed);
+                if (!validated.success) {
+                    sendToOne(ws, { type: 'error', message: 'Invalid message format' });
+                    return;
+                }
+                const msg = validated.data;
                 if (msg.type === 'set_conversation') {
                     clientConvMap.set(ws, msg.conversationId);
                     console.log(`[WS] set_conversation → ${msg.conversationId?.substring(0, 8)}, clients: ${clientConvMap.size}`);
@@ -50,7 +58,7 @@ function setupWebSocket(wss, { ensureCached, stepCache }) {
                     // Frontend error/log forwarding — rebroadcast to all Live Logs viewers
                     broadcastToGlobal({ ...msg, ts: msg.ts || Date.now() });
                 }
-            } catch (e) { }
+            } catch (e) { console.error('[WS] Message handler error:', e.message); }
         });
 
         ws.on('close', () => {
@@ -99,5 +107,9 @@ function broadcastToGlobal(data) {
         if (v.readyState === 1) v.send(msg);
     });
 }
+
+// Subscribe to event bus — bridge between event-driven modules and WebSocket clients
+bus.on('broadcast', broadcast);
+bus.on('broadcastAll', broadcastAll);
 
 module.exports = { setupWebSocket, sendToOne, broadcast, broadcastAll, broadcastToGlobal };

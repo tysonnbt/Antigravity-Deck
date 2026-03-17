@@ -89,6 +89,11 @@ function validateGitPath(filePath) {
         throw new Error('Invalid file path: paths starting with dash not allowed');
     }
 
+    // Reject git-special prefixes that could be abused
+    if (segments.some(s => s.startsWith('-'))) {
+        throw new Error('Invalid file path: path segments starting with dash not allowed');
+    }
+
     return filePath;
 }
 

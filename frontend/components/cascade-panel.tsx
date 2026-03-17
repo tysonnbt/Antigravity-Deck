@@ -34,6 +34,7 @@ export function CascadePanel({ currentConvId, currentWorkspace, wsVersion, onCas
     const [mode, setMode] = useState<'new' | 'continue'>('new');
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Workspace state
     const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -109,7 +110,19 @@ export function CascadePanel({ currentConvId, currentWorkspace, wsVersion, onCas
             cascadeId,
             timestamp: new Date(),
         }]);
-        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+        // Clear previous scroll timeout to avoid leaks on rapid calls
+        if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+        scrollTimeoutRef.current = setTimeout(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            scrollTimeoutRef.current = null;
+        }, 100);
+    }, []);
+
+    // Clean up scroll timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+        };
     }, []);
 
     const handleSend = useCallback(async () => {
