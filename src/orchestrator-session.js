@@ -114,6 +114,15 @@ class OrchestratorSession extends EventEmitter {
         // Semaphore for LS API calls
         this._apiQueue = [];
         this._activeApiCalls = 0;
+
+        // Chat layer fields
+        this.chatHistory = [];
+        this._chatQueue = [];
+        this._activeOrchestration = false;
+        this._orchRunId = null;
+        this._draining = false;
+        this._idleTimer = null;
+        this._plannerInitialized = false;
     }
 
     // ── Read-only properties ─────────────────────────────────────
@@ -255,11 +264,11 @@ class OrchestratorSession extends EventEmitter {
         };
     }
 
-    // ── Destroy ──────────────────────────────────────────────────
+    // ── Orchestration cleanup (preserves planner + chat) ─────────
 
-    destroy() {
-        if (this._destroyed) return;
-        this._destroyed = true;
+    _cleanupOrchestration() {
+        this._activeOrchestration = false;
+        this._orchRunId = null;
 
         if (this._overallTimeout) {
             clearTimeout(this._overallTimeout);
@@ -278,16 +287,46 @@ class OrchestratorSession extends EventEmitter {
         for (const [, st] of this._subtasks) {
             if (st.session && !st.session.destroyed) {
                 st.session.destroy();
+                st.session = null;
             }
         }
+    }
 
-        if (this._plannerSession && !this._plannerSession.destroyed) {
+    // ── Full teardown ─────────────────────────────────────────────
+
+    destroy() {
+        if (this._destroyed) return;
+        this._destroyed = true;
+
+        this._cleanupOrchestration();
+
+        if (this._plannerSession) {
             this._plannerSession.destroy();
+            this._plannerSession = null;
         }
+
+        this.chatHistory = [];
+        this._plannerInitialized = false;
+        clearTimeout(this._idleTimer);
 
         this._addLog('system', 'Orchestration destroyed');
         this.emit('destroyed');
         this.removeAllListeners();
+    }
+
+    // ── Planner lifecycle ─────────────────────────────────────────
+
+    _ensurePlanner() {
+        if (!this._plannerSession) {
+            this._plannerSession = new AgentSession(`planner-${this.id}`, {
+                workspace: this._workspace,
+                stepSoftLimit: this._config.plannerStepLimit,
+                lsInst: this._lsInst || resolveLsInst(this._workspace),
+                transport: 'orchestrator-planner',
+                orchestrationId: this.id,
+                role: 'planner',
+            });
+        }
     }
 
     // ── Main entry point ─────────────────────────────────────────
@@ -374,7 +413,7 @@ class OrchestratorSession extends EventEmitter {
             this._addLog('system', `Direct response: ${plan.reason || 'simple task'}`);
             this._setState(STATES.COMPLETED);
             this._completedAt = Date.now();
-            this._cleanup();
+            this._cleanupOrchestration();
             this.emit('orch_completed', {
                 orchestrationId: this.id,
                 summary: plan.response || '',
@@ -456,7 +495,7 @@ class OrchestratorSession extends EventEmitter {
         this._setState(STATES.FAILED);
         this._completedAt = Date.now();
         this._addLog('error', `Orchestration failed: ${reason}`);
-        this._cleanup();
+        this._cleanupOrchestration();
 
         const partialResults = {};
         for (const [taskId, st] of this._subtasks) {
@@ -470,31 +509,6 @@ class OrchestratorSession extends EventEmitter {
         });
     }
 
-    _cleanup() {
-        if (this._overallTimeout) {
-            clearTimeout(this._overallTimeout);
-            this._overallTimeout = null;
-        }
-        if (this._progressInterval) {
-            clearInterval(this._progressInterval);
-            this._progressInterval = null;
-        }
-        for (const timer of this._stuckCheckers.values()) {
-            clearInterval(timer);
-        }
-        this._stuckCheckers.clear();
-
-        for (const [, st] of this._subtasks) {
-            if (st.session && !st.session.destroyed) {
-                st.session.destroy();
-                st.session = null;
-            }
-        }
-        if (this._plannerSession && !this._plannerSession.destroyed) {
-            this._plannerSession.destroy();
-            this._plannerSession = null;
-        }
-    }
 
     // ── Execute approved plan ────────────────────────────────────
 
@@ -916,7 +930,7 @@ class OrchestratorSession extends EventEmitter {
         this._setState(STATES.COMPLETED);
         this._completedAt = Date.now();
         this._addLog('system', `Orchestration completed in ${this._elapsed()}ms`);
-        this._cleanup();
+        this._cleanupOrchestration();
 
         const results = {};
         for (const [taskId, st] of this._subtasks) {
@@ -975,7 +989,7 @@ class OrchestratorSession extends EventEmitter {
         this._setState(STATES.CANCELLING);
         this._addLog('system', 'Cancelling orchestration...');
 
-        this._cleanup();
+        this._cleanupOrchestration();
 
         this._setState(STATES.CANCELLED);
         this._completedAt = Date.now();
