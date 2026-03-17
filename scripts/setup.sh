@@ -5,7 +5,24 @@
 set -e
 
 REPO="https://github.com/tysonnbt/Antigravity-Deck.git"
+REPO_API="https://api.github.com/repos/tysonnbt/Antigravity-Deck"
 INSTALL_DIR="$HOME/.antigravity-deck"
+
+# --- Resolve latest release tag ---
+get_latest_tag() {
+    # Try GitHub API (no auth needed for public repos)
+    local tag
+    tag=$(curl -sL "$REPO_API/releases/latest" 2>/dev/null \
+        | grep '"tag_name"' | head -1 \
+        | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
+    if [ -n "$tag" ] && [ "$tag" != "" ]; then echo "$tag"; return; fi
+    # Fallback: git ls-remote tags (sorted by version descending)
+    tag=$(git ls-remote --tags --sort=-v:refname "$REPO" 'v*' 2>/dev/null \
+        | head -1 | sed 's/.*refs\/tags\///' | sed 's/\^{}//')
+    if [ -n "$tag" ]; then echo "$tag"; return; fi
+    # Ultimate fallback: main branch
+    echo "main"
+}
 
 echo ""
 echo "  🔮 Antigravity Deck — One-Command Setup"
@@ -77,27 +94,32 @@ echo ""
 scenario="fresh"       # fresh | up-to-date | updated
 updated_files=""
 
+TARGET_TAG=$(get_latest_tag)
+
 if [ -d "$INSTALL_DIR/.git" ]; then
     cd "$INSTALL_DIR"
 
-    # Save current commit hash before pull
+    # Save current commit hash before update
     hash_before=$(git rev-parse HEAD 2>/dev/null || echo "")
+    current_tag=$(git describe --tags --exact-match HEAD 2>/dev/null || echo "")
 
     echo "  📂 Found existing install — checking for updates..."
 
-    if git fetch origin main --quiet 2>/dev/null; then
-        local_hash=$(git rev-parse HEAD 2>/dev/null)
-        remote_hash=$(git rev-parse "origin/main" 2>/dev/null)
+    if git fetch origin --tags --quiet 2>/dev/null; then
+        # Re-resolve after fetch in case new tags appeared
+        TARGET_TAG=$(get_latest_tag)
 
-        if [ "$local_hash" = "$remote_hash" ]; then
+        if [ "$current_tag" = "$TARGET_TAG" ]; then
             scenario="up-to-date"
-            echo "  ✅ Already up to date (${local_hash:0:7})"
+            echo "  ✅ Already on latest release ($TARGET_TAG)"
         else
-            # Count commits behind
-            behind=$(git rev-list --count "HEAD..origin/main" 2>/dev/null || echo "?")
-            echo "  📥 $behind new commit(s) available — pulling..."
+            if [ -n "$current_tag" ]; then
+                echo "  📥 New release available: $current_tag → $TARGET_TAG"
+            else
+                echo "  📥 Switching to release $TARGET_TAG..."
+            fi
 
-            git pull --ff-only 2>/dev/null
+            git -c advice.detachedHead=false checkout "$TARGET_TAG" --quiet 2>/dev/null
 
             hash_after=$(git rev-parse HEAD 2>/dev/null)
 
@@ -105,7 +127,7 @@ if [ -d "$INSTALL_DIR/.git" ]; then
             updated_files=$(git diff --name-only "$hash_before" "$hash_after" 2>/dev/null || echo "")
             scenario="updated"
 
-            echo "  ✅ Updated to ${hash_after:0:7}"
+            echo "  ✅ Updated to $TARGET_TAG"
         fi
     else
         echo "  ⚠️  Could not fetch updates (offline?) — continuing with current version"
@@ -116,7 +138,8 @@ else
     mkdir -p "$INSTALL_DIR"
     git clone "$REPO" "$INSTALL_DIR"
     cd "$INSTALL_DIR"
-    echo "  ✅ Cloned successfully"
+    git -c advice.detachedHead=false checkout "$TARGET_TAG" --quiet 2>/dev/null
+    echo "  ✅ Installed $TARGET_TAG"
 fi
 
 # === Smart dependency install ===

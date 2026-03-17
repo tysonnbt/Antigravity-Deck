@@ -3,7 +3,28 @@
 
 $ErrorActionPreference = "Stop"
 $REPO        = "https://github.com/tysonnbt/Antigravity-Deck.git"
+$REPO_API    = "https://api.github.com/repos/tysonnbt/Antigravity-Deck"
 $INSTALL_DIR = Join-Path $env:LOCALAPPDATA "AntigravityDeck"
+
+# --- Resolve latest release tag ---
+function Get-LatestTag {
+    # Try GitHub API (no auth needed for public repos)
+    try {
+        $release = Invoke-RestMethod -Uri "$REPO_API/releases/latest" -TimeoutSec 10 2>$null
+        if ($release.tag_name) { return $release.tag_name }
+    } catch { }
+    # Fallback: git ls-remote tags
+    try {
+        $tags = (git ls-remote --tags --sort=-v:refname $REPO 'v*' 2>$null)
+        if ($tags) {
+            $first = ($tags -split "`n")[0]
+            $tag = ($first -replace '.*refs/tags/', '' -replace '\^{}', '').Trim()
+            if ($tag) { return $tag }
+        }
+    } catch { }
+    # Ultimate fallback
+    return "main"
+}
 
 Write-Host ""
 Write-Host "  Antigravity Deck -- One-Command Setup" -ForegroundColor Cyan
@@ -94,32 +115,35 @@ Write-Host ""
 # === Detect scenario ===
 $scenario = "fresh"       # fresh | up-to-date | updated
 $updatedFiles = @()
+$targetTag = Get-LatestTag
 
 if (Test-Path "$INSTALL_DIR\.git") {
     Push-Location $INSTALL_DIR
 
-    # Save current commit hash before pull
+    # Save current commit hash before update
     $hashBefore = (git rev-parse HEAD 2>$null)
+    $currentTag = (git describe --tags --exact-match HEAD 2>$null)
 
     Write-Host "  [i] Found existing install -- checking for updates..." -ForegroundColor Cyan
     try {
-        git fetch origin main --quiet 2>$null
+        git fetch origin --tags --quiet 2>$null
 
-        $localHash  = (git rev-parse HEAD 2>$null)
-        $remoteHash = (git rev-parse "origin/main" 2>$null)
+        # Re-resolve after fetch in case new tags appeared
+        $targetTag = Get-LatestTag
 
-        if ($localHash -eq $remoteHash) {
+        if ($currentTag -eq $targetTag) {
             $scenario = "up-to-date"
-            $shortHash = $localHash.Substring(0, 7)
-            Write-Host "  [OK] Already up to date ($shortHash)" -ForegroundColor Green
+            Write-Host "  [OK] Already on latest release ($targetTag)" -ForegroundColor Green
         }
         else {
-            # Count commits behind
-            $behind = (git rev-list --count "HEAD..origin/main" 2>$null)
-            Write-Host "  [i] $behind new commit(s) available -- pulling..." -ForegroundColor Yellow
+            if ($currentTag) {
+                Write-Host "  [i] New release available: $currentTag -> $targetTag" -ForegroundColor Yellow
+            } else {
+                Write-Host "  [i] Switching to release $targetTag..." -ForegroundColor Yellow
+            }
 
             $ErrorActionPreference = "Continue"
-            git pull --ff-only 2>$null
+            git -c advice.detachedHead=false checkout $targetTag --quiet 2>$null
             $ErrorActionPreference = "Stop"
 
             $hashAfter = (git rev-parse HEAD 2>$null)
@@ -132,12 +156,7 @@ if (Test-Path "$INSTALL_DIR\.git") {
             }
             $scenario = "updated"
 
-            if ($hashAfter) {
-                $shortNewHash = $hashAfter.Substring(0, 7)
-                Write-Host "  [OK] Updated to $shortNewHash" -ForegroundColor Green
-            } else {
-                Write-Host "  [OK] Updated successfully" -ForegroundColor Green
-            }
+            Write-Host "  [OK] Updated to $targetTag" -ForegroundColor Green
         }
     }
     catch {
@@ -151,7 +170,10 @@ else {
     Write-Host "  [i] First time setup -- cloning repository..." -ForegroundColor Cyan
     New-Item -ItemType Directory -Force -Path $INSTALL_DIR | Out-Null
     git clone $REPO $INSTALL_DIR
-    Write-Host "  [OK] Cloned successfully" -ForegroundColor Green
+    Push-Location $INSTALL_DIR
+    git -c advice.detachedHead=false checkout $targetTag --quiet 2>$null
+    Pop-Location
+    Write-Host "  [OK] Installed $targetTag" -ForegroundColor Green
 }
 
 Push-Location $INSTALL_DIR
