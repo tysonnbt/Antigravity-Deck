@@ -10,7 +10,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Workflow, Settings2, ChevronDown, ChevronUp, Save, Check } from 'lucide-react';
-import { OrchestratorPanel } from '@/components/agent-hub/orchestrator-panel';
+import { OrchestratorChat } from './orchestrator-chat';
+import { useOrchestratorWs } from '@/hooks/use-orchestrator-ws';
 import { API_BASE } from '@/lib/config';
 import { authHeaders } from '@/lib/auth';
 import {
@@ -20,6 +21,11 @@ import {
 import type { OrchestratorConfig } from '@/lib/orchestrator-api';
 
 export function OrchestratorView() {
+    const orch = useOrchestratorWs();
+
+    // Auto-connect WS on mount
+    useEffect(() => { orch.connect(); }, []);
+
     // ── Workspace selection ──────────────────────────────────────────────
     const [workspace, setWorkspace] = useState('');
     const [workspaces, setWorkspaces] = useState<string[]>([]);
@@ -188,9 +194,26 @@ export function OrchestratorView() {
                 </div>
             )}
 
-            {/* Main orchestrator panel */}
+            {/* Sticky progress bar */}
+            {(orch.activityState === 'executing' || orch.activityState === 'reviewing') && (
+                <div className="border-b border-border/20 px-3 py-1.5 flex items-center justify-between bg-muted/5">
+                    <div className="flex items-center gap-2 text-[10px]">
+                        <div className="h-1 w-24 bg-muted/20 rounded-full">
+                            <div
+                                className="h-full bg-blue-500 rounded-full transition-all"
+                                style={{ width: `${Math.round(orch.progress * 100)}%` }}
+                            />
+                        </div>
+                        <span className="text-muted-foreground">
+                            {Math.round(orch.progress * 100)}% · {Math.round(orch.elapsed / 1000)}s
+                        </span>
+                    </div>
+                </div>
+            )}
+
+            {/* Main orchestrator chat */}
             <div className="flex-1 min-h-0">
-                <OrchestratorPanel workspace={workspace} workspaces={workspaces} />
+                <OrchestratorChat orch={orch} />
             </div>
         </div>
     );
