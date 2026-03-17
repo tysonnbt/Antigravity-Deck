@@ -59,7 +59,7 @@ interface AppSidebarProps {
     onShowAccountInfo: () => void
     onShowSettings: () => void
     onShowLogs: () => void
-    onShowBridge: () => void
+    onShowAgentHub: () => void
     onShowSourceControl: () => void
     onShowResources: () => void
     onGoHome: () => void
@@ -78,7 +78,7 @@ export function AppSidebar({
     onShowAccountInfo,
     onShowSettings,
     onShowLogs,
-    onShowBridge,
+    onShowAgentHub,
     onShowSourceControl,
     onShowResources,
     onGoHome,
@@ -501,9 +501,9 @@ export function AppSidebar({
                                         <Activity className="mr-2 h-4 w-4" />
                                         <span>Live Logs</span>
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={onShowBridge}>
+                                    <DropdownMenuItem onClick={onShowAgentHub}>
                                         <Bot className="mr-2 h-4 w-4" />
-                                        <span>Agent Bridge</span>
+                                        <span>Agent Hub</span>
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={onShowSourceControl}>
                                         <GitBranch className="mr-2 h-4 w-4" />

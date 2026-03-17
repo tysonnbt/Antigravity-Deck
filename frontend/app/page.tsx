@@ -25,7 +25,7 @@ import { AccountInfoView } from '@/components/user-profile';
 import { SettingsView } from '@/components/settings-view';
 import { AuthGate } from '@/components/auth-gate';
 import { AgentLogsView } from '@/components/agent-logs-view';
-import { AgentBridgeView } from '@/components/agent-bridge-view';
+import { AgentHubView } from '@/components/agent-hub-view';
 import { SourceControlView } from '@/components/source-control-view';
 import { ResourceMonitorView } from '@/components/resource-monitor-view';
 import { WorkspaceOnboardModal } from '@/components/workspace-onboard-modal';
@@ -151,7 +151,7 @@ export default function Home() {
   // NEW: When true, show AgentLogsView in main panel
   const [showLogs, setShowLogs] = useState(() => getStoredValue('antigravity-show-logs', false));
   // NEW: When true, show Agent Bridge in main panel
-  const [showBridge, setShowBridge] = useState(() => getStoredValue('antigravity-show-bridge', false));
+  const [showAgentHub, setShowAgentHub] = useState(() => getStoredValue('antigravity-show-agent-hub', false));
   // NEW: When true, show Source Control / IDE view in main panel
   const [showSourceControl, setShowSourceControl] = useState(false);
   const [showResources, setShowResources] = useState(false);
@@ -172,7 +172,7 @@ export default function Home() {
   useEffect(() => { localStorage.setItem('antigravity-show-settings', JSON.stringify(showSettings)); }, [showSettings]);
   useEffect(() => { localStorage.setItem('antigravity-show-account-info', JSON.stringify(showAccountInfo)); }, [showAccountInfo]);
   useEffect(() => { localStorage.setItem('antigravity-show-logs', JSON.stringify(showLogs)); }, [showLogs]);
-  useEffect(() => { localStorage.setItem('antigravity-show-bridge', JSON.stringify(showBridge)); }, [showBridge]);
+  useEffect(() => { localStorage.setItem('antigravity-show-agent-hub', JSON.stringify(showAgentHub)); }, [showAgentHub]);
   useEffect(() => { localStorage.setItem('antigravity-show-analytics', JSON.stringify(showAnalytics)); }, [showAnalytics]);
 
   // Persist currentConvId and restore on mount
@@ -210,7 +210,7 @@ export default function Home() {
     setShowAccountInfo(false);
     setShowSettings(false);
     setShowLogs(false);
-    setShowBridge(false);
+    setShowAgentHub(false);
     setShowSourceControl(false);
     setShowResources(false);
   }, []);
@@ -277,12 +277,12 @@ export default function Home() {
     setShowLogs(true);
   }, [selectConversation, resetPanels]);
 
-  // === Show Agent Bridge ===
-  const handleShowBridge = useCallback(() => {
+  // === Show Agent Hub ===
+  const handleShowAgentHub = useCallback(() => {
     selectConversation(null);
     resetPanels();
     setActiveWorkspace(null);
-    setShowBridge(true);
+    setShowAgentHub(true);
   }, [selectConversation, resetPanels]);
 
   // === Show Source Control / IDE ===
@@ -308,7 +308,7 @@ export default function Home() {
     setShowAccountInfo(false);
     setShowSettings(false);
     setShowLogs(false);
-    setShowBridge(false);
+    setShowAgentHub(false);
     setShowResources(false);
   }, [selectConversation]);
 
@@ -418,8 +418,8 @@ export default function Home() {
   // === Determine what to show in main panel ===
   // When LS not detected, force welcome/detection screen regardless of stored state
   const showChat = detected && (currentConvId !== null || newChatMode);
-  const showConversationList = detected && !showChat && !showAccountInfo && !showSettings && !showLogs && !showBridge && !showSourceControl && !showResources && activeWorkspace !== null;
-  const showWelcome = !detected || (!showChat && !showConversationList && !showAccountInfo && !showSettings && !showLogs && !showBridge && !showSourceControl && !showResources);
+  const showConversationList = detected && !showChat && !showAccountInfo && !showSettings && !showLogs && !showAgentHub && !showSourceControl && !showResources && activeWorkspace !== null;
+  const showWelcome = !detected || (!showChat && !showConversationList && !showAccountInfo && !showSettings && !showLogs && !showAgentHub && !showSourceControl && !showResources);
 
   return (
     <AuthGate>
@@ -436,7 +436,7 @@ export default function Home() {
           onShowAccountInfo={handleShowAccountInfo}
           onShowSettings={handleShowSettings}
           onShowLogs={handleShowLogs}
-          onShowBridge={handleShowBridge}
+          onShowAgentHub={handleShowAgentHub}
           onShowSourceControl={handleShowSourceControl}
           onShowResources={handleShowResources}
           onGoHome={handleGoHome}
@@ -617,9 +617,9 @@ export default function Home() {
             <AgentLogsView />
           </div>
 
-          {/* Agent Bridge panel */}
-          <div className={detected && showBridge ? 'flex flex-col flex-1 min-h-0 overflow-hidden' : 'hidden'}>
-            <AgentBridgeView />
+          {/* Agent Hub panel */}
+          <div className={detected && showAgentHub ? 'flex flex-col flex-1 min-h-0 overflow-hidden' : 'hidden'}>
+            <AgentHubView />
           </div>
 
           {/* Source Control / IDE panel */}
