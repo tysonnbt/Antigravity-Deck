@@ -314,12 +314,12 @@ function _wireOrchestratorEvents(ws, orch) {
         _send(ws, { type: 'orch_plan', orchestrationId: orch.id, ...data });
     });
 
-    on('orch_awaiting_approval', () => {
-        _send(ws, { type: 'orch_awaiting_approval', orchestrationId: orch.id });
+    on('orch_awaiting_approval', (data) => {
+        _send(ws, { type: 'orch_awaiting_approval', orchestrationId: orch.id, ...data });
     });
 
-    on('orch_executing', () => {
-        _send(ws, { type: 'orch_executing', orchestrationId: orch.id });
+    on('orch_executing', (data) => {
+        _send(ws, { type: 'orch_executing', orchestrationId: orch.id, ...data });
     });
 
     on('orch_subtask_update', (data) => {
@@ -350,8 +350,8 @@ function _wireOrchestratorEvents(ws, orch) {
         _send(ws, { type: 'orch_failed', orchestrationId: orch.id, ...data });
     });
 
-    on('orch_cancelled', () => {
-        _send(ws, { type: 'orch_cancelled', orchestrationId: orch.id });
+    on('orch_cancelled', (data) => {
+        _send(ws, { type: 'orch_cancelled', orchestrationId: orch.id, ...data });
     });
 
     on('log', (data) => {

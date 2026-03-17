@@ -406,12 +406,17 @@ export function useOrchestratorWs() {
         wsSend({ type: 'orchestrate_clarify', orchestrationId: orchIdRef.current, taskId, answer });
     }, [wsSend]);
 
+    const setWorkspace = useCallback((ws: string) => {
+        workspaceRef.current = ws;
+    }, []);
+
     return {
         connectionState, orchestrationId, state, plan, subtasks,
         progress, elapsed, events, logs, error,
         connect, disconnect, orchestrate, execute,
         revisePlan: doRevisePlan, cancel, answerClarification: doAnswerClarification,
         messages, sendMessage, resetChat, activityState, pendingClarifications,
+        setWorkspace,
     };
 }
 

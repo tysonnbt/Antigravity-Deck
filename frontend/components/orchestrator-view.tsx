@@ -28,6 +28,9 @@ export function OrchestratorView() {
 
     // ── Workspace selection ──────────────────────────────────────────────
     const [workspace, setWorkspace] = useState('');
+
+    // Sync workspace to hook so sendMessage includes it
+    useEffect(() => { if (workspace) orch.setWorkspace(workspace); }, [workspace]);
     const [workspaces, setWorkspaces] = useState<string[]>([]);
 
     useEffect(() => {
