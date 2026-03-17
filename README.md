@@ -29,6 +29,7 @@ Full-featured workspace dashboard for [Antigravity](https://codeium.com/antigrav
 Run Antigravity LS instances **without the IDE UI** — directly from the Deck.
 
 - **Full lifecycle management** — Launch, kill, and list headless instances
+- **Smart binary detection** — Scans running processes first, then checks multiple install paths (including Windsurf), or use a custom path via `lsBinaryPath` setting
 - **Auto-auth** — Reuses extension server (port + CSRF) from a running IDE for cloud API access
 - **HL badge** — Visual indicators (Terminal icon + green "HL" badge) in sidebar and resource monitor
 - **Kill from dashboard** — Terminate headless instances via styled AlertDialog in Resource Monitor
@@ -66,6 +67,12 @@ Connect external AI agents (e.g., Pi, OpenClaw) to Antigravity via Discord.
 - **State persistence** — Bridge state saved to `settings.json` across restarts
 - **Live logs** — Bridge activity log viewable in the UI
 
+### 🔔 Push Notifications
+- **Rich notifications** — Shows conversation title and last step content instead of generic IDs
+- **Status transitions** — Notified when cascades complete, need approval, or hit errors
+- **Auto-accept alerts** — Get notified when changes are auto-accepted
+- **Per-event toggles** — Enable/disable each notification type independently
+
 ### ⚡ Cascade Control
 - **Cascade status** — Running, idle, or waiting for user input
 - **Accept/Reject** — Approve or reject pending code changes from the web UI
@@ -81,6 +88,7 @@ Connect external AI agents (e.g., Pi, OpenClaw) to Antigravity via Discord.
 ### ⚙️ Settings & Extras
 - **Default model** — Configure preferred AI model
 - **Default workspace root** — Set where new workspaces are created
+- **LS binary path** — Override auto-detected Language Server binary location
 - **Plugin management** — List, install, uninstall cascade plugins
 - **User profile** — Account info, plan tier, profile picture
 - **Dark/Light theme** — Toggle between themes
@@ -93,7 +101,7 @@ Connect external AI agents (e.g., Pi, OpenClaw) to Antigravity via Discord.
 
 ### ⚡ One-Command Setup (Recommended)
 
-**No git or npm knowledge needed.** Just paste one line — the app will clone, install, and go online with a shareable URL + QR code.
+**No git or npm knowledge needed.** Just paste one line — the app will clone the **latest stable release**, install dependencies, and go online with a shareable URL + QR code. Re-running the same command will detect and update to newer releases automatically.
 
 **Windows (PowerShell):**
 ```powershell
