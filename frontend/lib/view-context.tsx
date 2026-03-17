@@ -27,7 +27,6 @@ export interface ViewState {
   showResources: boolean;
   showAccountInfo: boolean;
   newChatMode: boolean;
-
 }
 
 export interface ViewActions {

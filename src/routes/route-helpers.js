@@ -84,12 +84,7 @@ function validateGitPath(filePath) {
         throw new Error('Invalid file path: absolute paths not allowed');
     }
 
-    // Reject paths starting with dash (could be interpreted as git options)
-    if (filePath.startsWith('-')) {
-        throw new Error('Invalid file path: paths starting with dash not allowed');
-    }
-
-    // Reject git-special prefixes that could be abused
+    // Reject path segments starting with dash (could be interpreted as git options)
     if (segments.some(s => s.startsWith('-'))) {
         throw new Error('Invalid file path: path segments starting with dash not allowed');
     }

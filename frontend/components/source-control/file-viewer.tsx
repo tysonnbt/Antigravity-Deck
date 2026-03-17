@@ -254,7 +254,7 @@ export function ExplorerTab({ workspace }: { workspace: string }) {
         try {
             const data = await listWorkspaceDir(workspace, '');
             setRootEntries(data.entries);
-        } catch (e: any) { setError(e.message); }
+        } catch (e: unknown) { setError(e instanceof Error ? e.message : String(e)); }
         finally { setLoading(false); }
     }, [workspace]);
 
@@ -270,7 +270,7 @@ export function ExplorerTab({ workspace }: { workspace: string }) {
             const data = await getWorkspaceFile(workspace, path);
             if (data.error && data.content === null) setFileError(data.error);
             else setFileContent(data.content ?? '');
-        } catch (e: any) { setFileError(e.message); }
+        } catch (e: unknown) { setFileError(e instanceof Error ? e.message : String(e)); }
         finally { setFileLoading(false); }
     }, [workspace]);
 

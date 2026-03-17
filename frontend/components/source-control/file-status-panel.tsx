@@ -32,7 +32,7 @@ export function SourceControlTab({ workspace }: { workspace: string }) {
             const data = await getGitStatus(workspace);
             setFiles(data.files || []);
             if (data.error) setError(data.error);
-        } catch (e: any) { setError(e.message); }
+        } catch (e: unknown) { setError(e instanceof Error ? e.message : String(e)); }
         finally { setLoading(false); }
     }, [workspace]);
 
@@ -54,8 +54,8 @@ export function SourceControlTab({ workspace }: { workspace: string }) {
             const hasDiff = rawDiff.includes('@@');
             const diffFile = hasDiff ? buildDiffFile(filePath, oldContent, newContent, rawDiff) : null;
             setDiffData({ diffFile, oldContent, newContent, hasDiff, rawDiff });
-        } catch (e: any) {
-            setDiffError(e.message);
+        } catch (e: unknown) {
+            setDiffError(e instanceof Error ? e.message : String(e));
         } finally { setDiffLoading(false); }
     }, [workspace]);
 
