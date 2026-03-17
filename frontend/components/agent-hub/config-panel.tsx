@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,22 +9,16 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Save, Check, ChevronDown, ChevronUp, Play, Square,
-    Eye, EyeOff, Loader2, AlertCircle, Settings2, Bot, Workflow,
+    Eye, EyeOff, Loader2, AlertCircle, Settings2, Bot,
 } from 'lucide-react';
 import { wsService } from '@/lib/ws-service';
 import { SESSION_STATE_CONFIG } from '@/lib/agent-utils';
-import { Textarea } from '@/components/ui/textarea';
 import {
     fetchAgentApiSettings, saveAgentApiSettings as saveApiSettings,
     fetchBridgeSettings, saveBridgeSettings as saveBridgeSettingsApi,
     fetchBridgeStatus, startBridge, stopBridge,
 } from '@/lib/agent-api';
 import type { AgentApiSettings, BridgeSettings, BridgeStatus } from '@/lib/agent-api';
-import {
-    fetchOrchestratorSettings, saveOrchestratorSettings,
-    fetchPlannerPrompt, savePlannerPrompt,
-} from '@/lib/orchestrator-api';
-import type { OrchestratorConfig } from '@/lib/orchestrator-api';
 
 // ── Defaults ────────────────────────────────────────────────────────────
 
@@ -56,16 +50,6 @@ export function AgentConfigPanel() {
     const [bridgeOpen, setBridgeOpen] = useState(false);
     const [showToken, setShowToken] = useState(false);
 
-    // ── Orchestrator Settings ────────────────────────────────────────────
-    const [orchSettings, setOrchSettings] = useState<OrchestratorConfig | null>(null);
-    const [orchOriginal, setOrchOriginal] = useState<OrchestratorConfig | null>(null);
-    const [orchSaving, setOrchSaving] = useState(false);
-    const [orchMsg, setOrchMsg] = useState('');
-    const [orchOpen, setOrchOpen] = useState(false);
-    const [orchPrompt, setOrchPrompt] = useState('');
-    const [orchPromptOriginal, setOrchPromptOriginal] = useState('');
-    const [orchPromptSaving, setOrchPromptSaving] = useState(false);
-
     // ── Load on mount ───────────────────────────────────────────────────
     useEffect(() => {
         fetchAgentApiSettings()
@@ -78,14 +62,6 @@ export function AgentConfigPanel() {
 
         fetchBridgeStatus()
             .then(setBridgeStatus)
-            .catch(() => {});
-
-        fetchOrchestratorSettings()
-            .then(d => { setOrchSettings(d); setOrchOriginal(d); })
-            .catch(() => {});
-
-        fetchPlannerPrompt()
-            .then(d => { const p = d.prompt || ''; setOrchPrompt(p); setOrchPromptOriginal(p); })
             .catch(() => {});
 
         // WS updates for bridge status
@@ -157,36 +133,6 @@ export function AgentConfigPanel() {
             const status = await fetchBridgeStatus();
             setBridgeStatus(status);
         } finally { setBridgeLoading(false); }
-    };
-
-    // ── Orchestrator settings save ──────────────────────────────────────
-    const hasOrchChanges = JSON.stringify(orchSettings) !== JSON.stringify(orchOriginal);
-    const hasPromptChanges = orchPrompt !== orchPromptOriginal;
-
-    const handleSaveOrch = async () => {
-        if (!orchSettings) return;
-        setOrchSaving(true);
-        setOrchMsg('');
-        try {
-            const saved = await saveOrchestratorSettings(orchSettings);
-            setOrchSettings(saved);
-            setOrchOriginal(saved);
-            setOrchMsg('saved');
-            setTimeout(() => setOrchMsg(''), 2000);
-        } catch {
-            setOrchMsg('error');
-        } finally {
-            setOrchSaving(false);
-        }
-    };
-
-    const handleSavePrompt = async () => {
-        setOrchPromptSaving(true);
-        try {
-            await savePlannerPrompt(orchPrompt);
-            setOrchPromptOriginal(orchPrompt);
-        } catch { /* silent */ }
-        finally { setOrchPromptSaving(false); }
     };
 
     const bridgeState = bridgeStatus?.state || 'IDLE';
@@ -344,87 +290,6 @@ export function AgentConfigPanel() {
                                         <Square className="w-3 h-3" /> Stop
                                     </Button>
                                 )}
-                            </div>
-                        </div>
-                    </CardContent>
-                )}
-            </Card>
-
-            {/* ── Section 3: Orchestrator Settings ── */}
-            <Card className="bg-muted/5 border-border/20">
-                <CardHeader className="p-3 pb-0 cursor-pointer" onClick={() => setOrchOpen(!orchOpen)}>
-                    <div className="flex items-center justify-between">
-                        <CardTitle className="text-xs flex items-center gap-1.5">
-                            <Workflow className="h-3.5 w-3.5" /> Orchestrator
-                        </CardTitle>
-                        {orchOpen ? <ChevronUp className="h-3 w-3 text-muted-foreground/40" /> : <ChevronDown className="h-3 w-3 text-muted-foreground/40" />}
-                    </div>
-                </CardHeader>
-                {orchOpen && orchSettings && (
-                    <CardContent className="p-3 pt-2 space-y-3">
-                        <div className="flex items-center justify-between">
-                            <Label className="text-[10px] text-muted-foreground/70">Enable Orchestrator</Label>
-                            <Switch checked={orchSettings.enabled}
-                                onCheckedChange={v => setOrchSettings(s => s ? { ...s, enabled: v } : s)}
-                                className="scale-75" />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2">
-                            <div className="space-y-1">
-                                <Label className="text-[10px] text-muted-foreground/70">Max Parallel</Label>
-                                <Input type="number" value={orchSettings.maxParallel} min={1} max={10}
-                                    onChange={e => setOrchSettings(s => s ? { ...s, maxParallel: parseInt(e.target.value) || 1 } : s)}
-                                    className="font-mono text-[11px] h-8" />
-                            </div>
-                            <div className="space-y-1">
-                                <Label className="text-[10px] text-muted-foreground/70">Max Subtasks</Label>
-                                <Input type="number" value={orchSettings.maxSubtasks} min={1} max={20}
-                                    onChange={e => setOrchSettings(s => s ? { ...s, maxSubtasks: parseInt(e.target.value) || 1 } : s)}
-                                    className="font-mono text-[11px] h-8" />
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2">
-                            <div className="space-y-1">
-                                <Label className="text-[10px] text-muted-foreground/70">Max Concurrent</Label>
-                                <Input type="number" value={orchSettings.maxConcurrentOrchestrations} min={1} max={10}
-                                    onChange={e => setOrchSettings(s => s ? { ...s, maxConcurrentOrchestrations: parseInt(e.target.value) || 1 } : s)}
-                                    className="font-mono text-[11px] h-8" />
-                            </div>
-                            <div className="space-y-1">
-                                <Label className="text-[10px] text-muted-foreground/70">Failure Threshold</Label>
-                                <Input type="number" value={orchSettings.failureThreshold} min={0} max={1} step={0.1}
-                                    onChange={e => setOrchSettings(s => s ? { ...s, failureThreshold: parseFloat(e.target.value) || 0 } : s)}
-                                    className="font-mono text-[11px] h-8" />
-                            </div>
-                        </div>
-
-                        <div className="flex items-center justify-end gap-2">
-                            {orchMsg && (
-                                <span className={cn('text-[10px] font-medium', orchMsg === 'saved' ? 'text-emerald-400' : 'text-red-400')}>
-                                    {orchMsg === 'saved' ? <><Check className="h-3 w-3 inline mr-0.5" />Saved</> : 'Error'}
-                                </span>
-                            )}
-                            <Button size="sm" variant="outline" onClick={handleSaveOrch}
-                                disabled={orchSaving || !hasOrchChanges} className="h-7 text-[10px] gap-1 px-2.5">
-                                <Save className="w-3 h-3" /> {orchSaving ? 'Saving…' : 'Save'}
-                            </Button>
-                        </div>
-
-                        {/* Planner prompt */}
-                        <div className="space-y-1.5 pt-2 border-t border-border/20">
-                            <Label className="text-[10px] text-muted-foreground/70">Planner Prompt</Label>
-                            <Textarea
-                                value={orchPrompt}
-                                onChange={e => setOrchPrompt(e.target.value)}
-                                className="min-h-[100px] text-[10px] bg-background/50 resize-y font-mono"
-                                placeholder="Custom planner system prompt (leave empty for default)..."
-                            />
-                            <div className="flex justify-end">
-                                <Button size="sm" variant="outline" onClick={handleSavePrompt}
-                                    disabled={orchPromptSaving || !hasPromptChanges} className="h-7 text-[10px] gap-1 px-2.5">
-                                    <Save className="w-3 h-3" /> {orchPromptSaving ? 'Saving…' : 'Save Prompt'}
-                                </Button>
                             </div>
                         </div>
                     </CardContent>

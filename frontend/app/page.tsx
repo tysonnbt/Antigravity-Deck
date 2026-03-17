@@ -27,6 +27,7 @@ import { AuthGate } from '@/components/auth-gate';
 import { AgentLogsView } from '@/components/agent-logs-view';
 import { AgentHubView } from '@/components/agent-hub-view';
 import { AgentConnectPanel } from '@/components/agent-hub/connect-panel';
+import { OrchestratorView } from '@/components/orchestrator-view';
 import { SourceControlView } from '@/components/source-control-view';
 import { ResourceMonitorView } from '@/components/resource-monitor-view';
 import { WorkspaceOnboardModal } from '@/components/workspace-onboard-modal';
@@ -155,6 +156,8 @@ export default function Home() {
   const [showAgentHub, setShowAgentHub] = useState(() => getStoredValue('antigravity-show-agent-hub', false));
   // NEW: When true, show Connect panel in main panel
   const [showConnect, setShowConnect] = useState(() => getStoredValue('antigravity-show-connect', false));
+  // NEW: When true, show Orchestrator standalone view
+  const [showOrchestrator, setShowOrchestrator] = useState(() => getStoredValue('antigravity-show-orchestrator', false));
   // NEW: When true, show Source Control / IDE view in main panel
   const [showSourceControl, setShowSourceControl] = useState(false);
   const [showResources, setShowResources] = useState(false);
@@ -177,6 +180,7 @@ export default function Home() {
   useEffect(() => { localStorage.setItem('antigravity-show-logs', JSON.stringify(showLogs)); }, [showLogs]);
   useEffect(() => { localStorage.setItem('antigravity-show-agent-hub', JSON.stringify(showAgentHub)); }, [showAgentHub]);
   useEffect(() => { localStorage.setItem('antigravity-show-connect', JSON.stringify(showConnect)); }, [showConnect]);
+  useEffect(() => { localStorage.setItem('antigravity-show-orchestrator', JSON.stringify(showOrchestrator)); }, [showOrchestrator]);
   useEffect(() => { localStorage.setItem('antigravity-show-analytics', JSON.stringify(showAnalytics)); }, [showAnalytics]);
 
   // Persist currentConvId and restore on mount
@@ -216,6 +220,7 @@ export default function Home() {
     setShowLogs(false);
     setShowAgentHub(false);
     setShowConnect(false);
+    setShowOrchestrator(false);
     setShowSourceControl(false);
     setShowResources(false);
   }, []);
@@ -290,6 +295,14 @@ export default function Home() {
     setShowAgentHub(true);
   }, [selectConversation, resetPanels]);
 
+  // === Show Orchestrator ===
+  const handleShowOrchestrator = useCallback(() => {
+    selectConversation(null);
+    resetPanels();
+    setActiveWorkspace(null);
+    setShowOrchestrator(true);
+  }, [selectConversation, resetPanels]);
+
   // === Show Connect ===
   const handleShowConnect = useCallback(() => {
     selectConversation(null);
@@ -317,13 +330,8 @@ export default function Home() {
   const handleGoHome = useCallback(() => {
     selectConversation(null);
     setActiveWorkspace(null);
-    setNewChatMode(false);
-    setShowAccountInfo(false);
-    setShowSettings(false);
-    setShowLogs(false);
-    setShowAgentHub(false);
-    setShowResources(false);
-  }, [selectConversation]);
+    resetPanels();
+  }, [selectConversation, resetPanels]);
 
   // When CascadePanel creates a new cascade, track it
   const handleCascadeCreated = useCallback((cascadeId: string) => {
@@ -431,8 +439,8 @@ export default function Home() {
   // === Determine what to show in main panel ===
   // When LS not detected, force welcome/detection screen regardless of stored state
   const showChat = detected && (currentConvId !== null || newChatMode);
-  const showConversationList = detected && !showChat && !showAccountInfo && !showSettings && !showLogs && !showAgentHub && !showConnect && !showSourceControl && !showResources && activeWorkspace !== null;
-  const showWelcome = !detected || (!showChat && !showConversationList && !showAccountInfo && !showSettings && !showLogs && !showAgentHub && !showConnect && !showSourceControl && !showResources);
+  const showConversationList = detected && !showChat && !showAccountInfo && !showSettings && !showLogs && !showAgentHub && !showConnect && !showOrchestrator && !showSourceControl && !showResources && activeWorkspace !== null;
+  const showWelcome = !detected || (!showChat && !showConversationList && !showAccountInfo && !showSettings && !showLogs && !showAgentHub && !showConnect && !showOrchestrator && !showSourceControl && !showResources);
 
   return (
     <AuthGate>
@@ -450,6 +458,7 @@ export default function Home() {
           onShowSettings={handleShowSettings}
           onShowLogs={handleShowLogs}
           onShowAgentHub={handleShowAgentHub}
+          onShowOrchestrator={handleShowOrchestrator}
           onShowConnect={handleShowConnect}
           onShowSourceControl={handleShowSourceControl}
           onShowResources={handleShowResources}
@@ -644,6 +653,13 @@ export default function Home() {
                 <span className="text-xs font-semibold text-foreground/80">Connect</span>
               </div>
               <AgentConnectPanel />
+            </div>
+          )}
+
+          {/* Orchestrator standalone view — conditional mount so WS disconnects when hidden */}
+          {detected && showOrchestrator && (
+            <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <OrchestratorView />
             </div>
           )}
 

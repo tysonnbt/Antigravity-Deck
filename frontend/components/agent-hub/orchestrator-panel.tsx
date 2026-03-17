@@ -13,32 +13,45 @@ import { OrchestratorTaskCard } from './orchestrator-task-card';
 import { API_BASE } from '@/lib/config';
 import { authHeaders } from '@/lib/auth';
 
-export function OrchestratorPanel() {
+interface OrchestratorPanelProps {
+    /** When provided, use this workspace instead of internal state */
+    workspace?: string;
+    /** When provided, skip internal fetch and use these */
+    workspaces?: string[];
+}
+
+export function OrchestratorPanel({ workspace: externalWorkspace, workspaces: externalWorkspaces }: OrchestratorPanelProps = {}) {
     const orch = useOrchestratorWs();
     const [task, setTask] = useState('');
-    const [workspace, setWorkspace] = useState('');
-    const [workspaces, setWorkspaces] = useState<string[]>([]);
+    const [internalWorkspace, setInternalWorkspace] = useState('');
+    const [internalWorkspaces, setInternalWorkspaces] = useState<string[]>([]);
     const [feedback, setFeedback] = useState('');
     const [logsOpen, setLogsOpen] = useState(false);
     const logsEndRef = useRef<HTMLDivElement>(null);
 
+    // Use external props when provided, otherwise internal state
+    const workspace = externalWorkspace ?? internalWorkspace;
+    const workspaces = externalWorkspaces ?? internalWorkspaces;
+    const hasExternalWorkspace = externalWorkspaces !== undefined;
+
     // Auto-connect WS on mount
     useEffect(() => { orch.connect(); }, []);
 
-    // Fetch workspaces
+    // Fetch workspaces only when not provided externally
     useEffect(() => {
+        if (hasExternalWorkspace) return;
         (async () => {
             try {
                 const res = await fetch(`${API_BASE}/api/workspaces`, { headers: authHeaders() });
                 if (res.ok) {
                     const data = await res.json();
                     const names = Array.isArray(data) ? data.map((w: { name?: string }) => w.name || '').filter(Boolean) : [];
-                    setWorkspaces(names);
-                    if (names.length > 0 && !workspace) setWorkspace(names[0]);
+                    setInternalWorkspaces(names);
+                    if (names.length > 0 && !internalWorkspace) setInternalWorkspace(names[0]);
                 }
             } catch { /* silent */ }
         })();
-    }, []);
+    }, [hasExternalWorkspace]);
 
     // Auto-scroll logs
     useEffect(() => {
@@ -82,15 +95,17 @@ export function OrchestratorPanel() {
                                 onKeyDown={e => { if (e.key === 'Enter' && e.metaKey) handleStart(); }}
                             />
                             <div className="flex items-center gap-2">
-                                <select
-                                    value={workspace}
-                                    onChange={e => setWorkspace(e.target.value)}
-                                    className="h-7 text-[10px] bg-background/50 border border-border/30 rounded px-2"
-                                >
-                                    {workspaces.map(w => (
-                                        <option key={w} value={w}>{w}</option>
-                                    ))}
-                                </select>
+                                {!hasExternalWorkspace && (
+                                    <select
+                                        value={workspace}
+                                        onChange={e => setInternalWorkspace(e.target.value)}
+                                        className="h-7 text-[10px] bg-background/50 border border-border/30 rounded px-2"
+                                    >
+                                        {workspaces.map(w => (
+                                            <option key={w} value={w}>{w}</option>
+                                        ))}
+                                    </select>
+                                )}
                                 <Button
                                     size="sm"
                                     className="h-7 text-[10px] px-3 ml-auto"
