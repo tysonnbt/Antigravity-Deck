@@ -656,12 +656,10 @@ export default function Home() {
             </div>
           )}
 
-          {/* Orchestrator standalone view — conditional mount so WS disconnects when hidden */}
-          {detected && showOrchestrator && (
-            <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-              <OrchestratorView />
-            </div>
-          )}
+          {/* Orchestrator — always mounted so chat state persists across tab switches */}
+          <div className={detected && showOrchestrator ? 'flex flex-col flex-1 min-h-0 overflow-hidden' : 'hidden'}>
+            <OrchestratorView />
+          </div>
 
           {/* Source Control / IDE panel */}
           {showSourceControl && (
