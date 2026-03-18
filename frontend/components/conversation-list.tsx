@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { API_BASE } from '@/lib/config';
 import { authHeaders } from '@/lib/auth';
 import { cn } from '@/lib/utils';
@@ -8,7 +8,33 @@ import { getWorkspaces } from '@/lib/cascade-api';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, ChevronRight, Folder, MessageSquare } from 'lucide-react';
+import { Plus, ChevronRight, Folder, MessageSquare, Star } from 'lucide-react';
+
+const PINNED_STORAGE_KEY = 'ag-pinned-conversations-v1';
+
+type PinnedStore = Record<string, string[]>; // workspaceName -> [convId, ...]
+
+function readPinnedStore(): PinnedStore {
+    if (typeof window === 'undefined') return {};
+    try {
+        const raw = localStorage.getItem(PINNED_STORAGE_KEY);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return {};
+        return parsed as PinnedStore;
+    } catch {
+        return {};
+    }
+}
+
+function writePinnedStore(next: PinnedStore) {
+    if (typeof window === 'undefined') return;
+    try {
+        localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+        // ignore
+    }
+}
 
 interface ConvSummary {
     id: string;
@@ -29,6 +55,9 @@ export function ConversationList({ workspaceName, wsVersion, onSelectConversatio
     const [conversations, setConversations] = useState<ConvSummary[]>([]);
     const [loading, setLoading] = useState(true);
     const [workspace, setWorkspace] = useState<Workspace | null>(null);
+
+    // Pinned conversations (per workspace)
+    const [pinnedIds, setPinnedIds] = useState<string[]>([]);
 
     const loadConversations = useCallback(async () => {
         setLoading(true);
@@ -62,6 +91,13 @@ export function ConversationList({ workspaceName, wsVersion, onSelectConversatio
         loadConversations();
     }, [loadConversations, wsVersion]);
 
+    // Load pinned list whenever workspace changes
+    useEffect(() => {
+        const store = readPinnedStore();
+        const pins = store[workspaceName] || [];
+        setPinnedIds(Array.isArray(pins) ? pins : []);
+    }, [workspaceName]);
+
     useEffect(() => {
         const interval = setInterval(loadConversations, 15000);
         return () => clearInterval(interval);
@@ -92,6 +128,27 @@ export function ConversationList({ workspaceName, wsVersion, onSelectConversatio
         if (status?.includes('DONE') || status?.includes('COMPLETED')) return 'bg-emerald-400';
         return 'bg-muted-foreground/30';
     };
+
+    const togglePin = useCallback((convId: string) => {
+        setPinnedIds(prev => {
+            const isPinned = prev.includes(convId);
+            const nextPins = isPinned ? prev.filter(id => id !== convId) : [convId, ...prev];
+            const store = readPinnedStore();
+            store[workspaceName] = nextPins;
+            writePinnedStore(store);
+            return nextPins;
+        });
+    }, [workspaceName]);
+
+    const { pinnedConvs, recentConvs } = useMemo(() => {
+        const byId = new Map(conversations.map(c => [c.id, c] as const));
+        const pinned = pinnedIds
+            .map(id => byId.get(id))
+            .filter(Boolean) as ConvSummary[];
+        const pinnedSet = new Set(pinned.map(c => c.id));
+        const recent = conversations.filter(c => !pinnedSet.has(c.id));
+        return { pinnedConvs: pinned, recentConvs: recent };
+    }, [conversations, pinnedIds]);
 
     return (
         <div className="flex-1 flex flex-col min-h-0">
@@ -142,41 +199,128 @@ export function ConversationList({ workspaceName, wsVersion, onSelectConversatio
                 </div>
             ) : (
                 <ScrollArea className="flex-1">
-                    <div className="p-2 sm:p-4 space-y-1 sm:space-y-1.5">
-                        {conversations.map(conv => (
-                            <Button
-                                key={conv.id}
-                                variant="ghost"
-                                onClick={() => onSelectConversation(conv.id)}
-                                className="w-full h-auto text-left justify-start px-3 sm:px-4 py-3 rounded-lg border border-transparent hover:border-border/50 group"
-                            >
-                                <div className="flex items-start gap-3 w-full min-w-0">
-                                    <div className={cn(
-                                        'w-2 h-2 rounded-full mt-1.5 shrink-0 transition-colors',
-                                        getStatusColor(conv.status || '')
-                                    )} />
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center justify-between gap-2 mb-0.5">
-                                            <span className="text-sm font-medium truncate text-foreground/90 group-hover:text-foreground">
-                                                {conv.summary}
-                                            </span>
-                                            <span className="text-[10px] text-muted-foreground/60 shrink-0">
-                                                {formatTime(conv.lastModifiedTime)}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-[10px] text-muted-foreground/50">
-                                                {conv.stepCount} steps
-                                            </span>
-                                            <span className="text-[10px] text-muted-foreground/30 font-mono">
-                                                {conv.id.substring(0, 8)}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-muted-foreground/60 shrink-0 mt-1 transition-colors" />
+                    <div className="p-2 sm:p-4 space-y-3">
+                        {pinnedConvs.length > 0 && (
+                            <div className="space-y-1 sm:space-y-1.5">
+                                <div className="px-2 text-[11px] font-semibold text-muted-foreground/70 tracking-wide flex items-center gap-2">
+                                    <Star className="h-3.5 w-3.5" /> Pinned
                                 </div>
-                            </Button>
-                        ))}
+                                <div className="space-y-1 sm:space-y-1.5">
+                                    {pinnedConvs.map(conv => {
+                                        const isPinned = true;
+                                        return (
+                                            <Button
+                                                key={conv.id}
+                                                variant="ghost"
+                                                onClick={() => onSelectConversation(conv.id)}
+                                                className="w-full h-auto text-left justify-start px-3 sm:px-4 py-3 rounded-lg border border-transparent hover:border-border/50 group"
+                                            >
+                                                <div className="flex items-start gap-3 w-full min-w-0">
+                                                    <div className={cn(
+                                                        'w-2 h-2 rounded-full mt-1.5 shrink-0 transition-colors',
+                                                        getStatusColor(conv.status || '')
+                                                    )} />
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center justify-between gap-2 mb-0.5">
+                                                            <span className="text-sm font-medium truncate text-foreground/90 group-hover:text-foreground">
+                                                                {conv.summary}
+                                                            </span>
+                                                            <span className="text-[10px] text-muted-foreground/60 shrink-0">
+                                                                {formatTime(conv.lastModifiedTime)}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-[10px] text-muted-foreground/50">
+                                                                {conv.stepCount} steps
+                                                            </span>
+                                                            <span className="text-[10px] text-muted-foreground/30 font-mono">
+                                                                {conv.id.substring(0, 8)}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); togglePin(conv.id); }}
+                                                        className={cn(
+                                                            'mt-0.5 shrink-0 rounded-md p-1 transition-colors',
+                                                            'text-muted-foreground/40 hover:text-muted-foreground/80 hover:bg-muted/40',
+                                                            isPinned && 'text-amber-400/90 hover:text-amber-400'
+                                                        )}
+                                                        aria-label={isPinned ? 'Unpin conversation' : 'Pin conversation'}
+                                                        title={isPinned ? 'Unpin' : 'Pin'}
+                                                    >
+                                                        <Star className={cn('h-4 w-4', isPinned && 'fill-current')} />
+                                                    </button>
+
+                                                    <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-muted-foreground/60 shrink-0 mt-1 transition-colors" />
+                                                </div>
+                                            </Button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="space-y-1 sm:space-y-1.5">
+                            <div className="px-2 text-[11px] font-semibold text-muted-foreground/70 tracking-wide">
+                                Recent
+                            </div>
+                            <div className="space-y-1 sm:space-y-1.5">
+                                {recentConvs.map(conv => {
+                                    const isPinned = pinnedIds.includes(conv.id);
+                                    return (
+                                        <Button
+                                            key={conv.id}
+                                            variant="ghost"
+                                            onClick={() => onSelectConversation(conv.id)}
+                                            className="w-full h-auto text-left justify-start px-3 sm:px-4 py-3 rounded-lg border border-transparent hover:border-border/50 group"
+                                        >
+                                            <div className="flex items-start gap-3 w-full min-w-0">
+                                                <div className={cn(
+                                                    'w-2 h-2 rounded-full mt-1.5 shrink-0 transition-colors',
+                                                    getStatusColor(conv.status || '')
+                                                )} />
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center justify-between gap-2 mb-0.5">
+                                                        <span className="text-sm font-medium truncate text-foreground/90 group-hover:text-foreground">
+                                                            {conv.summary}
+                                                        </span>
+                                                        <span className="text-[10px] text-muted-foreground/60 shrink-0">
+                                                            {formatTime(conv.lastModifiedTime)}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[10px] text-muted-foreground/50">
+                                                            {conv.stepCount} steps
+                                                        </span>
+                                                        <span className="text-[10px] text-muted-foreground/30 font-mono">
+                                                            {conv.id.substring(0, 8)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); togglePin(conv.id); }}
+                                                    className={cn(
+                                                        'mt-0.5 shrink-0 rounded-md p-1 transition-colors',
+                                                        'text-muted-foreground/30 hover:text-muted-foreground/80 hover:bg-muted/40',
+                                                        isPinned && 'text-amber-400/90 hover:text-amber-400'
+                                                    )}
+                                                    aria-label={isPinned ? 'Unpin conversation' : 'Pin conversation'}
+                                                    title={isPinned ? 'Unpin' : 'Pin'}
+                                                >
+                                                    <Star className={cn('h-4 w-4', isPinned && 'fill-current')} />
+                                                </button>
+
+                                                <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-muted-foreground/60 shrink-0 mt-1 transition-colors" />
+                                            </div>
+                                        </Button>
+                                    );
+                                })}
+                            </div>
+                        </div>
                     </div>
                 </ScrollArea>
             )}

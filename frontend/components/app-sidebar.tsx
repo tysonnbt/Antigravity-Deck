@@ -69,6 +69,8 @@ interface AppSidebarProps {
     workspaceResources?: ResourceSnapshot | null
     wsVersion?: number
     onWorkspaceCreated?: () => void
+    /** Called after a conversation is successfully deleted, with the deleted conv ID */
+    onConvDeleted?: (convId: string, wsName: string) => void
 }
 
 export function AppSidebar({
@@ -90,6 +92,7 @@ export function AppSidebar({
     workspaceResources,
     wsVersion,
     onWorkspaceCreated,
+    onConvDeleted,
 }: AppSidebarProps) {
     const { isDark, toggle: toggleTheme } = useTheme()
     const { isMobile } = useSidebar()
@@ -275,6 +278,30 @@ export function AppSidebar({
         [wsData, onSelectConversation]
     )
 
+    // Called by WorkspaceGroup after a conversation is successfully deleted.
+    // Optimistically removes the conv from local state so the UI updates instantly,
+    // then re-fetches from the server to stay in sync.
+    const handleConvDeleted = useCallback(
+        (convId: string, wsName: string) => {
+            setWsData((prev) =>
+                prev.map((wd) => {
+                    // Only touch the workspace that owned this conversation —
+                    // all others return the same reference (no re-render).
+                    if (wd.workspace.workspaceName !== wsName) return wd
+                    return {
+                        ...wd,
+                        conversations: wd.conversations.filter((c) => c.id !== convId),
+                    }
+                })
+            )
+            // Notify page.tsx so ConversationList (Recent/Pinned panel) also refreshes
+            onConvDeleted?.(convId, wsName)
+            // Re-fetch in the background to ensure full consistency
+            loadAll()
+        },
+        [loadAll, onConvDeleted]
+    )
+
     const handleCreateByName = useCallback(async () => {
         const name = newWsName.trim()
         if (!name || creating || nameValidationError) return
@@ -379,6 +406,7 @@ export function AppSidebar({
                                         onToggleExpand={() => handleWorkspaceClick(arrayIdx)}
                                         onSelectConv={(convId) => handleSelectConv(convId, arrayIdx)}
                                         onToggleShowAll={() => setShowAllMap((prev) => ({ ...prev, [arrayIdx]: true }))}
+                                        onDeleted={handleConvDeleted}
                                     />
                                 )
                             })}
@@ -451,6 +479,7 @@ export function AppSidebar({
                                                 onToggleExpand={() => handleWorkspaceClick(arrayIdx)}
                                                 onSelectConv={(convId) => handleSelectConv(convId, arrayIdx)}
                                                 onToggleShowAll={() => setShowAllMap((prev) => ({ ...prev, [arrayIdx]: true }))}
+                                                onDeleted={handleConvDeleted}
                                             />
                                         )
                                     })}
