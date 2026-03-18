@@ -30,12 +30,12 @@ import { AgentConnectPanel } from '@/components/agent-hub/connect-panel';
 import { OrchestratorView } from '@/components/orchestrator-view';
 import { SourceControlView } from '@/components/source-control-view';
 import { ResourceMonitorView } from '@/components/resource-monitor-view';
+import { useToast } from '@/hooks/use-toast';
 import { WorkspaceOnboardModal } from '@/components/workspace-onboard-modal';
 import { notificationService } from '@/lib/notifications';
 import { initAppLogger } from '@/lib/app-logger';
 import { usePwaInstall } from '@/hooks/use-pwa-install';
 import { getSettings } from '@/lib/cascade-api';
-
 
 // Lazy-load components that are hidden by default
 const AnalyticsPanel = dynamic(() => import('@/components/analytics-panel').then(m => ({ default: m.AnalyticsPanel })), { ssr: false });
@@ -96,6 +96,7 @@ function LaunchIdeButton() {
 
 export default function Home() {
   const { connected, detected, swapping, steps, baseIndex, stepCount, loadingOlder, conversations, currentConvId, cascadeStatus, conversationsVersion, stepContentVersion, workspaceResources, selectConversation, lastUpdate, loadOlder } = useWebSocket();
+  const { toast } = useToast();
 
   const [showAnalytics, setShowAnalytics] = useState(() => getStoredValue('antigravity-show-analytics', false));
   const [showTimeline, setShowTimeline] = useState(() => {
@@ -351,8 +352,11 @@ export default function Home() {
 
   // Export
   const handleExport = useCallback(() => {
-    if (currentConvId && steps.length > 0) exportToMarkdown(steps, currentConvId);
-  }, [steps, currentConvId]);
+    if (currentConvId && steps.length > 0) {
+      exportToMarkdown(steps, currentConvId);
+      toast({ variant: "success", title: "Conversation exported" });
+    }
+  }, [steps, currentConvId, toast]);
 
   // Copy conversation ID
   const handleCopyId = useCallback((e: React.MouseEvent, id: string) => {
