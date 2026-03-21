@@ -26,19 +26,55 @@ interface WSState {
     workspaceResources: ResourceSnapshot | null; // full resource snapshot
 }
 
+// === Seamless resume: cache UI state for instant restore on mobile cold-reload ===
+const CACHE_KEY_DETECTED = 'antigravity-cached-detected';
+const CACHE_KEY_STEPS = 'antigravity-cached-steps';
+const RECONNECT_GRACE_MS = 5000; // suppress disconnect indicators for 5s after mount
+
+function _getCachedDetected(): boolean {
+    if (typeof window === 'undefined') return false;
+    try { return localStorage.getItem(CACHE_KEY_DETECTED) === 'true'; } catch { return false; }
+}
+
+function _getCachedSteps(): { steps: Step[]; baseIndex: number; stepCount: number; convId: string | null } | null {
+    if (typeof window === 'undefined') return null;
+    try {
+        const raw = localStorage.getItem(CACHE_KEY_STEPS);
+        if (!raw) return null;
+        return JSON.parse(raw);
+    } catch { return null; }
+}
+
+function _saveCachedSteps(steps: Step[], baseIndex: number, stepCount: number, convId: string | null) {
+    try {
+        // Only cache last 30 steps to keep localStorage small
+        const tail = steps.slice(-30);
+        const adjustedBase = baseIndex + (steps.length - tail.length);
+        localStorage.setItem(CACHE_KEY_STEPS, JSON.stringify({
+            steps: tail, baseIndex: adjustedBase, stepCount, convId,
+        }));
+    } catch { /* ignore — quota exceeded or private mode */ }
+}
+
 export function useWebSocket() {
     // Restore conversation ID from localStorage for seamless refresh
     const storedConvId = typeof window !== 'undefined'
         ? (() => { try { const v = localStorage.getItem('antigravity-current-conv-id'); return v ? JSON.parse(v) : null; } catch { return null; } })()
         : null;
 
+    // Restore cached state for seamless mobile resume
+    const cachedDetected = _getCachedDetected();
+    const cachedSteps = _getCachedSteps();
+    const hasCachedData = cachedDetected && cachedSteps && cachedSteps.convId === storedConvId;
+
     const [state, setState] = useState<WSState>({
-        connected: false,
-        detected: false,
+        // Optimistic: if we have cached data, show it immediately (WS will sync in background)
+        connected: hasCachedData ? true : false,
+        detected: cachedDetected,
         swapping: false,
-        steps: [] as Step[],
-        baseIndex: 0,
-        stepCount: 0,
+        steps: (hasCachedData ? cachedSteps!.steps : []) as Step[],
+        baseIndex: hasCachedData ? cachedSteps!.baseIndex : 0,
+        stepCount: hasCachedData ? cachedSteps!.stepCount : 0,
         loadingOlder: false,
         conversations: {} as Record<string, TrajectorySummary>,
         currentConvId: storedConvId,
@@ -51,6 +87,9 @@ export function useWebSocket() {
     // Use refs for values needed in WS handlers to avoid stale closures
     const currentConvIdRef = useRef<string | null>(storedConvId);
     const cleanupRef = useRef<(() => void) | null>(null);
+    // Grace period: suppress disconnect indicators right after mount
+    const mountedAtRef = useRef(Date.now());
+    const graceActiveRef = useRef(hasCachedData);
 
     // Keep ref in sync with state
     useEffect(() => { currentConvIdRef.current = state.currentConvId; }, [state.currentConvId]);
@@ -93,6 +132,7 @@ export function useWebSocket() {
         // Re-sync conversation on WS open
         const offOpen = wsService.on('__ws_open', () => {
             console.log('[WS] connected, re-syncing conversation...');
+            graceActiveRef.current = false; // real connection established
             setState(prev => ({ ...prev, connected: true }));
             const convId = currentConvIdRef.current;
             console.log('[WS] onopen currentConvId:', convId?.substring(0, 8));
@@ -106,11 +146,21 @@ export function useWebSocket() {
         });
 
         const offClose = wsService.on('__ws_close', () => {
+            // During grace period after mount, suppress disconnect to avoid flash
+            if (graceActiveRef.current && (Date.now() - mountedAtRef.current) < RECONNECT_GRACE_MS) {
+                console.log('[WS] close during grace period — suppressing disconnect UI');
+                return;
+            }
+            graceActiveRef.current = false;
             setState(prev => ({ ...prev, connected: false, detected: false }));
         });
 
         const offStatus = wsService.on('status', (data) => {
             console.log('[WS] status:', data.detected, 'swapping:', data.swapping);
+            // Cache detected state for seamless mobile resume
+            try { localStorage.setItem(CACHE_KEY_DETECTED, data.detected ? 'true' : 'false'); } catch {}
+            // Grace period ends once we get real status from backend
+            graceActiveRef.current = false;
             setState(prev => ({
                 ...prev,
                 detected: !!data.detected,
@@ -130,6 +180,9 @@ export function useWebSocket() {
                 const incoming = (data.steps as Step[]) || [];
                 const incomingBase = (data.baseIndex as number) ?? 0;
                 const incomingCount = (data.stepCount as number) ?? incoming.length;
+
+                // Cache steps for seamless mobile resume
+                _saveCachedSteps(incoming, incomingBase, incomingCount, prev.currentConvId);
 
                 // Merge: if same base+length, only update steps that actually changed
                 // Prevents visible re-render on auto-refresh after cascade completion
@@ -256,6 +309,8 @@ export function useWebSocket() {
 
     const selectConversation = useCallback((id: string | null) => {
         currentConvIdRef.current = id; // update ref immediately for WS handlers
+        // Clear cached steps when switching conversations
+        try { localStorage.removeItem(CACHE_KEY_STEPS); } catch {}
         setState(prev => ({
             ...prev,
             currentConvId: id,
