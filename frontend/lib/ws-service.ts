@@ -16,6 +16,7 @@ class WebSocketService {
     private listeners = new Map<string, Set<WSListener>>(); // type → listeners
     private wildcardListeners = new Set<WSListener>(); // receive ALL messages
     private _connected = false;
+    private visibilityBound = false;
 
     get connected() { return this._connected; }
 
@@ -41,6 +42,37 @@ class WebSocketService {
 
     /** Connect (idempotent — safe to call multiple times) */
     async connect() {
+        // Bind visibilitychange once — reconnect immediately when tab resumes
+        if (!this.visibilityBound && typeof document !== 'undefined') {
+            this.visibilityBound = true;
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                    console.log('[WS-Service] tab visible — checking connection');
+                    // Check if WS is dead (CLOSED/CLOSING or null)
+                    if (!this.ws || this.ws.readyState === WebSocket.CLOSED || this.ws.readyState === WebSocket.CLOSING) {
+                        console.log('[WS-Service] connection dead — reconnecting immediately');
+                        if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+                        this.reconnectTimer = null;
+                        this.connect();
+                    }
+                }
+            });
+            // Also handle the freeze/resume Page Lifecycle events (mobile browsers)
+            document.addEventListener('freeze', () => {
+                console.log('[WS-Service] page frozen by browser');
+                // Clean close so we don't get stuck in CLOSING state
+                if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+                this.reconnectTimer = null;
+                try { this.ws?.close(); } catch { /* ignore */ }
+                this.ws = null;
+                this._connected = false;
+            });
+            document.addEventListener('resume', () => {
+                console.log('[WS-Service] page resumed — reconnecting');
+                this.connect();
+            });
+        }
+
         if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
             return; // already connected or connecting
         }
@@ -77,12 +109,17 @@ class WebSocketService {
                 console.log('[WS-Service] disconnected');
                 this._connected = false;
                 this.emit('__ws_close', {});
-                this.reconnectTimer = setTimeout(() => this.connect(), 2000);
+                // Only auto-reconnect if page is visible (don't waste resources in background)
+                if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+                    this.reconnectTimer = setTimeout(() => this.connect(), 2000);
+                }
             };
 
             ws.onerror = () => ws.close();
         } catch {
-            this.reconnectTimer = setTimeout(() => this.connect(), 2000);
+            if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+                this.reconnectTimer = setTimeout(() => this.connect(), 2000);
+            }
         }
     }
 

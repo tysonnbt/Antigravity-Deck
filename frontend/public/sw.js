@@ -1,7 +1,7 @@
 // === Antigravity Deck — Service Worker ===
-// Handles: PWA install, notification display, notification click
+// Handles: PWA install, app shell caching, notification display, notification click
 
-const SW_VERSION = '1.0.0';
+const SW_VERSION = '1.1.0';
 const CACHE_NAME = `ag-deck-${SW_VERSION}`;
 
 // === Install ===
@@ -21,18 +21,44 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// === Fetch — network-first (real-time app, not offline-first) ===
+// === Fetch — stale-while-revalidate for app shell, network-first for API ===
 self.addEventListener('fetch', (event) => {
-  // Only cache same-origin GET requests for static assets
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
-  // Cache sound files and icons for offline notification playback
-  const cachePatterns = ['/sounds/', '/favicon'];
-  const shouldCache = cachePatterns.some((p) => url.pathname.includes(p));
+  // Never cache API calls or WebSocket upgrades
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/ws')) return;
 
-  if (shouldCache) {
+  // Next.js static assets (/_next/static/...) — immutable, hashed filenames → cache-first
+  if (url.pathname.startsWith('/_next/static/')) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then((cache) =>
+        cache.match(event.request).then((cached) => {
+          if (cached) return cached;
+          return fetch(event.request).then((response) => {
+            if (response.ok) cache.put(event.request, response.clone());
+            return response;
+          });
+        })
+      )
+    );
+    return;
+  }
+
+  // App shell (HTML pages, /_next/data/...) — stale-while-revalidate
+  // Serve cached version instantly, update cache in background
+  const isNavigationOrData = event.request.mode === 'navigate' ||
+    url.pathname.startsWith('/_next/data/') ||
+    url.pathname.startsWith('/_next/') ||
+    event.request.destination === 'script' ||
+    event.request.destination === 'style';
+
+  // Sound files and icons — cache-first (unchanged)
+  const cachePatterns = ['/sounds/', '/favicon'];
+  const isStaticAsset = cachePatterns.some((p) => url.pathname.includes(p));
+
+  if (isNavigationOrData || isStaticAsset) {
     event.respondWith(
       caches.open(CACHE_NAME).then((cache) =>
         cache.match(event.request).then((cached) => {
@@ -40,10 +66,12 @@ self.addEventListener('fetch', (event) => {
             if (response.ok) cache.put(event.request, response.clone());
             return response;
           }).catch(() => cached); // fallback to cache if offline
+          // Stale-while-revalidate: return cached immediately, update in background
           return cached || fetchPromise;
         })
       )
     );
+    return;
   }
   // For everything else, let the browser handle it normally (no interception)
 });
