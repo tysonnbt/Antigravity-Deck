@@ -59,6 +59,7 @@ export function WorkspaceGroup({
     onToggleExpand,
     onSelectConv,
     onToggleShowAll,
+    onDeleted,
 }: {
     data: WorkspaceData
     arrayIdx: number
@@ -69,6 +70,7 @@ export function WorkspaceGroup({
     onToggleExpand: () => void
     onSelectConv: (convId: string) => void
     onToggleShowAll: () => void
+    onDeleted?: (convId: string, wsName: string) => void
 }) {
     const [deleteTarget, setDeleteTarget] = useState<ConvSummary | null>(null)
 
@@ -77,15 +79,18 @@ export function WorkspaceGroup({
 
     const handleConfirmDelete = async () => {
         if (!deleteTarget) return
+        const targetId = deleteTarget.id
+        // Optimistically close the dialog immediately for snappy UX
+        setDeleteTarget(null)
         try {
-            await fetch(`${API_BASE}/api/cascade/${deleteTarget.id}`, {
+            await fetch(`${API_BASE}/api/cascade/${targetId}`, {
                 method: 'DELETE',
                 headers: authHeaders(),
             })
+            // Notify parent to remove from list right away
+            onDeleted?.(targetId, data.workspace.workspaceName)
         } catch (err) {
             console.error('Failed to delete conversation:', err)
-        } finally {
-            setDeleteTarget(null)
         }
     }
 
