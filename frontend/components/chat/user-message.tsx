@@ -69,9 +69,35 @@ export const UserMessage = memo(function UserMessage({ step, index, stepIndex, o
     return (
         <div className="flex justify-end mb-4">
             <div className="max-w-[80%] group relative rounded-lg rounded-br-md px-4 py-3 bg-blue-600/20 border border-blue-500/20 overflow-hidden min-w-0">
-                <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">You</span>
-                    <span className="text-[10px] text-muted-foreground/40 opacity-0 group-hover:opacity-100">#{index + 1}</span>
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">You</span>
+                        <span className="text-[10px] text-muted-foreground/40 opacity-0 group-hover:opacity-100">#{index + 1}</span>
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {canRollback && (
+                            <Button
+                                variant="ghost"
+                                size={confirmRollback ? 'sm' : 'icon'}
+                                className={confirmRollback
+                                    ? 'h-5 px-2 text-[10px] text-orange-400 hover:text-orange-300 hover:bg-orange-500/10'
+                                    : 'h-5 w-5 text-muted-foreground/50 hover:text-foreground'}
+                                onClick={handleRollbackClick}
+                                title="Rollback to this message"
+                            >
+                                {confirmRollback ? 'Confirm?' : <RotateCcw className="h-3 w-3" />}
+                            </Button>
+                        )}
+                        <RawJsonViewer step={step} />
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5 text-muted-foreground/50 hover:text-foreground"
+                            onClick={(e) => copy(content, e)}
+                        >
+                            {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                        </Button>
+                    </div>
                 </div>
 
                 {/* Images */}
@@ -90,30 +116,6 @@ export const UserMessage = memo(function UserMessage({ step, index, stepIndex, o
                 )}
 
                 {content && <div className="text-sm leading-relaxed"><MarkdownRenderer content={content} /></div>}
-                <div className="absolute bottom-1.5 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {canRollback && (
-                        <Button
-                            variant="ghost"
-                            size={confirmRollback ? 'sm' : 'icon'}
-                            className={confirmRollback
-                                ? 'h-5 px-2 text-[10px] text-orange-400 hover:text-orange-300 hover:bg-orange-500/10'
-                                : 'h-5 w-5 text-muted-foreground/50 hover:text-foreground'}
-                            onClick={handleRollbackClick}
-                            title="Rollback to this message"
-                        >
-                            {confirmRollback ? 'Confirm?' : <RotateCcw className="h-3 w-3" />}
-                        </Button>
-                    )}
-                    <RawJsonViewer step={step} />
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-5 w-5 text-muted-foreground/50 hover:text-foreground"
-                        onClick={(e) => copy(content, e)}
-                    >
-                        {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                    </Button>
-                </div>
             </div>
         </div>
     );
