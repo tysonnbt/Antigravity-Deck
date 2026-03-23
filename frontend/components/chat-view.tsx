@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { Step } from '@/lib/types';
 import { extractStepContent, getStepConfig } from '@/lib/step-utils';
-import { cascadeSend, cascadeSubmit, cascadeCancel, cascadeInteract, getWorkspaces, getModels, getAutoAcceptState, setAutoAcceptState, saveMedia, clearConversationCache, fetchWorkflows } from '@/lib/cascade-api';
+import { cascadeSend, cascadeSubmit, cascadeCancel, cascadeInteract, cascadeRevert, getWorkspaces, getModels, getAutoAcceptState, setAutoAcceptState, saveMedia, clearConversationCache, fetchWorkflows } from '@/lib/cascade-api';
 import type { Workspace, CascadeModel, CascadeModelGroup, MediaItem, WorkflowItem } from '@/lib/cascade-api';
 import { API_BASE } from '@/lib/config';
 import { authHeaders } from '@/lib/auth';
@@ -428,6 +428,14 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
         catch (e) { console.error('Interact error:', e); }
     }, [activeCascadeId]);
 
+    // Rollback to a specific step
+    const handleRollback = useCallback(async (stepIndex: number) => {
+        if (!activeCascadeId) return;
+        setPendingMessage(null);
+        try { await cascadeRevert(activeCascadeId, stepIndex); }
+        catch (e) { console.error('Rollback error:', e); }
+    }, [activeCascadeId]);
+
     // New chat
     const handleNewChat = useCallback(() => {
         setLocalCascadeId(null);
@@ -605,7 +613,7 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
                                     const animClass = isRecent ? 'message-animate' : '';
                                     if (group.type === 'user') {
                                         const { step, originalIndex } = group.steps[0];
-                                        return <div key={`u-${gIdx}`} className={animClass}><UserMessage step={step} index={originalIndex} /></div>;
+                                        return <div key={`u-${gIdx}`} className={animClass}><UserMessage step={step} index={originalIndex} stepIndex={baseIndex + originalIndex} onRollback={handleRollback} cascadeStatus={cascadeStatus} /></div>;
                                     }
                                     if (group.type === 'response') {
                                         const { step, originalIndex } = group.steps[0];
