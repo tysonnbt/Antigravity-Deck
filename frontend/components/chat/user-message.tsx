@@ -38,7 +38,7 @@ export const UserMessage = memo(function UserMessage({ step, index, stepIndex, o
         if (!canRollback) return;
         if (confirmRollback) {
             setConfirmRollback(false);
-            onRollback(Math.max(0, stepIndex - 1));
+            onRollback(stepIndex - 1);
         } else {
             setConfirmRollback(true);
         }
