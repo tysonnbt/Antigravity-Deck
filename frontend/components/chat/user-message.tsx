@@ -90,7 +90,7 @@ export const UserMessage = memo(function UserMessage({ step, index, stepIndex, o
                 )}
 
                 {content && <div className="text-sm leading-relaxed"><MarkdownRenderer content={content} /></div>}
-                <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute bottom-1.5 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                     {canRollback && (
                         <Button
                             variant="ghost"
