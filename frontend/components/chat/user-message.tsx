@@ -31,14 +31,14 @@ export const UserMessage = memo(function UserMessage({ step, index, stepIndex, o
     }, [confirmRollback]);
 
     const isActive = cascadeStatus === 'CASCADE_RUN_STATUS_RUNNING' || cascadeStatus === 'CASCADE_RUN_STATUS_WAITING_FOR_USER';
-    const canRollback = onRollback && stepIndex != null && stepIndex > 0 && !isActive;
+    const canRollback = onRollback && stepIndex != null && !isActive;
 
     const handleRollbackClick = useCallback((e: React.MouseEvent) => {
         e.stopPropagation();
         if (!canRollback) return;
         if (confirmRollback) {
             setConfirmRollback(false);
-            onRollback(stepIndex - 1);
+            onRollback(Math.max(0, stepIndex - 1));
         } else {
             setConfirmRollback(true);
         }
