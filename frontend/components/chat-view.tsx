@@ -593,7 +593,8 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
                                     const animClass = isRecent ? 'message-animate' : '';
                                     if (group.type === 'user') {
                                         const { step, originalIndex } = group.steps[0];
-                                        return <div key={`u-${gIdx}`} className={animClass}><UserMessage step={step} index={originalIndex} stepIndex={baseIndex + originalIndex} onRollback={handleRollback} cascadeStatus={cascadeStatus} /></div>;
+                                        const isFirstUser = !groups.slice(0, gIdx).some(g => g.type === 'user');
+                                        return <div key={`u-${gIdx}`} className={animClass}><UserMessage step={step} index={originalIndex} stepIndex={baseIndex + originalIndex} onRollback={isFirstUser ? undefined : handleRollback} cascadeStatus={cascadeStatus} /></div>;
                                     }
                                     if (group.type === 'response') {
                                         const { step, originalIndex } = group.steps[0];
