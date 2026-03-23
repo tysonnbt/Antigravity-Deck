@@ -182,13 +182,15 @@ async function pollNow() {
 
             // Poll conversations to keep cache up to date:
             // - RUNNING/WAITING: always poll (streaming content updates)
-            // - IDLE: poll if server has more steps than cache (catch up after transition)
+            // - IDLE: poll if server has more/fewer steps than cache (catch up after transition or rollback)
             const isRunning = info.status === 'CASCADE_RUN_STATUS_RUNNING' ||
                 info.status === 'CASCADE_RUN_STATUS_WAITING_FOR_USER';
             const cached = stepCache[cascadeId];
-            const serverAhead = cached && info.stepCount > (cached.baseIndex || 0) + cached.steps.length;
+            const cachedLen = cached ? (cached.baseIndex || 0) + cached.steps.length : 0;
+            const serverAhead = cached && info.stepCount > cachedLen;
+            const serverBehind = cached && info.stepCount < cachedLen;
 
-            if (isRunning || serverAhead) {
+            if (isRunning || serverAhead || serverBehind) {
                 await pollConversation(cascadeId, info);
             }
 
