@@ -56,6 +56,7 @@ import { GeneratedImageStep } from './chat/generated-image-step';
 import { StreamingIndicator } from './chat/streaming-indicator';
 import { WorkflowAutocomplete } from './workflow-autocomplete';
 import type { WorkflowAutocompleteHandle } from './workflow-autocomplete';
+import { VoiceInputButton } from './chat/voice-input-button';
 
 // Helper: generate a small thumbnail (base64) from a full-size base64 image
 function generateThumbnail(base64: string, mimeType: string, maxSize = 128): Promise<string> {
@@ -826,6 +827,10 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
                                 >
                                     <Paperclip className="h-4 w-4" />
                                 </Button>
+                                <VoiceInputButton
+                                    onTranscript={(text) => setInput(prev => prev ? prev + ' ' + text : text)}
+                                    disabled={sending}
+                                />
                                 <Button
                                     variant={showSourceControl ? 'secondary' : 'ghost'}
                                     size="icon"
