@@ -1,8 +1,9 @@
 // === start-tunnel.js — Production launcher for Antigravity Deck ===
 // Usage:
-//   node start-tunnel.js           → build + start + Cloudflare tunnels
+//   node start-tunnel.js           → build + start + tunnels (cloudflared or ngrok)
 //   node start-tunnel.js --local   → build + start locally (no tunnels)
 //   node start-tunnel.js --build   → force rebuild even if .next exists
+//   node start-tunnel.js --ngrok   → force ngrok even if cloudflared is available
 
 const { spawn, execSync } = require('child_process');
 const fs = require('fs');
@@ -16,6 +17,7 @@ const IS_MAC = process.platform === 'darwin';
 const IS_WIN = process.platform === 'win32';
 const LOCAL_MODE = process.argv.includes('--local');
 const FORCE_BUILD = process.argv.includes('--build');
+const FORCE_NGROK = process.argv.includes('--ngrok');
 const QUIET = process.env.QUIET === '1' || process.argv.includes('--quiet');
 
 let beUrl = null;
@@ -33,7 +35,24 @@ function findCloudflared() {
     }
     return null;
 }
-const CLOUDFLARED = findCloudflared();
+
+// Find ngrok binary — fallback tunnel provider
+function findNgrok() {
+    try { execSync('ngrok version', { stdio: 'ignore' }); return 'ngrok'; } catch { }
+    const paths = IS_WIN
+        ? [path.join(process.env.USERPROFILE || '', 'ngrok.exe'), 'C:\\ngrok\\ngrok.exe']
+        : ['/usr/local/bin/ngrok', '/opt/homebrew/bin/ngrok', '/snap/bin/ngrok'];
+    for (const p of paths) {
+        if (fs.existsSync(p)) return IS_WIN ? `"${p}"` : p;
+    }
+    return null;
+}
+
+// === Tunnel provider detection (priority: cloudflared → ngrok) ===
+const CLOUDFLARED = FORCE_NGROK ? null : findCloudflared();
+const NGROK = findNgrok();
+const TUNNEL_PROVIDER = CLOUDFLARED ? 'cloudflared' : (NGROK ? 'ngrok' : null);
+const TUNNEL_BIN = CLOUDFLARED || NGROK;
 
 function log(tag, msg) {
     if (QUIET) return;
@@ -46,11 +65,46 @@ function progress(msg) {
     if (QUIET) process.stdout.write(`\r\x1b[K  ${msg}`);
 }
 
-// Extract Cloudflare tunnel URL from process output
+// Extract tunnel URL from process output (provider-aware)
 function extractTunnelUrl(text) {
-    const stripped = text.replace(/\s+/g, '');
-    const match = stripped.match(/(https:\/\/[a-z0-9]+-[a-z0-9-]+\.trycloudflare\.com)/);
-    return match ? match[1] : null;
+    if (TUNNEL_PROVIDER === 'cloudflared') {
+        const stripped = text.replace(/\s+/g, '');
+        const match = stripped.match(/(https:\/\/[a-z0-9]+-[a-z0-9-]+\.trycloudflare\.com)/);
+        return match ? match[1] : null;
+    }
+    // ngrok URL patterns
+    const ngrokMatch = text.match(/(https:\/\/[a-z0-9-]+\.ngrok-free\.app)/);
+    if (ngrokMatch) return ngrokMatch[1];
+    const ngrokOld = text.match(/(https:\/\/[a-z0-9]+\.ngrok\.io)/);
+    if (ngrokOld) return ngrokOld[1];
+    return null;
+}
+
+// Spawn a tunnel process for the given port (provider-aware)
+function spawnTunnel(port) {
+    if (TUNNEL_PROVIDER === 'cloudflared') {
+        return spawn(TUNNEL_BIN, ['tunnel', '--url', `http://localhost:${port}`], {
+            stdio: ['ignore', 'pipe', 'pipe'], shell: true
+        });
+    }
+    // ngrok: --log stdout ensures URL appears in stdout
+    return spawn(TUNNEL_BIN, ['http', String(port), '--log', 'stdout'], {
+        stdio: ['ignore', 'pipe', 'pipe'], shell: true
+    });
+}
+
+// Check if tunnel output indicates rate limiting
+function isRateLimited(text) {
+    if (TUNNEL_PROVIDER === 'cloudflared') {
+        return text.includes('429') || text.includes('Too Many Requests') || text.includes('error code: 1015');
+    }
+    return text.includes('ERR_NGROK_') && (text.includes('rate') || text.includes('limit'));
+}
+
+// Check if ngrok authtoken is missing from output
+function isNgrokAuthMissing(text) {
+    return text.includes('ERR_NGROK_105') || text.includes('authtoken') && text.includes('invalid') ||
+           text.includes('sign up') || text.includes('ERR_NGROK_100');
 }
 
 // Start a process, track it for cleanup
@@ -113,11 +167,13 @@ function cleanup() {
     log('*', 'Shutting down...');
     for (const p of allProcs) { try { p.kill(); } catch {} }
 
-    // Kill anything still on our ports
+    // Kill tunnel provider processes
     if (IS_WIN) {
         try { execSync(`taskkill /F /FI "IMAGENAME eq cloudflared.exe"`, { stdio: 'ignore' }); } catch {}
+        try { execSync(`taskkill /F /FI "IMAGENAME eq ngrok.exe"`, { stdio: 'ignore' }); } catch {}
     } else {
         try { execSync(`pkill -f "cloudflared.*tunnel.*localhost"`, { stdio: 'ignore' }); } catch {}
+        try { execSync(`pkill -f "ngrok.*http"`, { stdio: 'ignore' }); } catch {}
     }
 
     for (const port of [BE_PORT, FE_PORT]) {
@@ -207,13 +263,17 @@ async function runLocal() {
 // TUNNEL MODE: backend → tunnel → build (with URL) → frontend → tunnel
 // ============================================================
 async function runTunnel() {
-    if (!CLOUDFLARED) {
-        console.log('\n\x1b[31m  ❌ cloudflared not found!\x1b[0m');
-        const installCmd = IS_MAC ? 'brew install cloudflared' : 'winget install cloudflare.cloudflared';
-        console.log(`  Install: ${installCmd}\n`);
+    if (!TUNNEL_PROVIDER) {
+        console.log('\n\x1b[31m  ❌ No tunnel provider found! Install one of:\x1b[0m');
+        const cfCmd = IS_MAC ? 'brew install cloudflared' : 'winget install cloudflare.cloudflared';
+        console.log(`  • cloudflared: ${cfCmd}`);
+        console.log(`  • ngrok:       https://ngrok.com/download`);
+        console.log(`\n  Then run: \x1b[1mnpm run online\x1b[0m\n`);
         process.exit(1);
     }
-    log('*', `Using cloudflared: ${CLOUDFLARED}`);
+
+    const providerName = TUNNEL_PROVIDER === 'cloudflared' ? 'Cloudflare Tunnel' : 'ngrok';
+    log('*', `Using tunnel provider: ${providerName} (${TUNNEL_BIN})`);
 
     // Kill stale processes
     killStaleProcesses([BE_PORT, FE_PORT]);
@@ -222,14 +282,28 @@ async function runTunnel() {
     const authKey = process.env.AUTH_KEY || crypto.randomBytes(16).toString('hex');
 
     if (!QUIET) {
-        console.log('\n\x1b[1m  🚀 Antigravity Deck — Starting with Cloudflare Tunnel\x1b[0m');
+        console.log(`\n\x1b[1m  🚀 Antigravity Deck — Starting with ${providerName}\x1b[0m`);
         console.log(`  🔑 Auth Key: \x1b[33m${authKey}\x1b[0m\n`);
     }
 
+    // === CLOUDFLARED PATH: dual-tunnel (BE tunnel + FE tunnel) ===
+    if (TUNNEL_PROVIDER === 'cloudflared') {
+        await _runCloudflaredTunnel(authKey);
+    }
+    // === NGROK PATH: single-tunnel (FE only — Next.js proxies /api/* to BE) ===
+    else {
+        await _runNgrokTunnel(authKey);
+    }
+
+    console.log('\n  Press Ctrl+C to stop\n');
+}
+
+// --- CLOUDFLARED: dual-tunnel mode (original behavior) ---
+async function _runCloudflaredTunnel(authKey) {
     // Step 1: Start backend
     progress('Starting backend...');
     log('*', `Starting backend on port ${BE_PORT}...`);
-    const be = startProcess('BE', 'node', ['server.js'], {
+    startProcess('BE', 'node', ['server.js'], {
         cwd: __dirname,
         env: { ...process.env, PORT: String(BE_PORT), AUTH_KEY: authKey, QUIET_POLL: '1', NODE_ENV: 'production' }
     });
@@ -238,30 +312,10 @@ async function runTunnel() {
     // Step 2: Start backend tunnel
     progress('Starting backend tunnel...');
     log('*', 'Starting Cloudflare tunnel for backend...');
-    const tunBe = spawn(CLOUDFLARED, ['tunnel', '--url', `http://localhost:${BE_PORT}`], {
-        stdio: ['ignore', 'pipe', 'pipe'], shell: true
-    });
+    const tunBe = spawnTunnel(BE_PORT);
     allProcs.push(tunBe);
 
-    beUrl = await new Promise((resolve) => {
-        const timeout = setTimeout(() => { log('*', '⚠️  Timed out waiting for backend tunnel URL'); resolve(null); }, 30000);
-        let buffer = '';
-        const handler = (data) => {
-            const text = data.toString();
-            buffer += text;
-            text.split('\n').filter(l => l.trim()).forEach(l => log('TUN-BE', l.trim()));
-            // Detect Cloudflare rate limit
-            if (buffer.includes('429') || buffer.includes('Too Many Requests') || buffer.includes('error code: 1015')) {
-                clearTimeout(timeout);
-                resolve('RATE_LIMITED');
-                return;
-            }
-            const url = extractTunnelUrl(buffer);
-            if (url) { clearTimeout(timeout); resolve(url); }
-        };
-        tunBe.stdout?.on('data', handler);
-        tunBe.stderr?.on('data', handler);
-    });
+    beUrl = await _waitForTunnelUrl(tunBe, 'TUN-BE');
 
     if (beUrl === 'RATE_LIMITED') {
         console.error('\n\x1b[33m  ⚠️  Cloudflare rate limit (429 Too Many Requests)\x1b[0m');
@@ -273,14 +327,14 @@ async function runTunnel() {
     if (!beUrl) { log('*', '❌ Failed to get backend tunnel URL'); process.exit(1); }
     log('*', `✅ Backend tunnel: ${beUrl}`);
 
-    // Step 3: Build frontend (always — needs NEXT_PUBLIC_BACKEND_URL baked in)
+    // Step 3: Build frontend (needs NEXT_PUBLIC_BACKEND_URL baked in)
     buildFrontend({ NEXT_PUBLIC_BACKEND_URL: beUrl, NEXT_PUBLIC_BACKEND_PORT: String(BE_PORT) });
     try { fs.writeFileSync(path.join(__dirname, 'frontend', '.next', '.backend-port'), String(BE_PORT)); } catch { }
 
     // Step 4: Start frontend
     progress('Starting frontend...');
     log('*', `Starting frontend on port ${FE_PORT}...`);
-    const fe = startProcess('FE', 'npx', ['next', 'start', '--port', String(FE_PORT)], {
+    startProcess('FE', 'npx', ['next', 'start', '--port', String(FE_PORT)], {
         cwd: path.join(__dirname, 'frontend'),
         env: { ...process.env, NEXT_PUBLIC_BACKEND_URL: beUrl, BACKEND_PORT: String(BE_PORT), NODE_ENV: 'production' }
     });
@@ -289,43 +343,122 @@ async function runTunnel() {
     // Step 5: Start frontend tunnel
     progress('Starting frontend tunnel...');
     log('*', 'Starting Cloudflare tunnel for frontend...');
-    const tunFe = spawn(CLOUDFLARED, ['tunnel', '--url', `http://localhost:${FE_PORT}`], {
-        stdio: ['ignore', 'pipe', 'pipe'], shell: true
-    });
+    const tunFe = spawnTunnel(FE_PORT);
     allProcs.push(tunFe);
 
-    feUrl = await new Promise((resolve) => {
-        const timeout = setTimeout(() => { log('*', '⚠️  Timed out waiting for frontend tunnel URL'); resolve(null); }, 30000);
+    feUrl = await _waitForTunnelUrl(tunFe, 'TUN-FE');
+
+    if (feUrl === 'RATE_LIMITED') {
+        console.error('\n\x1b[33m  ⚠️  Cloudflare rate limit on frontend tunnel\x1b[0m');
+        console.error('  Backend tunnel is working. Wait 5-10 min and try again.\n');
+        feUrl = null;
+    }
+
+    _printResults(authKey, tunBe, tunFe);
+}
+
+// --- NGROK: single-tunnel mode (tunnel FE only, Next.js proxies /api/*) ---
+async function _runNgrokTunnel(authKey) {
+    // Step 1: Start backend (localhost only — no tunnel needed)
+    progress('Starting backend...');
+    log('*', `Starting backend on port ${BE_PORT}...`);
+    startProcess('BE', 'node', ['server.js'], {
+        cwd: __dirname,
+        env: { ...process.env, PORT: String(BE_PORT), AUTH_KEY: authKey, ALLOW_LOCALHOST_BYPASS: 'true', QUIET_POLL: '1', NODE_ENV: 'production' }
+    });
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    // Step 2: Build frontend (NO NEXT_PUBLIC_BACKEND_URL — uses relative /api/* proxy)
+    const nextDir = path.join(__dirname, 'frontend', '.next');
+    const portFile = path.join(nextDir, '.backend-port');
+    let needBuild = FORCE_BUILD || !fs.existsSync(nextDir);
+    if (!needBuild) {
+        try {
+            const builtPort = fs.readFileSync(portFile, 'utf8').trim();
+            if (builtPort !== String(BE_PORT)) needBuild = true;
+        } catch { needBuild = true; }
+    }
+    if (needBuild) {
+        buildFrontend({ BACKEND_PORT: String(BE_PORT) });
+        try { fs.writeFileSync(portFile, String(BE_PORT)); } catch { }
+    } else {
+        log('*', '✅ Frontend already built (use --build to force rebuild)');
+    }
+
+    // Step 3: Start frontend
+    progress('Starting frontend...');
+    log('*', `Starting frontend on port ${FE_PORT}...`);
+    startProcess('FE', 'npx', ['next', 'start', '--port', String(FE_PORT)], {
+        cwd: path.join(__dirname, 'frontend'),
+        env: { ...process.env, BACKEND_PORT: String(BE_PORT), NODE_ENV: 'production' }
+    });
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    // Step 4: Single tunnel pointing to frontend
+    progress('Starting ngrok tunnel...');
+    log('*', `Starting ngrok tunnel for frontend (port ${FE_PORT})...`);
+    const tunFe = spawnTunnel(FE_PORT);
+    allProcs.push(tunFe);
+
+    feUrl = await _waitForTunnelUrl(tunFe, 'TUN-FE');
+    beUrl = feUrl; // Same URL — all API calls go through FE proxy
+
+    if (feUrl === 'RATE_LIMITED') {
+        console.error('\n\x1b[33m  ⚠️  ngrok rate limit\x1b[0m');
+        console.error('  Please wait and try again, or use local mode: \x1b[1mnode start-tunnel.js --local\x1b[0m\n');
+        process.exit(1);
+    }
+    if (feUrl === 'AUTH_MISSING') {
+        console.error('\n\x1b[31m  ❌ ngrok authtoken not configured!\x1b[0m');
+        console.error('  Sign up for free at: \x1b[36mhttps://dashboard.ngrok.com/signup\x1b[0m');
+        console.error('  Then run: \x1b[1mngrok config add-authtoken YOUR_TOKEN\x1b[0m\n');
+        process.exit(1);
+    }
+    if (!feUrl) { log('*', '❌ Failed to get ngrok tunnel URL'); process.exit(1); }
+
+    _printResults(authKey, null, tunFe);
+}
+
+// --- Wait for tunnel URL from process output ---
+async function _waitForTunnelUrl(tunnelProc, logTag) {
+    return new Promise((resolve) => {
+        const timeout = setTimeout(() => { log('*', `⚠️  Timed out waiting for ${logTag} tunnel URL`); resolve(null); }, 30000);
         let buffer = '';
         const handler = (data) => {
             const text = data.toString();
             buffer += text;
-            text.split('\n').filter(l => l.trim()).forEach(l => log('TUN-FE', l.trim()));
-            // Detect Cloudflare rate limit
-            if (buffer.includes('429') || buffer.includes('Too Many Requests') || buffer.includes('error code: 1015')) {
+            text.split('\n').filter(l => l.trim()).forEach(l => log(logTag, l.trim()));
+            if (isRateLimited(buffer)) {
                 clearTimeout(timeout);
-                console.error('\n\x1b[33m  ⚠️  Cloudflare rate limit on frontend tunnel (429)\x1b[0m');
-                console.error('  Backend tunnel is working. Wait 5-10 min and try again.\n');
-                resolve(null);
+                resolve('RATE_LIMITED');
+                return;
+            }
+            if (TUNNEL_PROVIDER === 'ngrok' && isNgrokAuthMissing(buffer)) {
+                clearTimeout(timeout);
+                resolve('AUTH_MISSING');
                 return;
             }
             const url = extractTunnelUrl(buffer);
             if (url) { clearTimeout(timeout); resolve(url); }
         };
-        tunFe.stdout?.on('data', handler);
-        tunFe.stderr?.on('data', handler);
+        tunnelProc.stdout?.on('data', handler);
+        tunnelProc.stderr?.on('data', handler);
     });
+}
 
+// --- Print results and QR code ---
+function _printResults(authKey, tunBe, tunFe) {
     const qrUrl = feUrl ? `${feUrl}?key=${authKey}` : null;
     if (QUIET) process.stdout.write('\r\x1b[K');
 
     if (feUrl) {
+        const providerLabel = TUNNEL_PROVIDER === 'cloudflared' ? 'Cloudflare' : 'ngrok';
         console.log('\n' + '='.repeat(60));
-        console.log('\x1b[1m\x1b[32m  🌐 READY! Open this URL on any device:\x1b[0m');
+        console.log(`\x1b[1m\x1b[32m  🌐 READY! (${providerLabel}) Open this URL on any device:\x1b[0m`);
         console.log(`\x1b[1m  👉 ${feUrl}\x1b[0m`);
         console.log(`  🔑 Key: \x1b[33m${authKey}\x1b[0m`);
         console.log('='.repeat(60));
-        console.log(`  Backend API: ${beUrl}`);
+        if (beUrl && beUrl !== feUrl) console.log(`  Backend API: ${beUrl}`);
         console.log(`  Local:       http://localhost:${FE_PORT}`);
         console.log('='.repeat(60));
 
@@ -350,6 +483,7 @@ async function runTunnel() {
     // Write tunnel info file
     const infoFile = path.join(__dirname, '.tunnel-info.txt');
     const info = [
+        `Provider: ${TUNNEL_PROVIDER}`,
         `Frontend: ${feUrl || 'FAILED'}`,
         `Backend:  ${beUrl || 'FAILED'}`,
         `Auth Key: ${authKey}`,
@@ -363,13 +497,15 @@ async function runTunnel() {
 
     // Keep remaining output flowing
     if (!QUIET) {
-        tunBe.stdout?.on('data', d => d.toString().split('\n').filter(l => l.trim()).forEach(l => log('TUN-BE', l.trim())));
-        tunBe.stderr?.on('data', d => d.toString().split('\n').filter(l => l.trim()).forEach(l => log('TUN-BE', l.trim())));
-        tunFe.stdout?.on('data', d => d.toString().split('\n').filter(l => l.trim()).forEach(l => log('TUN-FE', l.trim())));
-        tunFe.stderr?.on('data', d => d.toString().split('\n').filter(l => l.trim()).forEach(l => log('TUN-FE', l.trim())));
+        if (tunBe) {
+            tunBe.stdout?.on('data', d => d.toString().split('\n').filter(l => l.trim()).forEach(l => log('TUN-BE', l.trim())));
+            tunBe.stderr?.on('data', d => d.toString().split('\n').filter(l => l.trim()).forEach(l => log('TUN-BE', l.trim())));
+        }
+        if (tunFe) {
+            tunFe.stdout?.on('data', d => d.toString().split('\n').filter(l => l.trim()).forEach(l => log('TUN-FE', l.trim())));
+            tunFe.stderr?.on('data', d => d.toString().split('\n').filter(l => l.trim()).forEach(l => log('TUN-FE', l.trim())));
+        }
     }
-
-    console.log('\n  Press Ctrl+C to stop\n');
 }
 
 // === Entry point ===

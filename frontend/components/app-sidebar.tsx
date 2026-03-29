@@ -95,7 +95,11 @@ export function AppSidebar({
     onConvDeleted,
 }: AppSidebarProps) {
     const { isDark, toggle: toggleTheme } = useTheme()
-    const { isMobile } = useSidebar()
+    const { isMobile, setOpenMobile } = useSidebar()
+
+    const closeMobile = useCallback(() => {
+        if (isMobile) setOpenMobile(false)
+    }, [isMobile, setOpenMobile])
 
     const [wsData, setWsData] = useState<WorkspaceData[]>([])
     const [folders, setFolders] = useState<WorkspaceFolder[]>([])
@@ -265,8 +269,9 @@ export function AppSidebar({
                 return { ...d, expanded: !d.expanded }
             }))
             onSelectWorkspace(wd.workspace.workspaceName)
+            closeMobile()
         },
-        [wsData, onSelectWorkspace]
+        [wsData, onSelectWorkspace, closeMobile]
     )
 
     const handleSelectConv = useCallback(
@@ -274,8 +279,9 @@ export function AppSidebar({
             const wd = wsData[arrayIdx]
             if (!wd) return
             onSelectConversation(convId, wd.workspace.workspaceName)
+            closeMobile()
         },
-        [wsData, onSelectConversation]
+        [wsData, onSelectConversation, closeMobile]
     )
 
     // Called by WorkspaceGroup after a conversation is successfully deleted.
@@ -371,7 +377,7 @@ export function AppSidebar({
             <Sidebar variant="inset">
                 <SidebarHeader>
                     <button
-                        onClick={onGoHome}
+                        onClick={() => { onGoHome(); closeMobile(); }}
                         className="flex items-center gap-2 px-4 py-2 mt-2 hover:opacity-80 transition-opacity cursor-pointer"
                     >
                         <FolderSync className="h-5 w-5 text-primary" />
@@ -492,21 +498,21 @@ export function AppSidebar({
                         <SidebarGroupContent>
                             <SidebarMenu>
                                 <SidebarMenuItem>
-                                    <SidebarMenuButton onClick={onShowAgentHub} tooltip="Agent Hub" className="text-xs">
+                                    <SidebarMenuButton onClick={() => { onShowAgentHub(); closeMobile(); }} tooltip="Agent Hub" className="text-xs">
                                         <Bot className="shrink-0" />
                                         <span>Agent Hub</span>
                                     </SidebarMenuButton>
                                 </SidebarMenuItem>
                                 {/* Orchestrator hidden while chat-first redesign is in progress
                                 <SidebarMenuItem>
-                                    <SidebarMenuButton onClick={onShowOrchestrator} tooltip="Orchestrator" className="text-xs">
+                                    <SidebarMenuButton onClick={() => { onShowOrchestrator(); closeMobile(); }} tooltip="Orchestrator" className="text-xs">
                                         <Workflow className="shrink-0" />
                                         <span>Orchestrator</span>
                                     </SidebarMenuButton>
                                 </SidebarMenuItem>
                                 */}
                                 <SidebarMenuItem>
-                                    <SidebarMenuButton onClick={onShowConnect} tooltip="Connect" className="text-xs">
+                                    <SidebarMenuButton onClick={() => { onShowConnect(); closeMobile(); }} tooltip="Connect" className="text-xs">
                                         <Cable className="shrink-0" />
                                         <span>Connect</span>
                                     </SidebarMenuButton>
@@ -553,19 +559,19 @@ export function AppSidebar({
                                     sideOffset={4}
                                     className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
                                 >
-                                    <DropdownMenuItem onClick={onShowAccountInfo}>
+                                    <DropdownMenuItem onClick={() => { onShowAccountInfo(); closeMobile(); }}>
                                         <User className="mr-2 h-4 w-4" />
                                         <span>Account & Plan</span>
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={onShowLogs}>
+                                    <DropdownMenuItem onClick={() => { onShowLogs(); closeMobile(); }}>
                                         <Activity className="mr-2 h-4 w-4" />
                                         <span>Live Logs</span>
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={onShowSourceControl}>
+                                    <DropdownMenuItem onClick={() => { onShowSourceControl(); closeMobile(); }}>
                                         <GitBranch className="mr-2 h-4 w-4" />
                                         <span>Source Control</span>
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={onShowResources}>
+                                    <DropdownMenuItem onClick={() => { onShowResources(); closeMobile(); }}>
                                         <Monitor className="mr-2 h-4 w-4" />
                                         <span>Resources</span>
                                     </DropdownMenuItem>
@@ -574,7 +580,7 @@ export function AppSidebar({
                                         <span>{isDark ? "Light Mode" : "Dark Mode"}</span>
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem onClick={() => setShowPlugins(true)}>
+                                    <DropdownMenuItem onClick={() => { setShowPlugins(true); closeMobile(); }}>
                                         <Plug className="mr-2 h-4 w-4" />
                                         <span>Plugins</span>
                                     </DropdownMenuItem>
@@ -587,7 +593,7 @@ export function AppSidebar({
                                         <span className="text-muted-foreground">Browser (Coming Soon)</span>
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem onClick={onShowSettings}>
+                                    <DropdownMenuItem onClick={() => { onShowSettings(); closeMobile(); }}>
                                         <Settings className="mr-2 h-4 w-4" />
                                         <span>App Settings</span>
                                     </DropdownMenuItem>

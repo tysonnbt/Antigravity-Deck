@@ -10,9 +10,10 @@
     "prod": "node start-tunnel.js --local",
     "server": "node --watch server.js --port 3500",
     "tunnel:be": "cloudflared tunnel --url http://localhost:3500",
-    "tunnel:fe": "cloudflared tunnel --url http://localhost:3000",
+    "tunnel:fe": "cloudflared tunnel --url http://localhost:1234",
     "tunnel": "npx concurrently -n TUN-BE,TUN-FE -c green,yellow \"npm run tunnel:be\" \"npm run tunnel:fe\"",
-    "online": "node start-tunnel.js"
+    "online": "node start-tunnel.js",
+    "online:ngrok": "node start-tunnel.js --ngrok"
   },
   "dependencies": {
     "discord.js": "^14.25.1",

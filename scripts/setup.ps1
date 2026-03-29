@@ -91,6 +91,23 @@ else {
     Write-Host "  [!] cloudflared not found (optional, needed for remote access)" -ForegroundColor Yellow
 }
 
+# ngrok (optional fallback -- needed if cloudflared unavailable)
+$ngFound = $false
+try {
+    ngrok version 2>$null | Out-Null
+    $ngFound = $true
+}
+catch { }
+
+if ($ngFound) {
+    Write-Host "  [OK] ngrok" -ForegroundColor Green
+}
+else {
+    if (-not $cfFound) {
+        Write-Host "  [!] ngrok not found (optional, needed for remote access)" -ForegroundColor Yellow
+    }
+}
+
 if ($missing.Count -gt 0) {
     Write-Host ""
     Write-Host "  Missing prerequisites:" -ForegroundColor Red
@@ -257,7 +274,7 @@ Write-Host ""
 Write-Host "  Starting Antigravity Deck..." -ForegroundColor Green
 Write-Host ""
 
-if ($cfFound) {
+if ($cfFound -or $ngFound) {
     node start-tunnel.js --quiet --build
 } else {
     node start-tunnel.js --local --build

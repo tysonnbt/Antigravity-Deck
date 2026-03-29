@@ -347,7 +347,6 @@ async function launchHeadlessLS(folderPath) {
     const args = [
         '--enable_lsp',
         '--csrf_token', csrfToken,
-        '--random_port',
         '--workspace_id', workspaceId,
         '--cloud_code_endpoint', 'https://daily-cloudcode-pa.googleapis.com',
         '--app_data_dir', 'antigravity',

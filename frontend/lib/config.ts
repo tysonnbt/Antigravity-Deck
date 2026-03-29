@@ -33,6 +33,7 @@ export async function getWsUrl(): Promise<string> {
 
 async function _resolveWsUrl(): Promise<string> {
     const hostname = window.location.hostname;
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
 
     const isLocal =
         hostname === 'localhost' ||
@@ -42,19 +43,31 @@ async function _resolveWsUrl(): Promise<string> {
         /^172\.(1[6-9]|2\d|3[01])\./.test(hostname) ||
         /^169\.254\./.test(hostname);
 
-    if (isLocal) {
-        try {
-            const res = await fetch('/api/ws-url');
-            const { wsPort } = await res.json();
+    // Always try /api/ws-url first — works through Next.js proxy for all modes
+    try {
+        const res = await fetch('/api/ws-url');
+        const { wsPort } = await res.json();
+
+        if (isLocal) {
+            // Local: connect directly to backend port on same host
             return `ws://${hostname}:${wsPort}`;
-        } catch {
-            return `ws://${hostname}:3500`;
         }
-    } else {
+
+        // Remote (ngrok/cloudflare): backend WS port is not directly accessible.
+        // If NEXT_PUBLIC_BACKEND_URL was baked in (cloudflared mode), use it.
         const tunnel = process.env.NEXT_PUBLIC_BACKEND_URL || '';
-        return tunnel
-            ? tunnel.replace(/^http/, 'ws')
-            : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`;
+        if (tunnel) {
+            return tunnel.replace(/^http/, 'ws');
+        }
+
+        // ngrok single-tunnel mode: WS is not accessible through FE tunnel.
+        // Fall back to polling mode by returning an unreachable URL that will
+        // gracefully fail, and the UI will still work via HTTP polling.
+        // Actually — try the same host first; if ngrok supports WS upgrade, it works.
+        return `${protocol}://${window.location.host}`;
+    } catch {
+        if (isLocal) return `ws://${hostname}:3500`;
+        return `${protocol}://${window.location.host}`;
     }
 }
 
