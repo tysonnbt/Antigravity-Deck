@@ -26,6 +26,10 @@ const nextConfig: NextConfig = {
         source: '/api/:path*',
         destination: `${BE_HOST}/api/:path*`,
       },
+      {
+        source: '/ws/:path*',
+        destination: `${BE_HOST}/ws/:path*`,
+      },
     ];
   },
 };

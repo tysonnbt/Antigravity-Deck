@@ -29,8 +29,10 @@ server.on('upgrade', (req, socket, head) => {
     orchestratorWss.handleUpgrade(req, socket, head, ws => orchestratorWss.emit('connection', ws, req));
   } else if (pathname === '/ws/agent') {
     agentWss.handleUpgrade(req, socket, head, ws => agentWss.emit('connection', ws, req));
-  } else {
+  } else if (pathname === '/ws/ui' || pathname === '/') {
     wss.handleUpgrade(req, socket, head, ws => wss.emit('connection', ws, req));
+  } else {
+    socket.destroy();
   }
 });
 

@@ -97,7 +97,8 @@ class WebSocketService {
         }
         try {
             const wsBase = await getWsUrl();
-            const ws = new WebSocket(authWsUrl(wsBase));
+            const wsUrl = wsBase.replace(/\/$/, '') + '/ws/ui';
+            const ws = new WebSocket(authWsUrl(wsUrl));
             this.ws = ws;
 
             ws.onopen = () => {

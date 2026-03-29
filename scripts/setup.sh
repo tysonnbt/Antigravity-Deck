@@ -73,6 +73,20 @@ else
     echo "  ⚠️  cloudflared not found (optional — needed for remote access)"
 fi
 
+# ngrok (optional fallback — needed if cloudflared unavailable)
+ng_found=false
+if command -v ngrok &>/dev/null; then
+    ng_found=true
+fi
+
+if $ng_found; then
+    echo "  ✅ ngrok"
+else
+    if ! $cf_found; then
+        echo "  ⚠️  ngrok not found (optional — needed for remote access)"
+    fi
+fi
+
 if [ ${#missing[@]} -gt 0 ]; then
     echo ""
     echo "  Missing prerequisites:"
@@ -216,7 +230,7 @@ echo ""
 echo "  Starting Antigravity Deck..."
 echo ""
 
-if $cf_found; then
+if $cf_found || $ng_found; then
     node start-tunnel.js --quiet --build
 else
     node start-tunnel.js --local --build

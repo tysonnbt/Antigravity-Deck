@@ -36,7 +36,7 @@ foreach ($proc in $procs) {
 }
 
 # Method 2: Kill child processes (next-server, cloudflared) referencing install dir
-$allProcs = @("node.exe", "next-server.exe", "cloudflared.exe")
+$allProcs = @("node.exe", "next-server.exe", "cloudflared.exe", "ngrok.exe")
 foreach ($procName in $allProcs) {
     $procs2 = Get-WmiObject Win32_Process -Filter "Name = '$procName'" 2>$null
     foreach ($proc in $procs2) {

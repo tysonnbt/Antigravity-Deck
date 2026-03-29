@@ -152,7 +152,9 @@ export function useWebSocket() {
                 return;
             }
             graceActiveRef.current = false;
-            setState(prev => ({ ...prev, connected: false, detected: false }));
+            // Don't reset detected — HTTP polling fallback handles LS detection independently.
+            // Resetting it here causes a back-and-forth loop when WS can't connect (e.g. ngrok tunnel).
+            setState(prev => ({ ...prev, connected: false }));
         });
 
         const offStatus = wsService.on('status', (data) => {
