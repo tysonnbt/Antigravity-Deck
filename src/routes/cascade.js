@@ -7,27 +7,11 @@ const { startCascade, sendMessage } = require('../cascade'); // startAndSend is 
 const { registerCascadeInstance } = require('../poller');
 const { resolveInst } = require('./route-helpers');
 
-// Security: Method whitelist to prevent arbitrary LS method invocation
-const ALLOWED_LS_METHODS = new Set([
-    'GetCascadeModelConfigData',
-    'GetAllCascadeTrajectories',
-    'GetCascadeTrajectory',
-    'GetCascadeTrajectorySteps',
-    'GetCascadeTrajectoryGeneratorMetadata',
-    'HandleCascadeUserInteraction',
-    'CancelCascadeInvocation',
-    'DeleteCascadeTrajectory',
-    'GetUserStatus',
-    'GetProfileData',
-    'GetWorkspaceFolders',
-    'GetSettings',
-    'UpdateSettings',
-    'GetAvailableCascadePlugins',
-    'InstallCascadePlugin',
-    'UninstallCascadePlugin',
-    'StartCascadeInvocation',
-    'SendCascadeMessage',
-]);
+// Security: Method whitelist to prevent arbitrary LS method invocation.
+// Generated from the extracted RPC registry — SAFE read-only methods are
+// auto-generated, mutating ones are hand-curated. Regenerate after an
+// Antigravity update: `node tools/api-tracker/gen-whitelist.js`.
+const { ALLOWED_LS_METHODS } = require('../ls-method-whitelist');
 
 module.exports = function setupCascadeRoutes(app) {
     // Create a new cascade conversation
@@ -236,7 +220,7 @@ module.exports = function setupCascadeRoutes(app) {
         catch (e) { res.status(500).json({ error: e.message }); }
     });
     app.delete('/api/plugins/:id', async (req, res) => {
-        try { res.json(await callApi('UninstallCascadePlugin', { pluginId: req.params.id }, resolveInst(req))); }
+        try { res.json(await callApi('DeletePlugin', { pluginId: req.params.id }, resolveInst(req))); }
         catch (e) { res.status(500).json({ error: e.message }); }
     });
 
