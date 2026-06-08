@@ -4,8 +4,14 @@ const { callApi, callApiStream } = require('./api');
 
 // Create a new Cascade conversation
 // inst: optional LS instance to route to (default: global lsConfig)
-async function startCascade(inst = null) {
-    const result = await callApi('StartCascade', {}, inst);
+// Antigravity 2.0.11+ REQUIRES a trajectory `source` — an empty {} body now
+// returns 400 "CortexTrajectorySource is unspecified".
+async function startCascade(inst = null, opts = {}) {
+    const {
+        source = 'CORTEX_TRAJECTORY_SOURCE_CASCADE_CLIENT',
+        trajectoryType = 'CORTEX_TRAJECTORY_TYPE_CASCADE',
+    } = opts;
+    const result = await callApi('StartCascade', { source, trajectoryType }, inst);
     return result.cascadeId;
 }
 
