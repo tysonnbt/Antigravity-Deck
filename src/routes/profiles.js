@@ -42,16 +42,13 @@ module.exports = function setupProfilesRoutes(app) {
         const inst = getFirstActiveInstance();
         if (!inst) return res.status(400).json({ error: 'IDE is not running. Open Antigravity IDE and login first.' });
 
-        Promise.all([
-            callApi('GetSubscriptionStatus', {}, inst).catch(() => null),
-            callApi('GetUserStatus', {}, inst).catch(() => null),
-        ]).then(([subStatus, userStatus]) => {
-            const email = subStatus?.user?.email || userStatus?.userStatus?.email;
+        callApi('GetUserStatus', {}, inst).catch(() => null).then(userStatus => {
+            const email = userStatus?.userStatus?.email;
             if (!email) return res.status(400).json({ error: 'Could not detect IDE account. Make sure you are logged in.' });
 
-            const userName = subStatus?.user?.name || userStatus?.userStatus?.name;
-            const tierName = subStatus?.user?.userTier?.name || userStatus?.userStatus?.userTier?.name;
-            const planName = subStatus?.user?.planStatus?.planInfo?.planName || userStatus?.userStatus?.planStatus?.planInfo?.planName;
+            const userName = userStatus?.userStatus?.name;
+            const tierName = userStatus?.userStatus?.userTier?.name;
+            const planName = userStatus?.userStatus?.planStatus?.planInfo?.planName;
             const autoName = email.split('@')[0].replace(/[^a-zA-Z0-9_-]/g, '-').substring(0, 30) || 'default';
             const metadata = { userName: userName || null, email, tier: tierName || null, plan: planName || null, savedAt: new Date().toISOString() };
             const result = createProfile(autoName, metadata);
@@ -68,14 +65,11 @@ module.exports = function setupProfilesRoutes(app) {
         // Try to fetch current user info from IDE for profile metadata
         const inst = getFirstActiveInstance();
         const metaPromise = inst
-            ? Promise.all([
-                callApi('GetSubscriptionStatus', {}, inst).catch(() => null),
-                callApi('GetUserStatus', {}, inst).catch(() => null),
-            ]).then(([subStatus, userStatus]) => ({
-                userName: subStatus?.user?.name || userStatus?.userStatus?.name || null,
-                email: subStatus?.user?.email || userStatus?.userStatus?.email || null,
-                tier: subStatus?.user?.userTier?.name || userStatus?.userStatus?.userTier?.name || null,
-                plan: subStatus?.user?.planStatus?.planInfo?.planName || userStatus?.userStatus?.planStatus?.planInfo?.planName || null,
+            ? callApi('GetUserStatus', {}, inst).catch(() => null).then(userStatus => ({
+                userName: userStatus?.userStatus?.name || null,
+                email: userStatus?.userStatus?.email || null,
+                tier: userStatus?.userStatus?.userTier?.name || null,
+                plan: userStatus?.userStatus?.planStatus?.planInfo?.planName || null,
                 savedAt: new Date().toISOString(),
             })).catch(() => null)
             : Promise.resolve(null);
