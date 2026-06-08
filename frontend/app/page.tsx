@@ -41,6 +41,7 @@ import { getSettings } from '@/lib/cascade-api';
 const AnalyticsPanel = dynamic(() => import('@/components/analytics-panel').then(m => ({ default: m.AnalyticsPanel })), { ssr: false });
 const StepDetail = dynamic(() => import('@/components/step-detail').then(m => ({ default: m.StepDetail })), { ssr: false });
 const McpView = dynamic(() => import('@/components/mcp-view').then(m => ({ default: m.McpView })), { ssr: false });
+const WorkflowsView = dynamic(() => import('@/components/workflows-view').then(m => ({ default: m.WorkflowsView })), { ssr: false });
 
 /** Read a JSON-serialised value from localStorage (SSR-safe). */
 function getStoredValue<T>(key: string, fallback: T): T {
@@ -164,6 +165,8 @@ export default function Home() {
   const [showResources, setShowResources] = useState(false);
   // NEW: When true, show MCP Servers panel in main panel
   const [showMcp, setShowMcp] = useState(false);
+  // NEW: When true, show Workflows / Skills / Rules panel in main panel
+  const [showWorkflows, setShowWorkflows] = useState(false);
   // Bumped when sidebar creates a workspace, so panels refresh their lists
   const [wsVersion, setWsVersion] = useState(0);
 
@@ -227,6 +230,7 @@ export default function Home() {
     setShowSourceControl(false);
     setShowResources(false);
     setShowMcp(false);
+    setShowWorkflows(false);
   }, []);
 
   // === Sidebar: click workspace → show conversation list ===
@@ -336,6 +340,14 @@ export default function Home() {
     resetPanels();
     setActiveWorkspace(null);
     setShowMcp(true);
+  }, [selectConversation, resetPanels]);
+
+  // === Show Workflows / Skills / Rules ===
+  const handleShowWorkflows = useCallback(() => {
+    selectConversation(null);
+    resetPanels();
+    setActiveWorkspace(null);
+    setShowWorkflows(true);
   }, [selectConversation, resetPanels]);
 
   // === Go Home — reset all navigation state to welcome screen ===
@@ -457,8 +469,8 @@ export default function Home() {
   // === Determine what to show in main panel ===
   // When LS not detected, force welcome/detection screen regardless of stored state
   const showChat = detected && (currentConvId !== null || newChatMode);
-  const showConversationList = detected && !showChat && !showAccountInfo && !showSettings && !showLogs && !showAgentHub && !showConnect && !showOrchestrator && !showSourceControl && !showResources && !showMcp && activeWorkspace !== null;
-  const showWelcome = !detected || (!showChat && !showConversationList && !showAccountInfo && !showSettings && !showLogs && !showAgentHub && !showConnect && !showOrchestrator && !showSourceControl && !showResources && !showMcp);
+  const showConversationList = detected && !showChat && !showAccountInfo && !showSettings && !showLogs && !showAgentHub && !showConnect && !showOrchestrator && !showSourceControl && !showResources && !showMcp && !showWorkflows && activeWorkspace !== null;
+  const showWelcome = !detected || (!showChat && !showConversationList && !showAccountInfo && !showSettings && !showLogs && !showAgentHub && !showConnect && !showOrchestrator && !showSourceControl && !showResources && !showMcp && !showWorkflows);
 
   return (
     <AuthGate>
@@ -481,6 +493,7 @@ export default function Home() {
           onShowSourceControl={handleShowSourceControl}
           onShowResources={handleShowResources}
           onShowMcp={handleShowMcp}
+          onShowWorkflows={handleShowWorkflows}
           onGoHome={handleGoHome}
           onWorkspaceCreated={handleWorkspaceCreated}
           onConvDeleted={handleConvDeleted}
@@ -714,6 +727,13 @@ export default function Home() {
           {showMcp && (
             <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
               <McpView />
+            </div>
+          )}
+
+          {/* Workflows / Skills / Rules panel */}
+          {showWorkflows && (
+            <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <WorkflowsView />
             </div>
           )}
 

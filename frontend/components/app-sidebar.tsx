@@ -65,6 +65,7 @@ interface AppSidebarProps {
     onShowSourceControl: () => void
     onShowResources: () => void
     onShowMcp: () => void
+    onShowWorkflows: () => void
     onGoHome: () => void
     activeWorkspace: string | null
     workspaceResources?: ResourceSnapshot | null
@@ -89,6 +90,7 @@ export function AppSidebar({
     onShowSourceControl,
     onShowResources,
     onShowMcp,
+    onShowWorkflows,
     onGoHome,
     activeWorkspace,
     workspaceResources,
@@ -520,6 +522,12 @@ export function AppSidebar({
                                     <SidebarMenuButton onClick={onShowMcp} tooltip="MCP Servers" className="text-xs">
                                         <Plug className="shrink-0" />
                                         <span>MCP Servers</span>
+                                    </SidebarMenuButton>
+                                </SidebarMenuItem>
+                                <SidebarMenuItem>
+                                    <SidebarMenuButton onClick={onShowWorkflows} tooltip="Workflows" className="text-xs">
+                                        <Workflow className="shrink-0" />
+                                        <span>Workflows</span>
                                     </SidebarMenuButton>
                                 </SidebarMenuItem>
                             </SidebarMenu>
