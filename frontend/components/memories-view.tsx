@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { lsCall } from '@/lib/cascade-api';
-import { Brain, AlertTriangle, Loader2, BookOpen } from 'lucide-react';
+import { Brain, AlertTriangle, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 // === Types ===
