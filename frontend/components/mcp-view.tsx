@@ -98,18 +98,22 @@ export function McpView() {
     const [togglingServer, setTogglingServer] = useState<string | null>(null);
     const [toggleErrors, setToggleErrors] = useState<Record<string, string>>({});
     const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // Guards async setState after unmount (fetchData is awaited in handleToggle and re-armed on a timer).
+    const isMountedRef = useRef(true);
 
     const fetchData = useCallback(async () => {
         try {
             const res = await lsCall<GetMcpServerStatesResponse>('GetMcpServerStates');
+            if (!isMountedRef.current) return;
             setStates(res.states ?? []);
             setError(null);
             // If LS reports discovery still in progress, poll again shortly
             if (res.is_loading) pollTimerRef.current = setTimeout(fetchData, 2000);
         } catch (e: unknown) {
+            if (!isMountedRef.current) return;
             setError(e instanceof Error ? e.message : 'Failed to load MCP server states');
         } finally {
-            setIsLoading(false);
+            if (isMountedRef.current) setIsLoading(false);
         }
     }, []);
 
@@ -123,15 +127,20 @@ export function McpView() {
             await lsCall('ToggleMcpServer', { serverName: name, enabled: nextEnabled });
             await fetchData();
         } catch (e: unknown) {
+            if (!isMountedRef.current) return;
             setToggleErrors(prev => ({ ...prev, [name]: e instanceof Error ? e.message : 'Toggle failed' }));
         } finally {
-            setTogglingServer(null);
+            if (isMountedRef.current) setTogglingServer(null);
         }
     }, [fetchData]);
 
     useEffect(() => {
+        isMountedRef.current = true;
         fetchData();
-        return () => { if (pollTimerRef.current !== null) clearTimeout(pollTimerRef.current); };
+        return () => {
+            isMountedRef.current = false;
+            if (pollTimerRef.current !== null) clearTimeout(pollTimerRef.current);
+        };
     }, [fetchData]);
 
     if (isLoading && states === null) {

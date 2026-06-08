@@ -425,14 +425,27 @@ export function WorkflowsView() {
         setCopyErrors(prev => { const n = { ...prev }; delete n[key]; return n; });
         try {
             await lsCall('CopyBuiltinWorkflowToWorkspace', { workflow: w, metadata: {} });
-            // Re-fetch the workflows list so the copied item appears as a workspace workflow
-            if (workspaceUris !== null) fetchTab('workflows', workspaceUris);
+            // Re-fetch the workflows list so the copied item appears as a workspace workflow.
+            // Use a dedicated AbortController (NOT the shared fetchAbortRef) so a concurrent
+            // tab-switch can't cancel this refresh, and vice-versa.
+            if (workspaceUris !== null) {
+                const ac = new AbortController();
+                setWorkflowsTab(prev => ({ ...prev, isLoading: true, error: null }));
+                try {
+                    const res = await lsCall<GetAllWorkflowsResponse>('GetAllWorkflows', { workspaceUris }, ac.signal);
+                    setWorkflowsTab({ data: res.workflows ?? [], isLoading: false, error: null });
+                } catch (re: unknown) {
+                    if (!isAbortError(re)) {
+                        setWorkflowsTab({ data: null, isLoading: false, error: re instanceof Error ? re.message : 'Failed to load workflows' });
+                    }
+                }
+            }
         } catch (e: unknown) {
             setCopyErrors(prev => ({ ...prev, [key]: e instanceof Error ? e.message : 'Copy failed' }));
         } finally {
             setCopyingPath(null);
         }
-    }, [workspaceUris, fetchTab]);
+    }, [workspaceUris]);
 
     useEffect(() => {
         if (workspaceUris === null) return; // still loading workspace info

@@ -51,11 +51,12 @@ export function PluginManager({ open, onClose }: { open: boolean; onClose: () =>
         setInstalling(plugin.id);
         setActionError(null);
         try {
-            await fetch(`${API_BASE}/api/plugins/install`, {
+            const res = await fetch(`${API_BASE}/api/plugins/install`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...authHeaders() },
                 body: JSON.stringify({ pluginId: plugin.id })
             });
+            if (!res.ok) throw new Error(`Install failed: ${res.status}`);
             await fetchPlugins();
         } catch (e: unknown) {
             setActionError(e instanceof Error ? e.message : 'Install failed');
@@ -69,7 +70,8 @@ export function PluginManager({ open, onClose }: { open: boolean; onClose: () =>
         setInstalling(pluginId);
         setActionError(null);
         try {
-            await fetch(`${API_BASE}/api/plugins/${pluginId}`, { method: 'DELETE', headers: authHeaders() });
+            const res = await fetch(`${API_BASE}/api/plugins/${pluginId}`, { method: 'DELETE', headers: authHeaders() });
+            if (!res.ok) throw new Error(`Uninstall failed: ${res.status}`);
             await fetchPlugins();
         } catch (e: unknown) {
             setActionError(e instanceof Error ? e.message : 'Uninstall failed');
