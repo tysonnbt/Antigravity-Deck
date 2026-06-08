@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import { lsCall } from '@/lib/cascade-api';
 import { Workflow, Activity, AlertTriangle, Loader2, BookOpen, ScrollText, FolderOpen } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -77,187 +78,179 @@ function ruleName(r: CortexMemory): string {
     return r.title ?? r.memoryId ?? '(unnamed)';
 }
 
-// === Sub-components ===
+/** True for the AbortError thrown when a fetch is cancelled (expected, not a user error). */
+function isAbortError(e: unknown): boolean {
+    return e instanceof DOMException && e.name === 'AbortError';
+}
 
-function WorkflowList({ items }: { items: WorkflowSpec[] }) {
-    if (items.length === 0) {
-        return (
-            <div className="rounded-xl border border-border/50 bg-card/50 p-10 text-center">
-                <Workflow className="w-8 h-8 mx-auto text-muted-foreground/20 mb-3" />
-                <p className="text-sm font-medium text-muted-foreground/60 mb-1">No workflows found</p>
-                <p className="text-xs text-muted-foreground/40 max-w-xs mx-auto">
-                    Add workflow files to your workspace to see them here.
-                </p>
-            </div>
-        );
-    }
+// === Shared presentational primitives ===
 
+function LoadingSpinner({ label }: { label: string }) {
     return (
-        <div className="rounded-xl border border-border/50 bg-card/50 overflow-hidden">
-            <div className="grid grid-cols-[1fr_auto] gap-3 px-4 py-2 text-[10px] text-muted-foreground/50 uppercase tracking-wider font-medium border-b border-border/30 bg-muted/10">
-                <span>Workflow</span>
-                <span>Scope</span>
-            </div>
-            <div className="divide-y divide-border/20">
-                {items.map((w, i) => {
-                    const name = workflowName(w);
-                    const key = w.path ?? w.name ?? String(i);
-                    return (
-                        <div key={key} className="px-4 py-3 hover:bg-muted/20 transition-colors">
-                            <div className="grid grid-cols-[1fr_auto] items-start gap-3">
-                                <div className="flex flex-col gap-0.5 min-w-0">
-                                    <div className="flex items-center gap-2 min-w-0">
-                                        <Workflow className="w-3.5 h-3.5 text-violet-400/60 shrink-0" />
-                                        <span className="text-sm font-medium truncate">{name}</span>
-                                        {w.isBuiltin && (
-                                            <span className="text-[9px] font-medium text-muted-foreground/50 bg-muted/40 px-1 py-0.5 rounded shrink-0">
-                                                builtin
-                                            </span>
-                                        )}
-                                        {w.turbo && (
-                                            <span className="text-[9px] font-medium text-amber-400/70 bg-amber-500/10 px-1 py-0.5 rounded shrink-0">
-                                                turbo
-                                            </span>
-                                        )}
-                                    </div>
-                                    {w.description && (
-                                        <p className="text-xs text-muted-foreground/60 pl-6 truncate">{w.description}</p>
-                                    )}
-                                    {w.pluginName && (
-                                        <p className="text-[10px] text-muted-foreground/40 pl-6 font-mono truncate">
-                                            plugin: {w.pluginName}
-                                        </p>
-                                    )}
-                                </div>
-                                {w.scope && (
-                                    <Badge className="text-[9px] h-5 px-1.5 bg-muted/30 text-muted-foreground border border-border/20 hover:bg-muted/30 shrink-0 mt-0.5">
-                                        {w.scope}
-                                    </Badge>
-                                )}
-                            </div>
-                        </div>
-                    );
-                })}
+        <div className="flex items-center justify-center py-16">
+            <div className="flex flex-col items-center gap-3">
+                <Loader2 className="w-6 h-6 text-muted-foreground/50 animate-spin" />
+                <span className="text-sm text-muted-foreground">{label}</span>
             </div>
         </div>
     );
 }
 
-function SkillList({ items }: { items: WorkflowSpec[] }) {
-    if (items.length === 0) {
-        return (
-            <div className="rounded-xl border border-border/50 bg-card/50 p-10 text-center">
-                <BookOpen className="w-8 h-8 mx-auto text-muted-foreground/20 mb-3" />
-                <p className="text-sm font-medium text-muted-foreground/60 mb-1">No skills found</p>
-                <p className="text-xs text-muted-foreground/40 max-w-xs mx-auto">
-                    Install skills from the Antigravity plugin marketplace to see them here.
-                </p>
+function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+    return (
+        <div className="flex items-center justify-center py-16">
+            <div className="flex flex-col items-center gap-3 max-w-sm text-center">
+                <AlertTriangle className="w-6 h-6 text-red-400/60" />
+                <span className="text-sm font-medium text-foreground/70">Failed to load</span>
+                <span className="text-xs text-muted-foreground font-mono break-all">{message}</span>
+                <button
+                    onClick={onRetry}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-muted/40 hover:bg-muted/70 text-muted-foreground hover:text-foreground transition-colors border border-border/30"
+                >
+                    Retry
+                </button>
             </div>
-        );
-    }
+        </div>
+    );
+}
 
+function EmptyState({ icon: Icon, title, hint }: { icon: ComponentType<{ className?: string }>; title: string; hint: string }) {
+    return (
+        <div className="rounded-xl border border-border/50 bg-card/50 p-10 text-center">
+            <Icon className="w-8 h-8 mx-auto text-muted-foreground/20 mb-3" />
+            <p className="text-sm font-medium text-muted-foreground/60 mb-1">{title}</p>
+            <p className="text-xs text-muted-foreground/40 max-w-xs mx-auto">{hint}</p>
+        </div>
+    );
+}
+
+/** A list row wrapper: name + optional badges line, optional description/meta lines, and a trailing scope badge. */
+function ListRow({
+    icon: Icon,
+    iconColor,
+    name,
+    badges,
+    description,
+    meta,
+    scope,
+}: {
+    icon: ComponentType<{ className?: string }>;
+    iconColor: string;
+    name: string;
+    badges?: ReactNode;
+    description?: string;
+    meta?: string;
+    scope?: string;
+}) {
+    return (
+        <div className="px-4 py-3 hover:bg-muted/20 transition-colors">
+            <div className="grid grid-cols-[1fr_auto] items-start gap-3">
+                <div className="flex flex-col gap-0.5 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <Icon className={`w-3.5 h-3.5 shrink-0 ${iconColor}`} />
+                        <span className="text-sm font-medium truncate">{name}</span>
+                        {badges}
+                    </div>
+                    {description && (
+                        <p className="text-xs text-muted-foreground/60 pl-6 line-clamp-2">{description}</p>
+                    )}
+                    {meta && (
+                        <p className="text-[10px] text-muted-foreground/40 pl-6 font-mono truncate">{meta}</p>
+                    )}
+                </div>
+                {scope && (
+                    <Badge className="text-[9px] h-5 px-1.5 bg-muted/30 text-muted-foreground border border-border/20 hover:bg-muted/30 shrink-0 mt-0.5">
+                        {scope}
+                    </Badge>
+                )}
+            </div>
+        </div>
+    );
+}
+
+function ListTable({ columnLabel, children }: { columnLabel: string; children: ReactNode }) {
     return (
         <div className="rounded-xl border border-border/50 bg-card/50 overflow-hidden">
             <div className="grid grid-cols-[1fr_auto] gap-3 px-4 py-2 text-[10px] text-muted-foreground/50 uppercase tracking-wider font-medium border-b border-border/30 bg-muted/10">
-                <span>Skill</span>
+                <span>{columnLabel}</span>
                 <span>Scope</span>
             </div>
-            <div className="divide-y divide-border/20">
-                {items.map((s, i) => {
-                    const name = workflowName(s);
-                    const key = s.path ?? s.name ?? String(i);
-                    return (
-                        <div key={key} className="px-4 py-3 hover:bg-muted/20 transition-colors">
-                            <div className="grid grid-cols-[1fr_auto] items-start gap-3">
-                                <div className="flex flex-col gap-0.5 min-w-0">
-                                    <div className="flex items-center gap-2 min-w-0">
-                                        <BookOpen className="w-3.5 h-3.5 text-emerald-400/60 shrink-0" />
-                                        <span className="text-sm font-medium truncate">{name}</span>
-                                        {s.isBuiltin && (
-                                            <span className="text-[9px] font-medium text-muted-foreground/50 bg-muted/40 px-1 py-0.5 rounded shrink-0">
-                                                builtin
-                                            </span>
-                                        )}
-                                    </div>
-                                    {s.description && (
-                                        <p className="text-xs text-muted-foreground/60 pl-6 truncate">{s.description}</p>
-                                    )}
-                                    {s.pluginName && (
-                                        <p className="text-[10px] text-muted-foreground/40 pl-6 font-mono truncate">
-                                            plugin: {s.pluginName}
-                                        </p>
-                                    )}
-                                </div>
-                                {s.scope && (
-                                    <Badge className="text-[9px] h-5 px-1.5 bg-muted/30 text-muted-foreground border border-border/20 hover:bg-muted/30 shrink-0 mt-0.5">
-                                        {s.scope}
-                                    </Badge>
-                                )}
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
+            <div className="divide-y divide-border/20">{children}</div>
         </div>
+    );
+}
+
+const builtinBadge = (
+    <span className="text-[9px] font-medium text-muted-foreground/50 bg-muted/40 px-1 py-0.5 rounded shrink-0">
+        builtin
+    </span>
+);
+
+// === Lists ===
+
+// Workflows and skills share the WorkflowSpec shape; only icon/color/labels differ.
+function SpecList({
+    items,
+    icon,
+    iconColor,
+    columnLabel,
+    showTurbo,
+}: {
+    items: WorkflowSpec[];
+    icon: ComponentType<{ className?: string }>;
+    iconColor: string;
+    columnLabel: string;
+    showTurbo: boolean;
+}) {
+    return (
+        <ListTable columnLabel={columnLabel}>
+            {items.map((w, i) => (
+                <ListRow
+                    key={w.path ?? w.name ?? String(i)}
+                    icon={icon}
+                    iconColor={iconColor}
+                    name={workflowName(w)}
+                    badges={
+                        <>
+                            {w.isBuiltin && builtinBadge}
+                            {showTurbo && w.turbo && (
+                                <span className="text-[9px] font-medium text-amber-400/70 bg-amber-500/10 px-1 py-0.5 rounded shrink-0">
+                                    turbo
+                                </span>
+                            )}
+                        </>
+                    }
+                    description={w.description}
+                    meta={w.pluginName ? `plugin: ${w.pluginName}` : undefined}
+                    scope={w.scope}
+                />
+            ))}
+        </ListTable>
     );
 }
 
 function RuleList({ items }: { items: CortexMemory[] }) {
-    if (items.length === 0) {
-        return (
-            <div className="rounded-xl border border-border/50 bg-card/50 p-10 text-center">
-                <ScrollText className="w-8 h-8 mx-auto text-muted-foreground/20 mb-3" />
-                <p className="text-sm font-medium text-muted-foreground/60 mb-1">No rules found</p>
-                <p className="text-xs text-muted-foreground/40 max-w-xs mx-auto">
-                    Add rule files to your workspace to inject persistent instructions into the agent.
-                </p>
-            </div>
-        );
-    }
-
     return (
-        <div className="rounded-xl border border-border/50 bg-card/50 overflow-hidden">
-            <div className="grid grid-cols-[1fr_auto] gap-3 px-4 py-2 text-[10px] text-muted-foreground/50 uppercase tracking-wider font-medium border-b border-border/30 bg-muted/10">
-                <span>Rule</span>
-                <span>Scope</span>
-            </div>
-            <div className="divide-y divide-border/20">
-                {items.map((r, i) => {
-                    const name = ruleName(r);
-                    const key = r.memoryId ?? r.absolutePath ?? String(i);
-                    return (
-                        <div key={key} className="px-4 py-3 hover:bg-muted/20 transition-colors">
-                            <div className="grid grid-cols-[1fr_auto] items-start gap-3">
-                                <div className="flex flex-col gap-0.5 min-w-0">
-                                    <div className="flex items-center gap-2 min-w-0">
-                                        <ScrollText className="w-3.5 h-3.5 text-sky-400/60 shrink-0" />
-                                        <span className="text-sm font-medium truncate">{name}</span>
-                                        {r.source && (
-                                            <span className="text-[9px] font-medium text-muted-foreground/50 bg-muted/40 px-1 py-0.5 rounded shrink-0">
-                                                {r.source}
-                                            </span>
-                                        )}
-                                    </div>
-                                    {r.textMemory && (
-                                        <p className="text-xs text-muted-foreground/60 pl-6 line-clamp-2">{r.textMemory}</p>
-                                    )}
-                                    {r.absolutePath && (
-                                        <p className="text-[10px] text-muted-foreground/40 pl-6 font-mono truncate">
-                                            {r.absolutePath}
-                                        </p>
-                                    )}
-                                </div>
-                                {r.scope && (
-                                    <Badge className="text-[9px] h-5 px-1.5 bg-muted/30 text-muted-foreground border border-border/20 hover:bg-muted/30 shrink-0 mt-0.5">
-                                        {r.scope}
-                                    </Badge>
-                                )}
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
+        <ListTable columnLabel="Rule">
+            {items.map((r, i) => (
+                <ListRow
+                    key={r.memoryId ?? r.absolutePath ?? String(i)}
+                    icon={ScrollText}
+                    iconColor="text-sky-400/60"
+                    name={ruleName(r)}
+                    badges={
+                        r.source ? (
+                            <span className="text-[9px] font-medium text-muted-foreground/50 bg-muted/40 px-1 py-0.5 rounded shrink-0">
+                                {r.source}
+                            </span>
+                        ) : undefined
+                    }
+                    description={r.textMemory}
+                    meta={r.absolutePath}
+                    scope={r.scope}
+                />
+            ))}
+        </ListTable>
     );
 }
 
@@ -287,6 +280,23 @@ function initialTabData<T>(): TabData<T> {
     return { data: null, isLoading: false, error: null };
 }
 
+/** Renders one tab's loading / error / content states from its TabData. */
+function TabContent<T>({
+    tab,
+    loadingLabel,
+    onRetry,
+    children,
+}: {
+    tab: TabData<T>;
+    loadingLabel: string;
+    onRetry: () => void;
+    children: (data: T) => ReactNode;
+}) {
+    if (tab.isLoading && tab.data === null) return <LoadingSpinner label={loadingLabel} />;
+    if (tab.error !== null) return <ErrorState message={tab.error} onRetry={onRetry} />;
+    return <>{tab.data !== null ? children(tab.data) : null}</>;
+}
+
 // === Main Component ===
 export function WorkflowsView() {
     const [workspaceUris, setWorkspaceUris] = useState<string[] | null>(null);
@@ -299,41 +309,38 @@ export function WorkflowsView() {
     const [skillsTab, setSkillsTab] = useState<TabData<WorkflowSpec[]>>(initialTabData);
     const [rulesTab, setRulesTab] = useState<TabData<CortexMemory[]>>(initialTabData);
 
-    // Track in-flight fetch AbortControllers per tab to avoid leaks/races
+    // Track the in-flight fetch's AbortController so we can cancel it on unmount / tab change.
     const fetchAbortRef = useRef<AbortController | null>(null);
 
     // Step 1: resolve workspace URIs on mount
     useEffect(() => {
-        let cancelled = false;
+        const ac = new AbortController();
         setWsLoading(true);
         setWsError(null);
 
-        lsCall<GetWorkspaceInfosResponse>('GetWorkspaceInfos')
+        lsCall<GetWorkspaceInfosResponse>('GetWorkspaceInfos', {}, ac.signal)
             .then(res => {
-                if (cancelled) return;
                 const uris = (res.workspaceInfos ?? [])
                     .map(info => info.workspaceUri)
                     .filter((u): u is string => typeof u === 'string' && u.length > 0);
                 setWorkspaceUris(uris);
             })
             .catch((e: unknown) => {
-                if (cancelled) return;
+                if (isAbortError(e)) return;
                 setWsError(e instanceof Error ? e.message : 'Failed to load workspace info');
                 setWorkspaceUris([]);
             })
             .finally(() => {
-                if (!cancelled) setWsLoading(false);
+                if (!ac.signal.aborted) setWsLoading(false);
             });
 
-        return () => { cancelled = true; };
+        return () => ac.abort();
     }, []);
 
-    // Step 2: fetch tab data when workspaceUris are ready and tab changes
+    // Step 2: fetch tab data when workspaceUris are ready and tab changes.
     const fetchTab = useCallback((tab: TabId, uris: string[]) => {
-        // Abort any prior in-flight fetch
-        if (fetchAbortRef.current !== null) {
-            fetchAbortRef.current.abort();
-        }
+        // Cancel any prior in-flight fetch (truly aborts the HTTP request via the signal).
+        if (fetchAbortRef.current !== null) fetchAbortRef.current.abort();
         const ac = new AbortController();
         fetchAbortRef.current = ac;
 
@@ -341,35 +348,26 @@ export function WorkflowsView() {
 
         if (tab === 'workflows') {
             setWorkflowsTab(prev => ({ ...prev, isLoading: true, error: null }));
-            lsCall<GetAllWorkflowsResponse>('GetAllWorkflows', body)
-                .then(res => {
-                    if (ac.signal.aborted) return;
-                    setWorkflowsTab({ data: res.workflows ?? [], isLoading: false, error: null });
-                })
+            lsCall<GetAllWorkflowsResponse>('GetAllWorkflows', body, ac.signal)
+                .then(res => setWorkflowsTab({ data: res.workflows ?? [], isLoading: false, error: null }))
                 .catch((e: unknown) => {
-                    if (ac.signal.aborted) return;
+                    if (isAbortError(e)) return;
                     setWorkflowsTab({ data: null, isLoading: false, error: e instanceof Error ? e.message : 'Failed to load workflows' });
                 });
         } else if (tab === 'skills') {
             setSkillsTab(prev => ({ ...prev, isLoading: true, error: null }));
-            lsCall<GetAllSkillsResponse>('GetAllSkills', body)
-                .then(res => {
-                    if (ac.signal.aborted) return;
-                    setSkillsTab({ data: res.skills ?? [], isLoading: false, error: null });
-                })
+            lsCall<GetAllSkillsResponse>('GetAllSkills', body, ac.signal)
+                .then(res => setSkillsTab({ data: res.skills ?? [], isLoading: false, error: null }))
                 .catch((e: unknown) => {
-                    if (ac.signal.aborted) return;
+                    if (isAbortError(e)) return;
                     setSkillsTab({ data: null, isLoading: false, error: e instanceof Error ? e.message : 'Failed to load skills' });
                 });
         } else {
             setRulesTab(prev => ({ ...prev, isLoading: true, error: null }));
-            lsCall<GetAllRulesResponse>('GetAllRules', body)
-                .then(res => {
-                    if (ac.signal.aborted) return;
-                    setRulesTab({ data: res.memories ?? [], isLoading: false, error: null });
-                })
+            lsCall<GetAllRulesResponse>('GetAllRules', body, ac.signal)
+                .then(res => setRulesTab({ data: res.memories ?? [], isLoading: false, error: null }))
                 .catch((e: unknown) => {
-                    if (ac.signal.aborted) return;
+                    if (isAbortError(e)) return;
                     setRulesTab({ data: null, isLoading: false, error: e instanceof Error ? e.message : 'Failed to load rules' });
                 });
         }
@@ -379,9 +377,7 @@ export function WorkflowsView() {
         if (workspaceUris === null) return; // still loading workspace info
         fetchTab(activeTab, workspaceUris);
         return () => {
-            if (fetchAbortRef.current !== null) {
-                fetchAbortRef.current.abort();
-            }
+            if (fetchAbortRef.current !== null) fetchAbortRef.current.abort();
         };
     }, [activeTab, workspaceUris, fetchTab]);
 
@@ -414,104 +410,8 @@ export function WorkflowsView() {
         return <NoWorkspaceState />;
     }
 
-    // === Tab rendering helpers ===
-    function renderWorkflowsContent() {
-        const { data, isLoading, error } = workflowsTab;
-        if (isLoading && data === null) {
-            return (
-                <div className="flex items-center justify-center py-16">
-                    <div className="flex flex-col items-center gap-3">
-                        <Loader2 className="w-6 h-6 text-muted-foreground/50 animate-spin" />
-                        <span className="text-sm text-muted-foreground">Loading workflows...</span>
-                    </div>
-                </div>
-            );
-        }
-        if (error !== null) {
-            return (
-                <div className="flex items-center justify-center py-16">
-                    <div className="flex flex-col items-center gap-3 max-w-sm text-center">
-                        <AlertTriangle className="w-6 h-6 text-red-400/60" />
-                        <span className="text-sm font-medium text-foreground/70">Failed to load workflows</span>
-                        <span className="text-xs text-muted-foreground font-mono break-all">{error}</span>
-                        <button
-                            onClick={() => { if (workspaceUris !== null) fetchTab('workflows', workspaceUris); }}
-                            className="text-xs px-3 py-1.5 rounded-lg bg-muted/40 hover:bg-muted/70 text-muted-foreground hover:text-foreground transition-colors border border-border/30"
-                        >
-                            Retry
-                        </button>
-                    </div>
-                </div>
-            );
-        }
-        return <WorkflowList items={data ?? []} />;
-    }
-
-    function renderSkillsContent() {
-        const { data, isLoading, error } = skillsTab;
-        if (isLoading && data === null) {
-            return (
-                <div className="flex items-center justify-center py-16">
-                    <div className="flex flex-col items-center gap-3">
-                        <Loader2 className="w-6 h-6 text-muted-foreground/50 animate-spin" />
-                        <span className="text-sm text-muted-foreground">Loading skills...</span>
-                    </div>
-                </div>
-            );
-        }
-        if (error !== null) {
-            return (
-                <div className="flex items-center justify-center py-16">
-                    <div className="flex flex-col items-center gap-3 max-w-sm text-center">
-                        <AlertTriangle className="w-6 h-6 text-red-400/60" />
-                        <span className="text-sm font-medium text-foreground/70">Failed to load skills</span>
-                        <span className="text-xs text-muted-foreground font-mono break-all">{error}</span>
-                        <button
-                            onClick={() => { if (workspaceUris !== null) fetchTab('skills', workspaceUris); }}
-                            className="text-xs px-3 py-1.5 rounded-lg bg-muted/40 hover:bg-muted/70 text-muted-foreground hover:text-foreground transition-colors border border-border/30"
-                        >
-                            Retry
-                        </button>
-                    </div>
-                </div>
-            );
-        }
-        return <SkillList items={data ?? []} />;
-    }
-
-    function renderRulesContent() {
-        const { data, isLoading, error } = rulesTab;
-        if (isLoading && data === null) {
-            return (
-                <div className="flex items-center justify-center py-16">
-                    <div className="flex flex-col items-center gap-3">
-                        <Loader2 className="w-6 h-6 text-muted-foreground/50 animate-spin" />
-                        <span className="text-sm text-muted-foreground">Loading rules...</span>
-                    </div>
-                </div>
-            );
-        }
-        if (error !== null) {
-            return (
-                <div className="flex items-center justify-center py-16">
-                    <div className="flex flex-col items-center gap-3 max-w-sm text-center">
-                        <AlertTriangle className="w-6 h-6 text-red-400/60" />
-                        <span className="text-sm font-medium text-foreground/70">Failed to load rules</span>
-                        <span className="text-xs text-muted-foreground font-mono break-all">{error}</span>
-                        <button
-                            onClick={() => { if (workspaceUris !== null) fetchTab('rules', workspaceUris); }}
-                            className="text-xs px-3 py-1.5 rounded-lg bg-muted/40 hover:bg-muted/70 text-muted-foreground hover:text-foreground transition-colors border border-border/30"
-                        >
-                            Retry
-                        </button>
-                    </div>
-                </div>
-            );
-        }
-        return <RuleList items={data ?? []} />;
-    }
-
     const currentTab = activeTab === 'workflows' ? workflowsTab : activeTab === 'skills' ? skillsTab : rulesTab;
+    const uris = workspaceUris ?? [];
 
     return (
         <div className="flex-1 overflow-y-auto">
@@ -550,13 +450,25 @@ export function WorkflowsView() {
                     </TabsList>
 
                     <TabsContent value="workflows">
-                        {renderWorkflowsContent()}
+                        <TabContent tab={workflowsTab} loadingLabel="Loading workflows..." onRetry={() => fetchTab('workflows', uris)}>
+                            {(items) => items.length === 0
+                                ? <EmptyState icon={Workflow} title="No workflows found" hint="Add workflow files to your workspace to see them here." />
+                                : <SpecList items={items} icon={Workflow} iconColor="text-violet-400/60" columnLabel="Workflow" showTurbo />}
+                        </TabContent>
                     </TabsContent>
                     <TabsContent value="skills">
-                        {renderSkillsContent()}
+                        <TabContent tab={skillsTab} loadingLabel="Loading skills..." onRetry={() => fetchTab('skills', uris)}>
+                            {(items) => items.length === 0
+                                ? <EmptyState icon={BookOpen} title="No skills found" hint="Install skills from the Antigravity plugin marketplace to see them here." />
+                                : <SpecList items={items} icon={BookOpen} iconColor="text-emerald-400/60" columnLabel="Skill" showTurbo={false} />}
+                        </TabContent>
                     </TabsContent>
                     <TabsContent value="rules">
-                        {renderRulesContent()}
+                        <TabContent tab={rulesTab} loadingLabel="Loading rules..." onRetry={() => fetchTab('rules', uris)}>
+                            {(items) => items.length === 0
+                                ? <EmptyState icon={ScrollText} title="No rules found" hint="Add rule files to your workspace to inject persistent instructions into the agent." />
+                                : <RuleList items={items} />}
+                        </TabContent>
                     </TabsContent>
                 </Tabs>
 

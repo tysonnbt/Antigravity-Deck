@@ -451,11 +451,12 @@ export async function cancelAddAccountFlow(previousProfile: string): Promise<{ s
 
 // === LS API Proxy ===
 // Generic helper for proxied LS calls: POST /api/ls/:method (relative path — uses Next.js rewrite).
-export async function lsCall<T = unknown>(method: string, body: Record<string, unknown> = {}): Promise<T> {
+export async function lsCall<T = unknown>(method: string, body: Record<string, unknown> = {}, signal?: AbortSignal): Promise<T> {
     const res = await fetch(`/api/ls/${method}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify(body),
+        signal,
     });
     if (!res.ok) throw new Error(`LS ${method} failed: ${res.status}`);
     return res.json();
