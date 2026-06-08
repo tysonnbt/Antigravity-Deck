@@ -318,6 +318,7 @@ export function AppSidebar({
             setNewWsName("")
             await loadAll()
             onWorkspaceCreated?.()
+            onSelectWorkspace(name)
             setShowCreateDialog(false)
             setHeadlessMode(false)
         } catch (e) {
@@ -326,7 +327,7 @@ export function AppSidebar({
         } finally {
             setCreating(false)
         }
-    }, [newWsName, creating, nameValidationError, headlessMode, loadAll, onWorkspaceCreated])
+    }, [newWsName, creating, nameValidationError, headlessMode, loadAll, onWorkspaceCreated, onSelectWorkspace])
 
     const handleOpenFolder = useCallback(
         async (folder: WorkspaceFolder) => {
@@ -336,13 +337,14 @@ export function AppSidebar({
                 await createWorkspace(folder.path)
                 await loadAll()
                 onWorkspaceCreated?.()
+                onSelectWorkspace(folder.name)
             } catch (e) {
                 console.error("Open failed:", e)
             } finally {
                 setOpeningFolder(null)
             }
         },
-        [openingFolder, loadAll, onWorkspaceCreated]
+        [openingFolder, loadAll, onWorkspaceCreated, onSelectWorkspace]
     )
 
     const handleOpenFolderHeadless = useCallback(
@@ -353,13 +355,14 @@ export function AppSidebar({
                 await createHeadlessWorkspace(folder.path)
                 await loadAll()
                 onWorkspaceCreated?.()
+                onSelectWorkspace(folder.name)
             } catch (e) {
                 console.error("Open headless failed:", e)
             } finally {
                 setOpeningFolder(null)
             }
         },
-        [openingFolder, loadAll, onWorkspaceCreated]
+        [openingFolder, loadAll, onWorkspaceCreated, onSelectWorkspace]
     )
 
     const regularWs = wsData.filter((d) => d.workspace.category !== "playground")
