@@ -28,6 +28,7 @@ export function PluginManager({ open, onClose }: { open: boolean; onClose: () =>
     const [plugins, setPlugins] = useState<Plugin[]>([]);
     const [loading, setLoading] = useState(false);
     const [installing, setInstalling] = useState<string | null>(null);
+    const [actionError, setActionError] = useState<string | null>(null);
 
     const fetchPlugins = useCallback(async () => {
         setLoading(true);
@@ -48,6 +49,7 @@ export function PluginManager({ open, onClose }: { open: boolean; onClose: () =>
 
     const handleInstall = async (plugin: Plugin) => {
         setInstalling(plugin.id);
+        setActionError(null);
         try {
             await fetch(`${API_BASE}/api/plugins/install`, {
                 method: 'POST',
@@ -55,20 +57,22 @@ export function PluginManager({ open, onClose }: { open: boolean; onClose: () =>
                 body: JSON.stringify({ pluginId: plugin.id })
             });
             await fetchPlugins();
-        } catch (e) {
-            console.error('Install error:', e);
+        } catch (e: unknown) {
+            setActionError(e instanceof Error ? e.message : 'Install failed');
         } finally {
             setInstalling(null);
         }
     };
 
     const handleUninstall = async (pluginId: string) => {
+        if (!window.confirm('Remove this plugin? This cannot be undone.')) return;
         setInstalling(pluginId);
+        setActionError(null);
         try {
             await fetch(`${API_BASE}/api/plugins/${pluginId}`, { method: 'DELETE', headers: authHeaders() });
             await fetchPlugins();
-        } catch (e) {
-            console.error('Uninstall error:', e);
+        } catch (e: unknown) {
+            setActionError(e instanceof Error ? e.message : 'Uninstall failed');
         } finally {
             setInstalling(null);
         }
@@ -86,6 +90,11 @@ export function PluginManager({ open, onClose }: { open: boolean; onClose: () =>
                     </DialogDescription>
                 </DialogHeader>
 
+                {actionError && (
+                    <div className="mx-5 mt-3 text-[10px] text-red-400/80 font-mono bg-red-500/5 border border-red-500/20 rounded px-3 py-2 break-all">
+                        {actionError}
+                    </div>
+                )}
                 <ScrollArea className="max-h-[55vh]">
                     <div className="p-4 space-y-2">
                         {loading ? (

@@ -31,6 +31,8 @@ const MANUAL_MUTATING = [
     'DeleteCascadeTrajectory',
     'InstallCascadePlugin',
     'DeletePlugin',
+    'ToggleMcpServer',
+    'CopyBuiltinWorkflowToWorkspace',
 ];
 
 function main() {

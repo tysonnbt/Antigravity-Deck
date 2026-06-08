@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { lsCall } from '@/lib/cascade-api';
-import { Plug, Activity, AlertTriangle, CheckCircle2, Loader2, WrenchIcon, XCircle } from 'lucide-react';
+import { Plug, Activity, AlertTriangle, CheckCircle2, Loader2, WrenchIcon, XCircle, ToggleLeft, ToggleRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 // === Types (from McpServerState proto) ===
@@ -95,6 +95,8 @@ export function McpView() {
     const [states, setStates] = useState<McpServerState[] | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [togglingServer, setTogglingServer] = useState<string | null>(null);
+    const [toggleErrors, setToggleErrors] = useState<Record<string, string>>({});
     const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const fetchData = useCallback(async () => {
@@ -110,6 +112,22 @@ export function McpView() {
             setIsLoading(false);
         }
     }, []);
+
+    const handleToggle = useCallback(async (state: McpServerState) => {
+        const name = state.spec?.server_name;
+        if (!name) return;
+        const nextEnabled = state.spec?.disabled === true; // currently disabled → enable; enabled → disable
+        setTogglingServer(name);
+        setToggleErrors(prev => { const n = { ...prev }; delete n[name]; return n; });
+        try {
+            await lsCall('ToggleMcpServer', { serverName: name, enabled: nextEnabled });
+            await fetchData();
+        } catch (e: unknown) {
+            setToggleErrors(prev => ({ ...prev, [name]: e instanceof Error ? e.message : 'Toggle failed' }));
+        } finally {
+            setTogglingServer(null);
+        }
+    }, [fetchData]);
 
     useEffect(() => {
         fetchData();
@@ -180,10 +198,11 @@ export function McpView() {
                 ) : (
                     <div className="rounded-xl border border-border/50 bg-card/50 overflow-hidden">
                         {/* Column headers */}
-                        <div className="grid grid-cols-[1fr_140px_80px] gap-3 px-4 py-2 text-[10px] text-muted-foreground/50 uppercase tracking-wider font-medium border-b border-border/30 bg-muted/10">
+                        <div className="grid grid-cols-[1fr_140px_64px_72px] gap-3 px-4 py-2 text-[10px] text-muted-foreground/50 uppercase tracking-wider font-medium border-b border-border/30 bg-muted/10">
                             <span>Server</span>
                             <span>Status</span>
                             <span className="text-right">Tools</span>
+                            <span className="text-right">Enable</span>
                         </div>
                         {/* Rows */}
                         <div className="divide-y divide-border/20">
@@ -192,19 +211,19 @@ export function McpView() {
                                 const count = toolCount(state);
                                 const hasError = state.error && state.error.length > 0;
                                 const toolList = state.tools ?? [];
+                                const svrKey = state.spec?.server_url ?? state.spec?.server_name ?? String(i);
+                                const svrName = state.spec?.server_name ?? '';
+                                const isDisabled = state.spec?.disabled === true;
+                                const isToggling = togglingServer === svrName;
+                                const toggleErr = svrName ? toggleErrors[svrName] : undefined;
 
                                 return (
-                                    <div key={state.spec?.server_url ?? state.spec?.server_name ?? String(i)} className="group">
+                                    <div key={svrKey} className="group">
                                         {/* Main row */}
-                                        <div className="grid grid-cols-[1fr_140px_80px] items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors">
+                                        <div className="grid grid-cols-[1fr_140px_64px_72px] items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors">
                                             <div className="flex items-center gap-2.5 min-w-0">
                                                 <Plug className="w-3.5 h-3.5 text-violet-400/60 shrink-0" />
                                                 <span className="text-sm font-medium truncate">{name}</span>
-                                                {state.spec?.disabled && (
-                                                    <span className="text-[9px] font-medium text-muted-foreground/50 bg-muted/40 px-1 py-0.5 rounded shrink-0">
-                                                        disabled
-                                                    </span>
-                                                )}
                                             </div>
                                             <div>{statusBadge(state.status)}</div>
                                             <div className="flex items-center justify-end gap-1">
@@ -213,7 +232,32 @@ export function McpView() {
                                                     {count}
                                                 </span>
                                             </div>
+                                            <div className="flex items-center justify-end">
+                                                <button
+                                                    onClick={() => handleToggle(state)}
+                                                    disabled={isToggling || !svrName}
+                                                    title={isDisabled ? 'Enable server' : 'Disable server'}
+                                                    className="flex items-center justify-center w-7 h-7 rounded-md transition-colors hover:bg-muted/40 disabled:opacity-40 disabled:cursor-not-allowed"
+                                                    aria-label={isDisabled ? 'Enable server' : 'Disable server'}
+                                                >
+                                                    {isToggling
+                                                        ? <Loader2 className="w-4 h-4 text-muted-foreground/50 animate-spin" />
+                                                        : isDisabled
+                                                            ? <ToggleLeft className="w-4 h-4 text-muted-foreground/50" />
+                                                            : <ToggleRight className="w-4 h-4 text-emerald-400" />
+                                                    }
+                                                </button>
+                                            </div>
                                         </div>
+
+                                        {/* Toggle error row */}
+                                        {toggleErr && (
+                                            <div className="px-4 pb-2 -mt-1">
+                                                <p className="text-[10px] text-amber-400/80 font-mono bg-amber-500/5 border border-amber-500/10 rounded px-2 py-1 break-all">
+                                                    Toggle failed: {toggleErr}
+                                                </p>
+                                            </div>
+                                        )}
 
                                         {/* Error row (if any) */}
                                         {hasError && (
@@ -231,7 +275,7 @@ export function McpView() {
                                                     <span
                                                         key={`${tool.name ?? ti}`}
                                                         className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-muted/30 text-muted-foreground border border-border/20"
-                                                        title={tool.description}
+                                                        title={tool.description as string | undefined}
                                                     >
                                                         {tool.name ?? `tool_${ti}`}
                                                     </span>
@@ -247,7 +291,7 @@ export function McpView() {
 
                 {/* Footer hint */}
                 <p className="text-center text-[10px] text-muted-foreground/40 pb-4">
-                    Read-only view — manage MCP servers via Antigravity IDE settings
+                    Toggle enables/disables a server without removing its config. Add servers via Antigravity IDE settings.
                 </p>
             </div>
         </div>

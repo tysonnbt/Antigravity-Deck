@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import type { ComponentType, ReactNode } from 'react';
 import { lsCall } from '@/lib/cascade-api';
-import { Workflow, Activity, AlertTriangle, Loader2, BookOpen, ScrollText, FolderOpen } from 'lucide-react';
+import { Workflow, Activity, AlertTriangle, Loader2, BookOpen, ScrollText, FolderOpen, Copy } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
@@ -195,36 +195,78 @@ function SpecList({
     iconColor,
     columnLabel,
     showTurbo,
+    onCopy,
+    copyingPath,
+    copyErrors,
 }: {
     items: WorkflowSpec[];
     icon: ComponentType<{ className?: string }>;
     iconColor: string;
     columnLabel: string;
     showTurbo: boolean;
+    onCopy?: (w: WorkflowSpec) => void;
+    copyingPath?: string | null;
+    copyErrors?: Record<string, string>;
 }) {
     return (
         <ListTable columnLabel={columnLabel}>
-            {items.map((w, i) => (
-                <ListRow
-                    key={w.path ?? w.name ?? String(i)}
-                    icon={icon}
-                    iconColor={iconColor}
-                    name={workflowName(w)}
-                    badges={
-                        <>
-                            {w.isBuiltin && builtinBadge}
-                            {showTurbo && w.turbo && (
-                                <span className="text-[9px] font-medium text-amber-400/70 bg-amber-500/10 px-1 py-0.5 rounded shrink-0">
-                                    turbo
-                                </span>
-                            )}
-                        </>
-                    }
-                    description={w.description}
-                    meta={w.pluginName ? `plugin: ${w.pluginName}` : undefined}
-                    scope={w.scope}
-                />
-            ))}
+            {items.map((w, i) => {
+                const key = w.path ?? w.name ?? String(i);
+                const isCopying = copyingPath === key;
+                const copyErr = copyErrors?.[key];
+                return (
+                    <div key={key}>
+                        <div className="grid grid-cols-[1fr_auto] items-start gap-3 px-4 py-3 hover:bg-muted/20 transition-colors">
+                            <div className="flex flex-col gap-0.5 min-w-0">
+                                <div className="flex items-center gap-2 min-w-0">
+                                    {(() => { const Icon = icon; return <Icon className={`w-3.5 h-3.5 shrink-0 ${iconColor}`} />; })()}
+                                    <span className="text-sm font-medium truncate">{workflowName(w)}</span>
+                                    {w.isBuiltin && builtinBadge}
+                                    {showTurbo && w.turbo && (
+                                        <span className="text-[9px] font-medium text-amber-400/70 bg-amber-500/10 px-1 py-0.5 rounded shrink-0">
+                                            turbo
+                                        </span>
+                                    )}
+                                </div>
+                                {w.description && (
+                                    <p className="text-xs text-muted-foreground/60 pl-6 line-clamp-2">{w.description as string}</p>
+                                )}
+                                {w.pluginName && (
+                                    <p className="text-[10px] text-muted-foreground/40 pl-6 font-mono truncate">plugin: {w.pluginName as string}</p>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0 mt-0.5">
+                                {onCopy && w.isBuiltin && (
+                                    <button
+                                        onClick={() => onCopy(w)}
+                                        disabled={isCopying}
+                                        title="Copy to workspace for editing"
+                                        className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-md bg-muted/30 hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors border border-border/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    >
+                                        {isCopying
+                                            ? <Loader2 className="w-3 h-3 animate-spin" />
+                                            : <Copy className="w-3 h-3" />
+                                        }
+                                        Copy
+                                    </button>
+                                )}
+                                {w.scope && (
+                                    <Badge className="text-[9px] h-5 px-1.5 bg-muted/30 text-muted-foreground border border-border/20 hover:bg-muted/30">
+                                        {w.scope as string}
+                                    </Badge>
+                                )}
+                            </div>
+                        </div>
+                        {copyErr && (
+                            <div className="px-4 pb-2 -mt-1">
+                                <p className="text-[10px] text-red-400/80 font-mono bg-red-500/5 border border-red-500/10 rounded px-2 py-1 break-all">
+                                    Copy failed: {copyErr}
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                );
+            })}
         </ListTable>
     );
 }
@@ -309,6 +351,9 @@ export function WorkflowsView() {
     const [skillsTab, setSkillsTab] = useState<TabData<WorkflowSpec[]>>(initialTabData);
     const [rulesTab, setRulesTab] = useState<TabData<CortexMemory[]>>(initialTabData);
 
+    const [copyingPath, setCopyingPath] = useState<string | null>(null);
+    const [copyErrors, setCopyErrors] = useState<Record<string, string>>({});
+
     // Track the in-flight fetch's AbortController so we can cancel it on unmount / tab change.
     const fetchAbortRef = useRef<AbortController | null>(null);
 
@@ -372,6 +417,22 @@ export function WorkflowsView() {
                 });
         }
     }, []);
+
+    const handleCopyWorkflow = useCallback(async (w: WorkflowSpec) => {
+        const key = w.path ?? w.name ?? '';
+        if (!key) return;
+        setCopyingPath(key);
+        setCopyErrors(prev => { const n = { ...prev }; delete n[key]; return n; });
+        try {
+            await lsCall('CopyBuiltinWorkflowToWorkspace', { workflow: w, metadata: {} });
+            // Re-fetch the workflows list so the copied item appears as a workspace workflow
+            if (workspaceUris !== null) fetchTab('workflows', workspaceUris);
+        } catch (e: unknown) {
+            setCopyErrors(prev => ({ ...prev, [key]: e instanceof Error ? e.message : 'Copy failed' }));
+        } finally {
+            setCopyingPath(null);
+        }
+    }, [workspaceUris, fetchTab]);
 
     useEffect(() => {
         if (workspaceUris === null) return; // still loading workspace info
@@ -453,7 +514,7 @@ export function WorkflowsView() {
                         <TabContent tab={workflowsTab} loadingLabel="Loading workflows..." onRetry={() => fetchTab('workflows', uris)}>
                             {(items) => items.length === 0
                                 ? <EmptyState icon={Workflow} title="No workflows found" hint="Add workflow files to your workspace to see them here." />
-                                : <SpecList items={items} icon={Workflow} iconColor="text-violet-400/60" columnLabel="Workflow" showTurbo />}
+                                : <SpecList items={items} icon={Workflow} iconColor="text-violet-400/60" columnLabel="Workflow" showTurbo onCopy={handleCopyWorkflow} copyingPath={copyingPath} copyErrors={copyErrors} />}
                         </TabContent>
                     </TabsContent>
                     <TabsContent value="skills">
@@ -474,7 +535,7 @@ export function WorkflowsView() {
 
                 {/* Footer */}
                 <p className="text-center text-[10px] text-muted-foreground/40 pb-4">
-                    Read-only view — manage workflows, skills, and rules via Antigravity IDE settings
+                    Builtin workflows can be copied to your workspace for customization. Manage skills and rules via Antigravity IDE settings.
                 </p>
             </div>
         </div>

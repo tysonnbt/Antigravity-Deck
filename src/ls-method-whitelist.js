@@ -93,6 +93,8 @@ const MANUAL_MUTATING_LS_METHODS = [
     'DeleteCascadeTrajectory',
     'InstallCascadePlugin',
     'DeletePlugin',
+    'ToggleMcpServer',
+    'CopyBuiltinWorkflowToWorkspace',
 ];
 
 const ALLOWED_LS_METHODS = new Set([...SAFE_LS_METHODS, ...MANUAL_MUTATING_LS_METHODS]);
