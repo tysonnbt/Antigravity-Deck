@@ -1,0 +1,1256 @@
+{
+  "generatedAt": "2026-06-08T05:07:54.909Z",
+  "scheme": {
+    "buckets": {
+      "safe": "Read-only / non-mutating. Eligible for automatic replay.",
+      "unsafe": "Mutating / side-effecting. NEVER auto-invoked; replay gated behind --include-unsafe + --no-dry-run.",
+      "unknown": "Ambiguous. Treated as unsafe for execution; listed for human review."
+    },
+    "precedence": [
+      "1. Explicit per-method overrides (OVERRIDES table).",
+      "2. UNSAFE prefix/suffix heuristics (Write/Update/Delete/Create/Start/Send/Cancel/Accept/Reject/Apply/Save/Install/Set/Add/Handle*Interaction/Execute/Run/...).",
+      "3. SAFE prefix heuristics (Stream*Updates/Get/List/Stat/Read/Fetch/Find/Search/Check/Query).",
+      "4. Stream* fallback → unknown (stream direction unclear).",
+      "5. Conservative default → unknown."
+    ],
+    "principle": "Anything not provably read-only is withheld from automatic replay."
+  },
+  "summary": {
+    "safe": 96,
+    "unsafe": 69,
+    "unknown": 81,
+    "total": 246
+  },
+  "methods": {
+    "AcceptDiff": {
+      "safety": "unsafe",
+      "reason": "Accept* — applies a proposed diff/change",
+      "source": "heuristic"
+    },
+    "AcceptTermsOfService": {
+      "safety": "unsafe",
+      "reason": "Accept* — applies a proposed diff/change",
+      "source": "heuristic"
+    },
+    "AcknowledgeCascadeCodeEdit": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "AcknowledgeCodeActionStep": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "AddEnvironmentToProject": {
+      "safety": "unsafe",
+      "reason": "Add* / AddTracked* — adds tracked resources",
+      "source": "heuristic"
+    },
+    "AddToBrowserWhitelist": {
+      "safety": "unsafe",
+      "reason": "Add* / AddTracked* — adds tracked resources",
+      "source": "heuristic"
+    },
+    "AddTrackedWorkspace": {
+      "safety": "unsafe",
+      "reason": "Add* / AddTracked* — adds tracked resources",
+      "source": "heuristic"
+    },
+    "AuthLogout": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "BrowserValidateCascadeOrCancelOverlay": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "CancelCascadeInvocation": {
+      "safety": "unsafe",
+      "reason": "Cancel* — interrupts a running invocation",
+      "source": "heuristic"
+    },
+    "CancelCascadeSteps": {
+      "safety": "unsafe",
+      "reason": "Cancel* — interrupts a running invocation",
+      "source": "heuristic"
+    },
+    "CaptureConsoleLogs": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "CaptureScreenshot": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "CheckDevToolsActivePort": {
+      "safety": "safe",
+      "reason": "Check* — read-only validation",
+      "source": "heuristic"
+    },
+    "CheckoutWorktree": {
+      "safety": "unsafe",
+      "reason": "Checkout* — checks out a worktree/branch (mutates state)",
+      "source": "heuristic"
+    },
+    "CompleteMcpOAuth": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "ConvertTrajectoryToMarkdown": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "CopyBuiltinWorkflowToWorkspace": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "CreateCitcWorkspace": {
+      "safety": "unsafe",
+      "reason": "Create* — creates state",
+      "source": "heuristic"
+    },
+    "CreateCustomizationFile": {
+      "safety": "unsafe",
+      "reason": "Create* — creates state",
+      "source": "heuristic"
+    },
+    "CreateProject": {
+      "safety": "unsafe",
+      "reason": "Create* — creates state",
+      "source": "heuristic"
+    },
+    "CreateScratchProjectFolder": {
+      "safety": "unsafe",
+      "reason": "Create* — creates state",
+      "source": "heuristic"
+    },
+    "CreateTrajectoryShare": {
+      "safety": "unsafe",
+      "reason": "Create* — creates state",
+      "source": "heuristic"
+    },
+    "CreateWorktree": {
+      "safety": "unsafe",
+      "reason": "Create* — creates state",
+      "source": "heuristic"
+    },
+    "DeleteAgentMessage": {
+      "safety": "unsafe",
+      "reason": "Delete* — removes state",
+      "source": "heuristic"
+    },
+    "DeleteCascadeMemory": {
+      "safety": "unsafe",
+      "reason": "Delete* — removes state",
+      "source": "heuristic"
+    },
+    "DeleteCascadeTrajectory": {
+      "safety": "unsafe",
+      "reason": "Delete* — removes state",
+      "source": "heuristic"
+    },
+    "DeleteFileOrDirectory": {
+      "safety": "unsafe",
+      "reason": "Delete* — removes state",
+      "source": "heuristic"
+    },
+    "DeleteMediaArtifact": {
+      "safety": "unsafe",
+      "reason": "Delete* — removes state",
+      "source": "heuristic"
+    },
+    "DeletePlugin": {
+      "safety": "unsafe",
+      "reason": "Delete* — removes state",
+      "source": "heuristic"
+    },
+    "DeleteProject": {
+      "safety": "unsafe",
+      "reason": "Delete* — removes state",
+      "source": "heuristic"
+    },
+    "DeleteQueuedUserInputStep": {
+      "safety": "unsafe",
+      "reason": "Delete* — removes state",
+      "source": "heuristic"
+    },
+    "DeleteWorktree": {
+      "safety": "unsafe",
+      "reason": "Delete* — removes state",
+      "source": "heuristic"
+    },
+    "DisconnectMcpOAuth": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "DownloadBuildWithGooglePlugin": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "DumpFlightRecorder": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "DumpPprof": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "EndAudioSession": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "EndBattleMode": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "Exit": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "FetchUserInfo": {
+      "safety": "safe",
+      "reason": "Fetch* — pure read",
+      "source": "heuristic"
+    },
+    "FocusUserPage": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "ForceBackgroundResearchRefresh": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "ForceStopCascadeTree": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "ForkConversation": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "GenerateCommitMessage": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "GenerateEnvironmentName": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "GenerateSkillInstallationCL": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "GetAgentScripts": {
+      "safety": "safe",
+      "reason": "explicit override",
+      "source": "override"
+    },
+    "GetAgentTeamMetadata": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetAllBrowserWhitelistedUrls": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetAllCascadeTrajectories": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetAllCustomAgentConfigs": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetAllPlugins": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetAllRules": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetAllSkills": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetAllWorkflows": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetArtifactSnapshots": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetAuthStatus": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetAvailableCascadePlugins": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetAvailableModels": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetBrowserOpenConversation": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetBrowserWhitelistFilePath": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetBuildWithGooglePlugins": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetCascadeMemories": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetCascadeModelConfigData": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetCascadeModelConfigs": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetCascadeNuxes": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetCascadePluginById": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetCascadeTrajectory": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetCascadeTrajectoryExecutorMetadatas": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetCascadeTrajectoryGeneratorMetadata": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetCascadeTrajectorySteps": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetChangelog": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetCodeFrequencyForRepo": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetCodeValidationStates": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetCommandModelConfigs": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetConversationMetadata": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetDebugDiagnostics": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetDefaultProjectDir": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetGrantedScopes": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetKnowledgeItems": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetLoadCodeAssist": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetLocalUserInfo": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetMatchingContextScopeItems": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetMcpPrompt": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetMcpServerStates": {
+      "safety": "safe",
+      "reason": "explicit override",
+      "source": "override"
+    },
+    "GetMcpServerTemplates": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetMendelFlags": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetModelResponse": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetModelStatuses": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetPatchAndCodeChange": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetProfileData": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetRepoInfos": {
+      "safety": "safe",
+      "reason": "explicit override",
+      "source": "override"
+    },
+    "GetRevertPreview": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetRevisionArtifact": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetSettings": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetSidecarEvents": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetSidecarLogs": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetSidecars": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetSkillMarketplaceLink": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetSlashCommands": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetStandaloneDir": {
+      "safety": "safe",
+      "reason": "explicit override",
+      "source": "override"
+    },
+    "GetStaticExperimentStatus": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetStatus": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetSubscriptionStatus": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetTeamOrganizationalControls": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetTermsOfService": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetTokenBase": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetTranscription": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetTurnDiff": {
+      "safety": "safe",
+      "reason": "explicit override",
+      "source": "override"
+    },
+    "GetUnleashData": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetUserAnalyticsSummary": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetUserMemories": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetUserSettings": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetUserStatus": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetUserTrajectory": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetUserTrajectoryDebug": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetUserTrajectoryDescriptions": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetWebDocsOptions": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetWorkingDirectories": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetWorkspaceEditState": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetWorkspaceFolders": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetWorkspaceInfos": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "GetWorktreeDiff": {
+      "safety": "safe",
+      "reason": "Get* — pure read",
+      "source": "heuristic"
+    },
+    "HandleCascadeUserInteraction": {
+      "safety": "unsafe",
+      "reason": "Handle*Interaction — drives the agent on user input",
+      "source": "heuristic"
+    },
+    "HandleScreenRecording": {
+      "safety": "unsafe",
+      "reason": "Handle* — processes an interaction (side-effecting)",
+      "source": "heuristic"
+    },
+    "HandleStreamingCommand": {
+      "safety": "unsafe",
+      "reason": "Handle* — processes an interaction (side-effecting)",
+      "source": "heuristic"
+    },
+    "HasAuthToken": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "Heartbeat": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "ImportFromCursor": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "ImportProjectFromUrl": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "InitializeCascadePanelState": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "InstallCascadePlugin": {
+      "safety": "unsafe",
+      "reason": "Install* — installs a plugin/extension",
+      "source": "heuristic"
+    },
+    "JetboxDeleteSummary": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "JetboxGetLatestVersion": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "JetboxSubscribeToGcertState": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "JetboxSubscribeToOAuthState": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "JetboxSubscribeToState": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "JetboxSubscribeToSummaries": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "JetboxWriteState": {
+      "safety": "unsafe",
+      "reason": "Jetbox write — persists agent/file state",
+      "source": "heuristic"
+    },
+    "JetboxWriteSummary": {
+      "safety": "unsafe",
+      "reason": "Jetbox write — persists agent/file state",
+      "source": "heuristic"
+    },
+    "ListCustomizationPathsByFile": {
+      "safety": "safe",
+      "reason": "List* — pure read",
+      "source": "heuristic"
+    },
+    "ListMcpPrompts": {
+      "safety": "safe",
+      "reason": "List* — pure read",
+      "source": "heuristic"
+    },
+    "ListMcpResources": {
+      "safety": "safe",
+      "reason": "List* — pure read",
+      "source": "heuristic"
+    },
+    "ListPages": {
+      "safety": "safe",
+      "reason": "List* — pure read",
+      "source": "heuristic"
+    },
+    "ListSidecarLogFiles": {
+      "safety": "safe",
+      "reason": "List* — pure read",
+      "source": "heuristic"
+    },
+    "LoadReplayConversation": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "LoadTrajectory": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "LoginWithBrowser": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "ManageSidecar": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "MigrateApiKey": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "OpenUrl": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "ProjectUpdatesStream": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "ProvideCompletionFeedback": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "ReadDir": {
+      "safety": "safe",
+      "reason": "Read* — pure read",
+      "source": "heuristic"
+    },
+    "ReadFile": {
+      "safety": "safe",
+      "reason": "Read* — pure read",
+      "source": "heuristic"
+    },
+    "ReadProject": {
+      "safety": "safe",
+      "reason": "Read* — pure read",
+      "source": "heuristic"
+    },
+    "ReconnectExtensionServer": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "RecordAnalyticsEvent": {
+      "safety": "unsafe",
+      "reason": "explicit override",
+      "source": "override"
+    },
+    "RecordChatFeedback": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "RecordChatPanelSession": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "RecordCommitMessageSave": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "RecordError": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "RecordEvent": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "RecordInteractiveCascadeFeedback": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "RecordLints": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "RecordObservabilityData": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "RecordSearchDocOpen": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "RecordSearchResultsView": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "RecordSidecarEvent": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "RecordUserGrep": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "RecordUserStepSnapshot": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "RefreshContextForIdeAction": {
+      "safety": "unsafe",
+      "reason": "Refresh* — may trigger re-indexing side effects",
+      "source": "heuristic"
+    },
+    "RefreshMcpServers": {
+      "safety": "unsafe",
+      "reason": "Refresh* — may trigger re-indexing side effects",
+      "source": "heuristic"
+    },
+    "RegisterGdmUser": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "RegisterInteraction": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "RejectDiff": {
+      "safety": "unsafe",
+      "reason": "Reject* — discards a proposed diff/change",
+      "source": "heuristic"
+    },
+    "RemoveTrackedWorkspace": {
+      "safety": "unsafe",
+      "reason": "Remove* — removes state",
+      "source": "heuristic"
+    },
+    "ReplayGroundTruthTrajectory": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "RequestAgentStatePageUpdate": {
+      "safety": "unknown",
+      "reason": "explicit override",
+      "source": "override"
+    },
+    "ResetOnboarding": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "ResolveFolder": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "ResolveOutstandingSteps": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "ResolveWorkspaceUrlPreview": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "Restart": {
+      "safety": "unsafe",
+      "reason": "Restart* — restarts a service",
+      "source": "heuristic"
+    },
+    "RevertToCascadeStep": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "RunCommand": {
+      "safety": "unsafe",
+      "reason": "Run* — runs a command",
+      "source": "heuristic"
+    },
+    "SaveAgentScriptCommandSpec": {
+      "safety": "unsafe",
+      "reason": "Save* — persists content (e.g. SaveMediaAsArtifact)",
+      "source": "heuristic"
+    },
+    "SaveMediaAsArtifact": {
+      "safety": "unsafe",
+      "reason": "Save* — persists content (e.g. SaveMediaAsArtifact)",
+      "source": "heuristic"
+    },
+    "SaveScreenRecording": {
+      "safety": "unsafe",
+      "reason": "Save* — persists content (e.g. SaveMediaAsArtifact)",
+      "source": "heuristic"
+    },
+    "ScanSkillsConfigFile": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "SearchCode": {
+      "safety": "safe",
+      "reason": "Search* — pure read (query only)",
+      "source": "heuristic"
+    },
+    "SearchConversations": {
+      "safety": "safe",
+      "reason": "Search* — pure read (query only)",
+      "source": "heuristic"
+    },
+    "SearchFiles": {
+      "safety": "safe",
+      "reason": "Search* — pure read (query only)",
+      "source": "heuristic"
+    },
+    "SendActionToChatPanel": {
+      "safety": "unsafe",
+      "reason": "Send* — emits a message / drives the agent",
+      "source": "heuristic"
+    },
+    "SendAgentMessage": {
+      "safety": "unsafe",
+      "reason": "Send* — emits a message / drives the agent",
+      "source": "heuristic"
+    },
+    "SendAllQueuedMessages": {
+      "safety": "unsafe",
+      "reason": "Send* — emits a message / drives the agent",
+      "source": "heuristic"
+    },
+    "SendAudioChunk": {
+      "safety": "unsafe",
+      "reason": "Send* — emits a message / drives the agent",
+      "source": "heuristic"
+    },
+    "SendCascadeMessage": {
+      "safety": "unsafe",
+      "reason": "Send* — emits a message / drives the agent",
+      "source": "heuristic"
+    },
+    "SendStepsToBackground": {
+      "safety": "unsafe",
+      "reason": "Send* — emits a message / drives the agent",
+      "source": "heuristic"
+    },
+    "SendUserCascadeMessage": {
+      "safety": "unsafe",
+      "reason": "Send* — emits a message / drives the agent",
+      "source": "heuristic"
+    },
+    "SetBaseExperiments": {
+      "safety": "unsafe",
+      "reason": "Set* — sets configuration/state",
+      "source": "heuristic"
+    },
+    "SetBrowserOpenConversation": {
+      "safety": "unsafe",
+      "reason": "Set* — sets configuration/state",
+      "source": "heuristic"
+    },
+    "SetCloudCodeURL": {
+      "safety": "unsafe",
+      "reason": "Set* — sets configuration/state",
+      "source": "heuristic"
+    },
+    "SetOrVerifyStaticConfig": {
+      "safety": "unsafe",
+      "reason": "Set* — sets configuration/state",
+      "source": "heuristic"
+    },
+    "SetUserInfo": {
+      "safety": "unsafe",
+      "reason": "Set* — sets configuration/state",
+      "source": "heuristic"
+    },
+    "SetUserSettings": {
+      "safety": "unsafe",
+      "reason": "Set* — sets configuration/state",
+      "source": "heuristic"
+    },
+    "SetWorkingDirectories": {
+      "safety": "unsafe",
+      "reason": "Set* — sets configuration/state",
+      "source": "heuristic"
+    },
+    "SetupUniversitySandbox": {
+      "safety": "unsafe",
+      "reason": "Set* — sets configuration/state",
+      "source": "heuristic"
+    },
+    "ShouldEnableUnleash": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "SignalExecutableIdle": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "SimulateSegFault": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "SkipBrowserSubagent": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "SkipOnboarding": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "SmartFocusConversation": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "SmartOpenBrowser": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "StartBattleMode": {
+      "safety": "unsafe",
+      "reason": "Start* — starts an invocation/agent run",
+      "source": "heuristic"
+    },
+    "StartCascade": {
+      "safety": "unsafe",
+      "reason": "Start* — starts an invocation/agent run",
+      "source": "heuristic"
+    },
+    "StartCascadeInvocation": {
+      "safety": "unsafe",
+      "reason": "Start* — starts an invocation/agent run",
+      "source": "heuristic"
+    },
+    "StartScreenRecording": {
+      "safety": "unsafe",
+      "reason": "Start* — starts an invocation/agent run",
+      "source": "heuristic"
+    },
+    "StatUri": {
+      "safety": "safe",
+      "reason": "explicit override",
+      "source": "override"
+    },
+    "StreamAgentStateUpdates": {
+      "safety": "safe",
+      "reason": "Stream*Updates — read-only subscription",
+      "source": "heuristic"
+    },
+    "StreamAudioTranscription": {
+      "safety": "unknown",
+      "reason": "Stream* not matching *Updates — direction unclear",
+      "source": "heuristic"
+    },
+    "StreamCascadePanelReactiveUpdates": {
+      "safety": "safe",
+      "reason": "Stream*Updates — read-only subscription",
+      "source": "heuristic"
+    },
+    "StreamCascadeReactiveUpdates": {
+      "safety": "safe",
+      "reason": "Stream*Updates — read-only subscription",
+      "source": "heuristic"
+    },
+    "StreamCascadeSummariesReactiveUpdates": {
+      "safety": "safe",
+      "reason": "Stream*Updates — read-only subscription",
+      "source": "heuristic"
+    },
+    "StreamTerminalShellCommand": {
+      "safety": "unknown",
+      "reason": "Stream* not matching *Updates — direction unclear",
+      "source": "heuristic"
+    },
+    "StreamUserTrajectoryReactiveUpdates": {
+      "safety": "safe",
+      "reason": "Stream*Updates — read-only subscription",
+      "source": "heuristic"
+    },
+    "SubscribeToSidecars": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "ToggleMcpServer": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "UninstallCascadePlugin": {
+      "safety": "unsafe",
+      "reason": "Uninstall* — removes a plugin/extension",
+      "source": "heuristic"
+    },
+    "UpdateCascadeMemory": {
+      "safety": "unsafe",
+      "reason": "Update* — mutates server/IDE state",
+      "source": "heuristic"
+    },
+    "UpdateConversationAnnotations": {
+      "safety": "unsafe",
+      "reason": "Update* — mutates server/IDE state",
+      "source": "heuristic"
+    },
+    "UpdateCustomization": {
+      "safety": "unsafe",
+      "reason": "Update* — mutates server/IDE state",
+      "source": "heuristic"
+    },
+    "UpdateCustomizationPathsFile": {
+      "safety": "unsafe",
+      "reason": "Update* — mutates server/IDE state",
+      "source": "heuristic"
+    },
+    "UpdateDevExperiments": {
+      "safety": "unsafe",
+      "reason": "Update* — mutates server/IDE state",
+      "source": "heuristic"
+    },
+    "UpdateEnterpriseExperimentsFromUrl": {
+      "safety": "unsafe",
+      "reason": "Update* — mutates server/IDE state",
+      "source": "heuristic"
+    },
+    "UpdatePRForWorktree": {
+      "safety": "unsafe",
+      "reason": "Update* — mutates server/IDE state",
+      "source": "heuristic"
+    },
+    "UpdateProject": {
+      "safety": "unsafe",
+      "reason": "Update* — mutates server/IDE state",
+      "source": "heuristic"
+    },
+    "UpdateSettings": {
+      "safety": "unsafe",
+      "reason": "Update* — mutates server/IDE state",
+      "source": "heuristic"
+    },
+    "ValidateProject": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "WaitForConversationFullyIdle": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "WatchDirectory": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "WellSupportedLanguages": {
+      "safety": "unknown",
+      "reason": "no rule matched — conservative default",
+      "source": "default"
+    },
+    "WriteFile": {
+      "safety": "unsafe",
+      "reason": "Write* — persists state",
+      "source": "heuristic"
+    }
+  }
+}

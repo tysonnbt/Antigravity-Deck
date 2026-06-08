@@ -16,6 +16,7 @@ function setupRoutes(app) {
     require('./routes/agent-bridge')(app);
     require('./routes/agent-api')(app);
     require('./routes/orchestrator-api')(app);
+    require('./routes/api-tracker')(app);
 }
 
 module.exports = { setupRoutes };
