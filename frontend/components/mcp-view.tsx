@@ -1,10 +1,9 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { lsCall } from '@/lib/cascade-api';
 import { Plug, Activity, AlertTriangle, CheckCircle2, Loader2, WrenchIcon, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 // === Types (from McpServerState proto) ===
 // McpServerSpec fields: server_name, command, args, env, server_url, disabled, ...
@@ -96,6 +95,7 @@ export function McpView() {
     const [states, setStates] = useState<McpServerState[] | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const fetchData = useCallback(async () => {
         try {
@@ -103,9 +103,7 @@ export function McpView() {
             setStates(res.states ?? []);
             setError(null);
             // If LS reports discovery still in progress, poll again shortly
-            if (res.is_loading) {
-                setTimeout(fetchData, 2000);
-            }
+            if (res.is_loading) pollTimerRef.current = setTimeout(fetchData, 2000);
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : 'Failed to load MCP server states');
         } finally {
@@ -115,6 +113,7 @@ export function McpView() {
 
     useEffect(() => {
         fetchData();
+        return () => { if (pollTimerRef.current !== null) clearTimeout(pollTimerRef.current); };
     }, [fetchData]);
 
     if (isLoading && states === null) {
@@ -136,7 +135,7 @@ export function McpView() {
                     <span className="text-sm font-medium text-foreground/70">Failed to load MCP servers</span>
                     <span className="text-xs text-muted-foreground font-mono break-all">{error}</span>
                     <button
-                        onClick={() => { setIsLoading(true); setError(null); fetchData(); }}
+                        onClick={() => { if (pollTimerRef.current !== null) clearTimeout(pollTimerRef.current); setIsLoading(true); setError(null); fetchData(); }}
                         className="text-xs px-3 py-1.5 rounded-lg bg-muted/40 hover:bg-muted/70 text-muted-foreground hover:text-foreground transition-colors border border-border/30"
                     >
                         Retry
@@ -195,7 +194,7 @@ export function McpView() {
                                 const toolList = state.tools ?? [];
 
                                 return (
-                                    <div key={`${name}-${i}`} className="group">
+                                    <div key={state.spec?.server_url ?? state.spec?.server_name ?? String(i)} className="group">
                                         {/* Main row */}
                                         <div className="grid grid-cols-[1fr_140px_80px] items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors">
                                             <div className="flex items-center gap-2.5 min-w-0">
@@ -232,7 +231,7 @@ export function McpView() {
                                                     <span
                                                         key={`${tool.name ?? ti}`}
                                                         className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-muted/30 text-muted-foreground border border-border/20"
-                                                        title={tool.description as string | undefined}
+                                                        title={tool.description}
                                                     >
                                                         {tool.name ?? `tool_${ti}`}
                                                     </span>
