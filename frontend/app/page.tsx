@@ -42,6 +42,8 @@ const AnalyticsPanel = dynamic(() => import('@/components/analytics-panel').then
 const StepDetail = dynamic(() => import('@/components/step-detail').then(m => ({ default: m.StepDetail })), { ssr: false });
 const McpView = dynamic(() => import('@/components/mcp-view').then(m => ({ default: m.McpView })), { ssr: false });
 const WorkflowsView = dynamic(() => import('@/components/workflows-view').then(m => ({ default: m.WorkflowsView })), { ssr: false });
+const MemoriesView = dynamic(() => import('@/components/memories-view').then(m => ({ default: m.MemoriesView })), { ssr: false });
+const RepoInfoView = dynamic(() => import('@/components/repo-info-view').then(m => ({ default: m.RepoInfoView })), { ssr: false });
 
 /** Read a JSON-serialised value from localStorage (SSR-safe). */
 function getStoredValue<T>(key: string, fallback: T): T {
@@ -167,6 +169,10 @@ export default function Home() {
   const [showMcp, setShowMcp] = useState(false);
   // NEW: When true, show Workflows / Skills / Rules panel in main panel
   const [showWorkflows, setShowWorkflows] = useState(false);
+  // NEW: When true, show Memories (knowledge items) panel in main panel
+  const [showMemories, setShowMemories] = useState(false);
+  // NEW: When true, show Repo Info panel in main panel
+  const [showRepoInfo, setShowRepoInfo] = useState(false);
   // Bumped when sidebar creates a workspace, so panels refresh their lists
   const [wsVersion, setWsVersion] = useState(0);
 
@@ -231,6 +237,8 @@ export default function Home() {
     setShowResources(false);
     setShowMcp(false);
     setShowWorkflows(false);
+    setShowMemories(false);
+    setShowRepoInfo(false);
   }, []);
 
   // === Sidebar: click workspace → show conversation list ===
@@ -348,6 +356,22 @@ export default function Home() {
     resetPanels();
     setActiveWorkspace(null);
     setShowWorkflows(true);
+  }, [selectConversation, resetPanels]);
+
+  // === Show Memories (knowledge items) ===
+  const handleShowMemories = useCallback(() => {
+    selectConversation(null);
+    resetPanels();
+    setActiveWorkspace(null);
+    setShowMemories(true);
+  }, [selectConversation, resetPanels]);
+
+  // === Show Repo Info ===
+  const handleShowRepoInfo = useCallback(() => {
+    selectConversation(null);
+    resetPanels();
+    setActiveWorkspace(null);
+    setShowRepoInfo(true);
   }, [selectConversation, resetPanels]);
 
   // === Go Home — reset all navigation state to welcome screen ===
@@ -469,8 +493,8 @@ export default function Home() {
   // === Determine what to show in main panel ===
   // When LS not detected, force welcome/detection screen regardless of stored state
   const showChat = detected && (currentConvId !== null || newChatMode);
-  const showConversationList = detected && !showChat && !showAccountInfo && !showSettings && !showLogs && !showAgentHub && !showConnect && !showOrchestrator && !showSourceControl && !showResources && !showMcp && !showWorkflows && activeWorkspace !== null;
-  const showWelcome = !detected || (!showChat && !showConversationList && !showAccountInfo && !showSettings && !showLogs && !showAgentHub && !showConnect && !showOrchestrator && !showSourceControl && !showResources && !showMcp && !showWorkflows);
+  const showConversationList = detected && !showChat && !showAccountInfo && !showSettings && !showLogs && !showAgentHub && !showConnect && !showOrchestrator && !showSourceControl && !showResources && !showMcp && !showWorkflows && !showMemories && !showRepoInfo && activeWorkspace !== null;
+  const showWelcome = !detected || (!showChat && !showConversationList && !showAccountInfo && !showSettings && !showLogs && !showAgentHub && !showConnect && !showOrchestrator && !showSourceControl && !showResources && !showMcp && !showWorkflows && !showMemories && !showRepoInfo);
 
   return (
     <AuthGate>
@@ -494,6 +518,8 @@ export default function Home() {
           onShowResources={handleShowResources}
           onShowMcp={handleShowMcp}
           onShowWorkflows={handleShowWorkflows}
+          onShowMemories={handleShowMemories}
+          onShowRepoInfo={handleShowRepoInfo}
           onGoHome={handleGoHome}
           onWorkspaceCreated={handleWorkspaceCreated}
           onConvDeleted={handleConvDeleted}
@@ -734,6 +760,20 @@ export default function Home() {
           {showWorkflows && (
             <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
               <WorkflowsView />
+            </div>
+          )}
+
+          {/* Memories (knowledge items) panel */}
+          {showMemories && (
+            <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <MemoriesView />
+            </div>
+          )}
+
+          {/* Repo Info panel */}
+          {showRepoInfo && (
+            <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <RepoInfoView />
             </div>
           )}
 

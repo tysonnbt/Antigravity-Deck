@@ -43,7 +43,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Settings, User, Plug, Book, Globe, Moon, Sun, Plus, FolderOpen, FolderPlus, EllipsisVertical, Activity, Bot, FolderSync, Loader2, Circle, GitBranch, Terminal, Monitor, Cable, Workflow } from "lucide-react"
+import { Settings, User, Plug, Book, Globe, Moon, Sun, Plus, FolderOpen, FolderPlus, EllipsisVertical, Activity, Bot, FolderSync, Loader2, Circle, GitBranch, Terminal, Monitor, Cable, Workflow, Brain } from "lucide-react"
 
 import { WorkspaceGroup } from "./sidebar/workspace-group"
 import type { ConvSummary, WorkspaceData } from "./sidebar/workspace-group"
@@ -66,6 +66,8 @@ interface AppSidebarProps {
     onShowResources: () => void
     onShowMcp: () => void
     onShowWorkflows: () => void
+    onShowMemories: () => void
+    onShowRepoInfo: () => void
     onGoHome: () => void
     activeWorkspace: string | null
     workspaceResources?: ResourceSnapshot | null
@@ -91,6 +93,8 @@ export function AppSidebar({
     onShowResources,
     onShowMcp,
     onShowWorkflows,
+    onShowMemories,
+    onShowRepoInfo,
     onGoHome,
     activeWorkspace,
     workspaceResources,
@@ -528,6 +532,18 @@ export function AppSidebar({
                                     <SidebarMenuButton onClick={onShowWorkflows} tooltip="Workflows" className="text-xs">
                                         <Workflow className="shrink-0" />
                                         <span>Workflows</span>
+                                    </SidebarMenuButton>
+                                </SidebarMenuItem>
+                                <SidebarMenuItem>
+                                    <SidebarMenuButton onClick={onShowMemories} tooltip="Memories" className="text-xs">
+                                        <Brain className="shrink-0" />
+                                        <span>Memories</span>
+                                    </SidebarMenuButton>
+                                </SidebarMenuItem>
+                                <SidebarMenuItem>
+                                    <SidebarMenuButton onClick={onShowRepoInfo} tooltip="Repo Info" className="text-xs">
+                                        <GitBranch className="shrink-0" />
+                                        <span>Repo Info</span>
                                     </SidebarMenuButton>
                                 </SidebarMenuItem>
                             </SidebarMenu>
