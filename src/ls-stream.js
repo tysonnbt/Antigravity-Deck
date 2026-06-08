@@ -82,8 +82,8 @@ function subscribeAgentState(inst, conversationId, onUpdate) {
                     },
                     rejectUnauthorized: false,
                 }, resolve);
+                activeReq = req;            // track immediately so teardown can destroy it
                 req.on('error', reject);
-                activeReq = req;
                 req.write(body);
                 req.end();
             });
