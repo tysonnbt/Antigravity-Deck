@@ -23,61 +23,122 @@ module.exports = function setupConversationsRoutes(app) {
         if (!inst) return res.status(400).json({ error: 'Unknown workspace' });
 
         try {
-            // Get all trajectories from this LS instance
-            const trajData = await callApiOnInstance(inst, 'GetAllCascadeTrajectories');
-
-            // Filter: only keep cascades whose workspace URI matches this instance
-            if (inst.workspaceFolderUri && trajData.trajectorySummaries) {
-                const wsUri = inst.workspaceFolderUri;
-                const filtered = {};
-                for (const [id, info] of Object.entries(trajData.trajectorySummaries)) {
-                    const cascadeWsUris = (info.workspaces || []).map(w => w.workspaceFolderAbsoluteUri);
-                    if (cascadeWsUris.some(uri => uri === wsUri)) {
-                        filtered[id] = info;
-                    }
-                }
-                trajData.trajectorySummaries = filtered;
+            // Source: full Jetbox conversation history (all-time). Fall back to the live
+            // cascade list only if Jetbox hasn't populated yet (e.g. right after boot).
+            const { getSummaries } = require('../jetbox');
+            let all = getSummaries();
+            if (!all || Object.keys(all).length === 0) {
+                const trajData = await callApiOnInstance(inst, 'GetAllCascadeTrajectories');
+                all = trajData.trajectorySummaries || {};
             }
 
-            res.json(trajData);
+            // Filter: only keep cascades whose workspace URI matches this instance.
+            // Case-insensitive + decoded comparison (Windows drive letters vary: C: vs c:).
+            // Orphans (no workspace URIs) only show in detached instances (no real folder).
+            const wsUri = inst.workspaceFolderUri;
+            const isDetached = !wsUri || wsUri.startsWith('detached://');
+            const normalize = uri => decodeURIComponent(uri || '').toLowerCase().replace(/\/+$/, '');
+            const wsUriNorm = normalize(wsUri);
+            const filtered = {};
+            for (const [id, info] of Object.entries(all)) {
+                const cascadeWsUris = (info.workspaces || []).map(w => w.workspaceFolderAbsoluteUri);
+                const isOrphan = !info.workspaces || info.workspaces.length === 0;
+                const matchesWorkspace = cascadeWsUris.some(uri => normalize(uri) === wsUriNorm);
+                if (matchesWorkspace || (isOrphan && isDetached)) filtered[id] = info;
+            }
+
+            res.json({ trajectorySummaries: filtered });
         } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
-    // Available models for cascade
+    // Available models for cascade — mirrors the Antigravity IDE's model picker:
+    // same models, same order + grouping (from clientModelSorts), same badges (tagTitle).
+    // The LS already scopes clientModelConfigs to the signed-in user's tier, so no extra
+    // tier filtering is needed here; we only drop any explicitly-disabled model defensively.
     app.get('/api/models', async (req, res) => {
         try {
+            // Models are hub-global in 2.0.11; resolveInst() already falls back to the
+            // shared hub (getFirstActiveInstance) when no workspace is tracked, so the
+            // picker still loads before a folder is opened.
             const inst = resolveInst(req);
             if (!inst) return res.status(503).json({ error: 'IDE not connected' });
             const data = await callApi('GetCascadeModelConfigData', {}, inst);
-            const models = (data.clientModelConfigs || []).map(m => ({
+
+            const mapModel = (m) => ({
                 label: m.label,
                 modelId: m.modelOrAlias?.model || m.modelOrAlias?.alias || '',
                 supportsImages: !!m.supportsImages,
                 isRecommended: !!m.isRecommended,
+                isBeta: !!m.isBeta,
+                tagTitle: m.tagTitle || '',
+                tagDescription: m.tagDescription || '',
                 quota: m.quotaInfo?.remainingFraction ?? 1,
                 resetTime: m.quotaInfo?.resetTime || null,
-            }));
+            });
+
+            // LS omits `disabled` when false; drop only models explicitly disabled.
+            const configs = (data.clientModelConfigs || []).filter(m => m.disabled !== true);
+            const byLabel = new Map(configs.map(m => [m.label, m]));
+
+            // Build IDE-faithful groups from the default sort scheme (clientModelSorts[0]).
+            // Its groups reference models by label and define the display order + grouping.
+            const used = new Set();
+            const groups = [];
+            const primarySort = (data.clientModelSorts || [])[0];
+            if (primarySort) {
+                for (const g of (primarySort.groups || [])) {
+                    const groupModels = (g.modelLabels || [])
+                        .map(label => byLabel.get(label))
+                        .filter(Boolean)
+                        .map(m => { used.add(m.label); return mapModel(m); });
+                    // Only the first group carries the sort name as its header (avoids dupes).
+                    if (groupModels.length) groups.push({ name: groups.length === 0 ? (primarySort.name || '') : '', models: groupModels });
+                }
+            }
+            // Any models the sort didn't reference stay visible (never silently hide them).
+            const leftovers = configs.filter(m => !used.has(m.label)).map(mapModel);
+            if (leftovers.length) groups.push({ name: groups.length ? 'Other' : '', models: leftovers });
+
+            // Flat list (backward compatible) = groups flattened, already in IDE order.
+            const models = groups.flatMap(g => g.models);
             const defaultModel = data.defaultOverrideModelConfig?.modelOrAlias?.model || '';
-            res.json({ models, defaultModel });
+            res.json({ models, groups, defaultModel });
         } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
-    // Conversations list — merge from ALL LS instances
+    // Full conversation history — from the Jetbox stream (all projects, all-time).
     app.get('/api/conversations', async (req, res) => {
         try {
+            const { getSummaries } = require('../jetbox');
+            const summaries = getSummaries();
+            if (summaries && Object.keys(summaries).length > 0) {
+                return res.json({ trajectorySummaries: summaries });
+            }
+            // Fallback (Jetbox not populated yet): merge live cascade lists per unique hub conn.
             const { lsInstances } = require('../config');
             const merged = { trajectorySummaries: {} };
+            const seenConns = new Set();
             for (const inst of lsInstances) {
+                const connKey = `${inst.useTls ? 's' : ''}${inst.port}:${inst.csrfToken}`;
+                if (seenConns.has(connKey)) continue;
+                seenConns.add(connKey);
                 try {
                     const data = await callApiOnInstance(inst, 'GetAllCascadeTrajectories');
-                    if (data?.trajectorySummaries) {
-                        Object.assign(merged.trajectorySummaries, data.trajectorySummaries);
-                    }
+                    if (data?.trajectorySummaries) Object.assign(merged.trajectorySummaries, data.trajectorySummaries);
                 } catch { }
             }
             res.json(merged);
         }
         catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
+    // Projects (Jetbox ProjectUpdatesStream + ReadProject) with conversation counts —
+    // powers the "Projects" grouping in the conversation history view.
+    app.get('/api/projects', (req, res) => {
+        try {
+            const { getProjects } = require('../jetbox');
+            res.json({ projects: getProjects() });
+        } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
     // Conversation steps

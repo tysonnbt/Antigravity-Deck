@@ -5,13 +5,24 @@ const { callApi, callApiStream } = require('./api');
 // Create a new Cascade conversation
 // inst: optional LS instance to route to (default: global lsConfig)
 // Antigravity 2.0.11+ REQUIRES a trajectory `source` — an empty {} body now
-// returns 400 "CortexTrajectorySource is unspecified".
+// returns 400 "CortexTrajectorySource is unspecified". Since 2.0.11 uses a single
+// shared hub LS, the new cascade must be bound to a workspace via `workspaceUris`
+// (StartCascadeRequest field 8) so it shows under the right workspace; otherwise
+// we fall back to the instance's own workspaceFolderUri when it is a real file:// URI.
 async function startCascade(inst = null, opts = {}) {
     const {
         source = 'CORTEX_TRAJECTORY_SOURCE_CASCADE_CLIENT',
         trajectoryType = 'CORTEX_TRAJECTORY_TYPE_CASCADE',
     } = opts;
-    const result = await callApi('StartCascade', { source, trajectoryType }, inst);
+    const body = { source, trajectoryType };
+    // Prefer explicit opts.workspaceUris, else derive from the routed instance
+    let workspaceUris = opts.workspaceUris;
+    if (!workspaceUris && inst && inst.workspaceFolderUri && inst.workspaceFolderUri.startsWith('file:')) {
+        workspaceUris = [inst.workspaceFolderUri];
+    }
+    if (workspaceUris && workspaceUris.length) body.workspaceUris = workspaceUris;
+    else if (inst && inst.isHub) console.warn('[Cascade] StartCascade with no workspace binding — conversation will be unscoped (detached)');
+    const result = await callApi('StartCascade', body, inst);
     return result.cascadeId;
 }
 

@@ -113,16 +113,120 @@ function setAutoAccept(val) {
     console.log(`[AutoAccept] ${autoAcceptEnabled ? 'ENABLED' : 'DISABLED'} (saved to settings)`);
 }
 
+// --- Requested-interaction dispatch (authoritative) ---
+// A WAITING step declares the exact CascadeUserInteraction member the LS expects via
+// `requestedInteraction` (RequestedInteraction oneof — same member names as the response
+// oneof). Responding with any OTHER member is silently dropped by the LS — that was the
+// "outside-of-project permission gate" bug: VIEW_FILE steps requested `permission` but the
+// step-type switch answered `filePermission`. So when `requestedInteraction` is present it
+// takes priority over the legacy step-type switch.
+// Return contract:
+//   object    → response member(s) to merge into the interaction (accept semantics)
+//   null      → cannot / should not auto-answer (leave WAITING)
+//   undefined → no recognizable member; caller falls back to the step-type switch
+const READONLY_PERMISSION_ACTION = /^(read|list|view|search|stat|glob|grep|find|fetch|get)/i;
+
+function buildFromRequestedInteraction(requested, step, autoAcceptMode) {
+    const has = (m) => requested[m] !== undefined && requested[m] !== null && typeof requested[m] === 'object';
+
+    // permission — the 2.0.11 "outside-of-project" access gate (PermissionInteraction).
+    // Verified live: the IDE answers { permission: { allow: true } } for "allow this time".
+    if (has('permission')) {
+        const res = requested.permission.resource || {};
+        if (autoAcceptMode) {
+            if (!READONLY_PERMISSION_ACTION.test(String(res.action || ''))) {
+                console.log(`[AutoAccept] permission gate (${res.action || '?'}: ${res.target || '?'}) is not read-only — leaving for manual decision`);
+                return null;
+            }
+            // Auto-accept = "always allow": grant the pattern via turnGrants so the same
+            // resource doesn't re-prompt. Shape verified from the IDE webview (grant builder
+            // `aRa`): { allow:true, turnGrants:{ allow:[pattern], deny:[] } } — no scope field.
+            const blocked = requested.permission.persistSuggestionType === 2
+                || requested.permission.persistSuggestionType === 'PERSIST_SUGGESTION_TYPE_BLOCKED';
+            const suggested = requested.permission.persistSuggestionType === 1
+                || requested.permission.persistSuggestionType === 'PERSIST_SUGGESTION_TYPE_SUGGESTED';
+            const pat = requested.permission.suggestedPersistPattern;
+            if (blocked) {
+                console.log(`[AutoAccept] permission gate -> allow once (persist blocked) (${res.action || '?'})`);
+                return { permission: { allow: true } };
+            }
+            const pattern = (suggested && pat) ? `${res.action}(${pat})` : `${res.action}(${res.target})`;
+            console.log(`[AutoAccept] permission gate -> ALWAYS allow (${res.action || '?'}: ${res.target || '?'})`);
+            return { permission: { allow: true, turnGrants: { allow: [pattern], deny: [] } } };
+        }
+        console.log(`[AutoAccept] permission gate -> allow once (${res.action || '?'}: ${res.target || '?'})`);
+        return { permission: { allow: true } };
+    }
+
+    // file_permission — the spec carries the authoritative path.
+    if (has('filePermission')) {
+        const uri = requested.filePermission.absolutePathUri || '';
+        if (autoAcceptMode && uri && !validateFilePathInWorkspace(uri)) {
+            console.warn(`[AutoAccept] Skipping file permission outside workspace: ${uri}`);
+            return null;
+        }
+        const fp = { allow: true, scope: 'PERMISSION_SCOPE_ONCE' };
+        if (uri) fp.absolutePathUri = uri;
+        return { filePermission: fp };
+    }
+
+    // These require a real user answer (options / typed input) — never auto-build.
+    if (has('askQuestion') || has('elicitation')) {
+        console.log('[AutoAccept] requested interaction needs a user answer (ask_question/elicitation) — skipping');
+        return null;
+    }
+
+    if (has('deploy')) return { deploy: { cancel: false } };
+
+    if (has('runCommand')) {
+        const cmd = step.runCommand?.commandLine || step.runCommand?.command || '';
+        return { runCommand: { confirm: true, proposedCommandLine: cmd, submittedCommandLine: cmd } };
+    }
+
+    if (has('sendCommandInput')) {
+        const input = step.sendCommandInput?.input || '';
+        return { sendCommandInput: { confirm: true, proposedInput: input, submittedInput: input } };
+    }
+
+    // Members whose accept is a plain { confirm: true } (per exa.cortex_pb schema).
+    const CONFIRM_MEMBERS = [
+        'approvalInteraction', 'mcp', 'readUrlContent', 'openBrowserUrl', 'browserAction',
+        'runExtensionCode', 'executeBrowserJavascript', 'captureBrowserScreenshot',
+        'clickBrowserPixel', 'openBrowserSetup', 'confirmBrowserSetup',
+    ];
+    for (const m of CONFIRM_MEMBERS) {
+        if (has(m)) return { [m]: { confirm: true } };
+    }
+
+    // Unknown member: answering with a guessed member would be silently dropped (the
+    // original bug class) — leave it WAITING and make the gap loud in the logs.
+    const members = Object.keys(requested);
+    if (members.length > 0) {
+        console.warn(`[AutoAccept] Unknown requestedInteraction member(s) [${members.join(',')}] — cannot answer, leaving WAITING`);
+        return null;
+    }
+    return undefined;
+}
+
 // --- Build interaction payload from WAITING step data ---
 
 function buildInteraction(stepInfo, options = {}) {
     const { trajectoryId, stepIndex, step } = stepInfo;
     if (!trajectoryId || stepIndex === undefined || !step) return null;
-    
+
     const { autoAcceptMode = false } = options; // Flag to distinguish auto-accept vs manual
 
     const interaction = { trajectoryId, stepIndex };
     const stepType = (step.type || '').replace('CORTEX_STEP_TYPE_', '');
+
+    // Authoritative path: answer the member the LS explicitly requested.
+    const requested = step.requestedInteraction;
+    if (requested && typeof requested === 'object') {
+        const viaRequested = buildFromRequestedInteraction(requested, step, autoAcceptMode);
+        if (viaRequested === null) return null;
+        if (viaRequested !== undefined) return { ...interaction, ...viaRequested };
+        // fall through: requestedInteraction was empty/unusable — use the legacy switch
+    }
 
     switch (stepType) {
         case 'RUN_COMMAND': {
@@ -194,7 +298,9 @@ function buildInteraction(stepInfo, options = {}) {
                     }
                 }
             } else {
-                interaction.codeAction = { confirm: true };
+                // No file path → not a file-permission gate; treat as a generic approval.
+                // (`codeAction` is NOT a member of CascadeUserInteraction — would be dropped.)
+                interaction.approvalInteraction = { confirm: true };
             }
             break;
         }
@@ -230,8 +336,9 @@ function buildInteraction(stepInfo, options = {}) {
                 };
                 console.log(`[AutoAccept] Read-only ${stepType}: ${readPath} (always allowed)`);
             } else {
-                interaction.confirm = true;
-                console.log(`[AutoAccept] Read-only ${stepType}: no path found, generic confirm`);
+                // `confirm` is NOT a member of CascadeUserInteraction — use the generic approval.
+                interaction.approvalInteraction = { confirm: true };
+                console.log(`[AutoAccept] Read-only ${stepType}: no path found, generic approval`);
             }
             break;
         }
@@ -253,6 +360,55 @@ function buildInteraction(stepInfo, options = {}) {
             const url = step.openBrowserUrl?.url || '';
             console.log(`[AutoAccept] Browser action${url ? ': ' + url : ''}`);
             break;
+        }
+        case 'MCP_TOOL': {
+            // MCP tool-call approval — a plain confirm on the `mcp` member.
+            interaction.mcp = { confirm: true };
+            console.log(`[AutoAccept] MCP tool call`);
+            break;
+        }
+        case 'TOOL_CALL_PROPOSAL': {
+            // Generic tool-call / approval gate.
+            interaction.approvalInteraction = { confirm: true };
+            break;
+        }
+        case 'RUN_EXTENSION_CODE': {
+            interaction.runExtensionCode = { confirm: true };
+            break;
+        }
+        case 'EXECUTE_BROWSER_JAVASCRIPT': {
+            interaction.executeBrowserJavascript = { confirm: true };
+            break;
+        }
+        case 'CAPTURE_BROWSER_SCREENSHOT': {
+            interaction.captureBrowserScreenshot = { confirm: true };
+            break;
+        }
+        case 'CLICK_BROWSER_PIXEL': {
+            interaction.clickBrowserPixel = { confirm: true };
+            break;
+        }
+        case 'OPEN_BROWSER_SETUP': {
+            interaction.openBrowserSetup = { confirm: true };
+            break;
+        }
+        case 'CONFIRM_BROWSER_SETUP': {
+            interaction.confirmBrowserSetup = { confirm: true };
+            break;
+        }
+        case 'DEPLOY_FIREBASE':
+        case 'SET_UP_FIREBASE': {
+            // Deploy confirmation — `cancel:false` = proceed.
+            interaction.deploy = { cancel: false };
+            console.log(`[AutoAccept] Deploy confirm`);
+            break;
+        }
+        case 'ASK_QUESTION':
+        case 'ELICITATION': {
+            // These require a real answer (selected options / typed input), not a blind
+            // confirm — they can't be auto-built. Surface to the user via dedicated UI.
+            console.log(`[AutoAccept] ${stepType} needs a user answer — cannot auto-build, skipping`);
+            return null;
         }
         default: {
             // Unknown step type — try to find file path from various sources
@@ -281,14 +437,38 @@ function buildInteraction(stepInfo, options = {}) {
                     }
                 }
             } else {
-                console.log(`[AutoAccept] Unknown step type for interaction: ${stepType}, attempting generic confirm`);
-                interaction.confirm = true;
+                // `confirm` is NOT a member of CascadeUserInteraction — use the generic approval.
+                console.log(`[AutoAccept] Unknown step type for interaction: ${stepType}, generic approval`);
+                interaction.approvalInteraction = { confirm: true };
             }
             break;
         }
     }
 
     return interaction;
+}
+
+// --- Flip an accept interaction into a reject (deny), generically across all members ---
+// buildInteraction() always builds the *accept* payload (confirm/allow=true, deploy.cancel=false).
+// To reject, flip the single populated oneof member to its deny value. Works for every member type.
+function denyInteraction(interaction) {
+    const COMMON = new Set(['trajectoryId', 'stepIndex', 'timedOut']);
+    const out = {};
+    for (const [key, val] of Object.entries(interaction)) {
+        if (COMMON.has(key) || val === null || typeof val !== 'object') { out[key] = val; continue; }
+        if (key === 'filePermission') {
+            // Reject = keep only the path; absence of `allow` (default false) is the deny.
+            out[key] = { absolutePathUri: val.absolutePathUri };
+            continue;
+        }
+        const member = { ...val };
+        if ('confirm' in member) member.confirm = false;     // run_command/mcp/approval/browser/extension/...
+        if ('allow' in member) member.allow = false;         // permission
+        if ('cancel' in member) member.cancel = true;        // deploy: cancel=true = reject
+        if ('cancelled' in member) member.cancelled = true;  // ask_question
+        out[key] = member;
+    }
+    return out;
 }
 
 // --- Direct accept on a specific LS instance ---
@@ -346,29 +526,46 @@ async function handleAutoAcceptDirect(cascadeId, inst, stepInfo = null) {
     }
 }
 
+// Effective LS connections to poll/answer on. Hub model: when no workspace is tracked,
+// lsInstances is empty but the hub connection still serves every cascade — fall back to it.
+// (Same fallback the manual accept route uses.)
+function effectiveInstances() {
+    if (lsInstances.length) return lsInstances;
+    try {
+        const { getFirstActiveInstance } = require('./detector');
+        const hub = getFirstActiveInstance();
+        return hub ? [hub] : [];
+    } catch { return []; }
+}
+
 // --- Legacy wrapper — tries all instances ---
 
 async function handleAutoAccept(cascadeId, status, stepInfo = null) {
     if (!autoAcceptEnabled) return;
     if (status !== 'CASCADE_RUN_STATUS_WAITING_FOR_USER') return;
-    for (const inst of lsInstances) {
+    for (const inst of effectiveInstances()) {
         await handleAutoAcceptDirect(cascadeId, inst, stepInfo);
     }
 }
 
 // --- Build accept payload for manual accept (used by routes.js) ---
 
-async function buildAcceptPayload(cascadeId, instOrNull = null) {
+// Locate WAITING steps (most-recent-first) for a cascade, with their trajectoryId and
+// true step index. JSON first, binary protobuf fallback. Used both to build accept
+// payloads and to fill trajectoryId/stepIndex into custom interactions sent by the UI.
+async function locateWaitingSteps(cascadeId, instOrNull = null) {
     const callFn = instOrNull ? (m, b) => callApiOnInstance(instOrNull, m, b) : (m, b) => callApi(m, b);
     const summaries = await callFn('GetAllCascadeTrajectories', {});
     const info = summaries?.trajectorySummaries?.[cascadeId];
-    if (!info) return null;
+    if (!info) return [];
 
     const trajectoryId = info.trajectoryId;
     const stepCount = info.stepCount || 0;
-    if (!trajectoryId || stepCount === 0) return null;
+    if (!trajectoryId || stepCount === 0) return [];
 
     const from = Math.max(0, stepCount - 8);
+    const candidates = [];
+
     const stepsResp = await callFn('GetCascadeTrajectorySteps', {
         cascadeId, startIndex: from, endIndex: stepCount,
     });
@@ -380,12 +577,10 @@ async function buildAcceptPayload(cascadeId, instOrNull = null) {
 
     for (let i = steps.length - 1; i >= 0; i--) { // search from end (most recent)
         if (steps[i].status === 'CORTEX_STEP_STATUS_WAITING' || steps[i].status === 9) {
-            const stepIndex = apiStartedAt + i;
-            console.log(`[buildAcceptPayload] Found WAITING step[${stepIndex}] (apiStartedAt=${apiStartedAt}, i=${i}, steps.length=${steps.length})`);
-            const interaction = buildInteraction({ trajectoryId, stepIndex, step: steps[i] });
-            if (interaction) return { cascadeId, interaction };
+            candidates.push({ trajectoryId, stepIndex: apiStartedAt + i, step: steps[i] });
         }
     }
+    if (candidates.length > 0) return candidates;
 
     // Binary fallback: if JSON didn't return the WAITING step, try binary protobuf
     try {
@@ -395,14 +590,21 @@ async function buildAcceptPayload(cascadeId, instOrNull = null) {
         const decoded = decodeBinarySteps(binBuf);
         for (let i = decoded.length - 1; i >= 0; i--) {
             if (decoded[i].status === 'CORTEX_STEP_STATUS_WAITING' || decoded[i].status === 9) {
-                const stepIndex = from + i;
-                console.log(`[buildAcceptPayload] Found WAITING step[${stepIndex}] (binary fallback)`);
-                const interaction = buildInteraction({ trajectoryId, stepIndex, step: decoded[i] });
-                if (interaction) return { cascadeId, interaction };
+                candidates.push({ trajectoryId, stepIndex: from + i, step: decoded[i] });
             }
         }
     } catch { }
 
+    return candidates;
+}
+
+async function buildAcceptPayload(cascadeId, instOrNull = null) {
+    const candidates = await locateWaitingSteps(cascadeId, instOrNull);
+    for (const cand of candidates) {
+        console.log(`[buildAcceptPayload] Found WAITING step[${cand.stepIndex}]`);
+        const interaction = buildInteraction(cand);
+        if (interaction) return { cascadeId, interaction };
+    }
     return null;
 }
 
@@ -420,13 +622,15 @@ function startAutoAcceptPolling() {
 }
 
 async function autoAcceptPollNow() {
-    if (!autoAcceptEnabled || lsInstances.length === 0) return;
+    if (!autoAcceptEnabled) return;
     if (isAutoAcceptRunning) return; // Prevent concurrent runs
+    const instances = effectiveInstances();
+    if (instances.length === 0) return;
     isAutoAcceptRunning = true;
 
     try {
         // Poll EACH LS instance independently — NO lsConfig mutation!
-        for (const inst of lsInstances) {
+        for (const inst of instances) {
             try {
                 const summaries = await callApiOnInstance(inst, 'GetAllCascadeTrajectories');
                 const trajectories = summaries?.trajectorySummaries || {};
@@ -491,7 +695,9 @@ module.exports = {
     getAutoAccept,
     setAutoAccept,
     buildInteraction,
+    denyInteraction,
     buildAcceptPayload,
+    locateWaitingSteps,
     handleAutoAccept,
     handleAutoAcceptDirect,
     startAutoAcceptPolling,

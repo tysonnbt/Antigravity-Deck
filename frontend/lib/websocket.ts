@@ -284,7 +284,12 @@ export function useWebSocket() {
         });
 
         const offConvUpdated = wsService.on('conversations_updated', () => {
-            console.log('[WS] conversations_updated — refreshing sidebar');
+            console.log('[WS] conversations_updated — refreshing sidebar + open conversation');
+            // Hub-only mode has no per-workspace step poller, so use the Jetbox 'conversations_updated'
+            // signal to re-pull the OPEN conversation's steps. The backend re-fetches only when new
+            // steps actually arrived, and steps_init merges in place, so there's no visible flicker.
+            const convId = currentConvIdRef.current;
+            if (convId) wsService?.send({ type: 'set_conversation', conversationId: convId });
             setState(prev => ({ ...prev, conversationsVersion: prev.conversationsVersion + 1 }));
         });
 

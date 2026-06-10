@@ -10,7 +10,6 @@ export interface Workspace {
     workspaceFolderUri: string;
     category: 'workspace' | 'playground';
     port: number;
-    headless?: boolean;
 }
 
 export interface WorkspaceResources {
@@ -18,7 +17,6 @@ export interface WorkspaceResources {
     memBytes: number;
     memMB: number;
     name?: string;
-    headless?: boolean;
 }
 
 export interface SystemResources {
@@ -60,7 +58,18 @@ export interface CascadeModel {
     modelId: string;
     supportsImages: boolean;
     isRecommended: boolean;
+    isBeta?: boolean;
+    tagTitle?: string;        // short badge shown in the IDE picker, e.g. "Fast"
+    tagDescription?: string;  // badge tooltip, e.g. "Limited time"
     quota: number; // 0-1 fraction remaining
+    resetTime?: string | null;
+}
+
+// A display section mirroring the Antigravity IDE model picker (from clientModelSorts).
+// `name` is the section header (e.g. "Recommended"); empty string means render no header.
+export interface CascadeModelGroup {
+    name: string;
+    models: CascadeModel[];
 }
 
 export interface CascadeSendResponse {
@@ -118,11 +127,11 @@ export async function cascadeSend(cascadeId: string, message: string, modelId?: 
 }
 
 // Start a new cascade and send a message in one call
-export async function cascadeSubmit(message: string, modelId?: string, images?: MediaItem[], workspace?: string): Promise<CascadeSubmitResponse> {
+export async function cascadeSubmit(message: string, modelId?: string, images?: MediaItem[], workspace?: string, workspaceUri?: string): Promise<CascadeSubmitResponse> {
     const res = await fetch(`${API_BASE}/api/cascade/submit`, {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ message, modelId, images, workspace }),
+        body: JSON.stringify({ message, modelId, images, workspace, workspaceUri }),
     });
     if (!res.ok) throw new Error(`Submit failed: ${res.status}`);
     return res.json();
@@ -151,30 +160,6 @@ export async function createWorkspace(nameOrPath: string, isName = false): Promi
         body: JSON.stringify(isName ? { name: nameOrPath } : { path: nameOrPath }),
     });
     if (!res.ok) throw new Error(`Create failed: ${res.status}`);
-    return res.json();
-}
-
-// Create a headless workspace (no IDE UI) — requires running IDE for auth
-export async function createHeadlessWorkspace(nameOrPath: string, isName = false): Promise<{ created: boolean; alreadyRunning?: boolean; workspace?: { pid: string; workspaceName: string; port: number; headless: boolean }; error?: string }> {
-    const res = await fetch(`${API_BASE}/api/workspaces/create-headless`, {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify(isName ? { name: nameOrPath } : { path: nameOrPath }),
-    });
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-        throw new Error(err.error || `Create headless failed: ${res.status}`);
-    }
-    return res.json();
-}
-
-// Kill a headless workspace
-export async function killHeadlessWorkspace(pid: string): Promise<{ killed: boolean; workspace: string }> {
-    const res = await fetch(`${API_BASE}/api/workspaces/headless/${pid}`, {
-        method: 'DELETE',
-        headers: authHeaders(),
-    });
-    if (!res.ok) throw new Error(`Kill headless failed: ${res.status}`);
     return res.json();
 }
 
@@ -212,8 +197,9 @@ export async function updateSettings(settings: Partial<AppSettings>): Promise<Ap
     return res.json();
 }
 
-// Get available cascade models
-export async function getModels(): Promise<{ models: CascadeModel[]; defaultModel: string }> {
+// Get available cascade models. `groups` mirrors the Antigravity IDE picker's
+// sections/order; `models` is the same set flattened (backward compatible).
+export async function getModels(): Promise<{ models: CascadeModel[]; groups: CascadeModelGroup[]; defaultModel: string }> {
     const res = await fetch(`${API_BASE}/api/models`, { headers: authHeaders() });
     if (!res.ok) throw new Error(`Models failed: ${res.status}`);
     return res.json();
@@ -234,6 +220,35 @@ export async function cascadeInteract(cascadeId: string, action: 'accept' | 'rej
         body: JSON.stringify({ action })
     });
     if (!res.ok) throw new Error(`Interact failed: ${res.status}`);
+    return res.json();
+}
+
+// Gate options for the current WAITING interaction (dynamic, computed server-side to
+// mirror what the Antigravity IDE would show).
+export interface GateOption {
+    id: string;
+    label: string;
+    payload: Record<string, unknown>;
+}
+export interface PermissionGateInfo {
+    kind: 'permission';
+    action: string;
+    actionLabel: string;
+    target: string;
+    editableTarget: boolean;
+    title: string;
+    reason: string;
+    options: GateOption[];
+    denyWriteIn: { label: string; placeholder: string };
+}
+export type GateInfo =
+    | PermissionGateInfo
+    | { kind: 'askQuestion' | 'elicitation' | 'filePermission'; spec: Record<string, unknown> }
+    | { kind: null };
+
+export async function fetchGate(cascadeId: string): Promise<GateInfo> {
+    const res = await fetch(`${API_BASE}/api/cascade/${cascadeId}/gate`, { headers: authHeaders() });
+    if (!res.ok) throw new Error(`Gate fetch failed: ${res.status}`);
     return res.json();
 }
 

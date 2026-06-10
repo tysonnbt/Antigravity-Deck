@@ -12,7 +12,7 @@ const EventEmitter = require('events');
 const { startCascade, sendMessage: cascadeSend } = require('./cascade');
 const { getStepCountAndStatus } = require('./step-cache');
 const { waitAndExtractResponse } = require('./cascade-relay');
-const { callApi } = require('./api');
+const { callApi, callApiFireAndForget } = require('./api');
 
 const STATES = { IDLE: 'IDLE', ACTIVE: 'ACTIVE', TRANSITIONING: 'TRANSITIONING' };
 
@@ -232,15 +232,28 @@ class AgentSession extends EventEmitter {
     // ── Accept / Reject ──────────────────────────────────────────────────────
 
     async accept() {
-        if (!this._cascadeId) return;
-        await this._callApi('AcceptDiff', { cascadeId: this._cascadeId });
-        this._addLog('system', 'Accepted code changes');
+        await this._interact(false);
     }
 
     async reject() {
+        await this._interact(true);
+    }
+
+    // AcceptDiff/RejectDiff don't exist in Antigravity 2.0.11's LS (404) — answer the
+    // pending WAITING interaction via HandleCascadeUserInteraction, same as the dashboard.
+    async _interact(reject, logPrefix = '') {
         if (!this._cascadeId) return;
-        await this._callApi('RejectDiff', { cascadeId: this._cascadeId });
-        this._addLog('system', 'Rejected code changes');
+        const { buildAcceptPayload, denyInteraction } = require('./auto-accept');
+        const payload = await buildAcceptPayload(this._cascadeId, this._lsInst);
+        if (!payload) {
+            this._addLog('system', `${logPrefix}${reject ? 'Reject' : 'Accept'}: no pending interaction found`);
+            return;
+        }
+        const body = reject
+            ? { cascadeId: this._cascadeId, interaction: denyInteraction(payload.interaction) }
+            : payload;
+        await callApiFireAndForget('HandleCascadeUserInteraction', body, this._lsInst);
+        this._addLog('system', `${logPrefix}${reject ? 'Rejected' : 'Accepted'} pending interaction`);
     }
 
     // ── Status ───────────────────────────────────────────────────────────────
@@ -345,13 +358,11 @@ class AgentSession extends EventEmitter {
     }
 
     async _triggerAccept() {
-        await this._callApi('AcceptDiff', { cascadeId: this._cascadeId });
-        this._addLog('system', 'Auto-accepted code changes');
+        await this._interact(false, 'Auto-');
     }
 
     async _triggerReject() {
-        await this._callApi('RejectDiff', { cascadeId: this._cascadeId });
-        this._addLog('system', 'Auto-rejected code changes');
+        await this._interact(true, 'Auto-');
     }
 
     _callApi(method, body = {}) {

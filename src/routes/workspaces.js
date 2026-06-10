@@ -1,11 +1,10 @@
 // === Workspace Routes ===
-// /api/workspaces/* (CRUD, headless, resources, folders)
+// /api/workspaces/* (CRUD, resources, folders)
 
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const { detectLanguageServers, detectPorts, findApiPort } = require('../detector');
-const { launchHeadlessLS, getHeadlessInstances, killHeadlessLS } = require('../headless-ls');
+const { getHub, ensureWorkspaceTracked, init } = require('../detector');
 const { getResourceSnapshot } = require('../resource-monitor');
 const { pathToFileUri, validateWorkspacePath } = require('./route-helpers');
 
@@ -22,13 +21,15 @@ module.exports = function setupWorkspacesRoutes(app) {
             return res.json({ root, folders: [] });
         }
 
-        const openUris = new Set(lsInstances.map(i => i.workspaceFolderUri));
+        // Case-insensitive URI match (Windows drive letters vary: file:///C:/ vs file:///c:/)
+        const norm = u => decodeURIComponent(u || '').toLowerCase().replace(/\/+$/, '');
         const entries = fs.readdirSync(root, { withFileTypes: true })
             .filter(d => d.isDirectory() && !d.name.startsWith('.'))
             .map(d => {
                 const fullPath = path.join(root, d.name);
                 const uri = pathToFileUri(fullPath);
-                const matchIdx = lsInstances.findIndex(i => i.workspaceFolderUri === uri);
+                const uriNorm = norm(uri);
+                const matchIdx = lsInstances.findIndex(i => norm(i.workspaceFolderUri) === uriNorm);
                 return {
                     name: d.name,
                     path: fullPath,
@@ -47,11 +48,6 @@ module.exports = function setupWorkspacesRoutes(app) {
         res.json(getResourceSnapshot());
     });
 
-    // List headless LS instances — static, before /headless/:pid
-    app.get('/api/workspaces/headless', (req, res) => {
-        res.json(getHeadlessInstances());
-    });
-
     // Workspace list — all detected LS instances
     app.get('/api/workspaces', (req, res) => {
         const { lsInstances } = require('../config');
@@ -62,7 +58,6 @@ module.exports = function setupWorkspacesRoutes(app) {
             workspaceFolderUri: inst.workspaceFolderUri || '',
             category: inst.category || 'workspace',
             port: inst.port,
-            headless: !!inst.headless,
         })));
     });
 
@@ -106,9 +101,11 @@ module.exports = function setupWorkspacesRoutes(app) {
             console.log(`[*] Created workspace folder: ${folderPath}`);
         }
 
-        // Check if already open (matching workspace folder URI)
+        // Check if already tracked (matching workspace folder URI, case-insensitive —
+        // Windows drive letters vary: file:///C:/ vs file:///c:/)
         const folderUri = pathToFileUri(folderPath);
-        const existing = lsInstances.findIndex(i => i.workspaceFolderUri === folderUri);
+        const norm = u => decodeURIComponent(u || '').toLowerCase().replace(/\/+$/, '');
+        const existing = lsInstances.findIndex(i => norm(i.workspaceFolderUri) === norm(folderUri));
         if (existing >= 0) {
             console.log(`[*] Workspace already open: ${folderPath}`);
             return res.json({
@@ -122,166 +119,61 @@ module.exports = function setupWorkspacesRoutes(app) {
             });
         }
 
-        // Remember current PIDs, then launch IDE
-        const beforePids = new Set(lsInstances.map(i => i.pid));
-        console.log(`[*] Opening Antigravity IDE: ${folderPath}`);
-        if (platform === 'darwin') {
-            // Try Antigravity first using spawn (no shell = no command injection)
-            const child = spawn('open', ['-a', 'Antigravity', folderPath], {
-                timeout: 10000,
-                detached: true,
-                stdio: 'ignore'
-            });
-
-            child.on('error', (err) => {
-                console.error('[!] Failed to open Antigravity:', err.message);
-            });
-
-            child.on('exit', (code) => {
-                if (code !== 0 && code !== null) {
-                    console.error(`[!] Antigravity exited with code ${code}`);
+        // Best-effort: open the Antigravity IDE GUI on this folder (no wait). Antigravity
+        // 2.0.11 uses a single shared "hub" LS, so the Deck works through the hub whether
+        // or not the GUI is shown — we never block on a new per-workspace LS process.
+        const launchIde = () => {
+            try {
+                if (platform === 'darwin') {
+                    const child = spawn('open', ['-a', 'Antigravity', folderPath], { timeout: 10000, detached: true, stdio: 'ignore' });
+                    child.on('error', (err) => console.error('[!] Failed to open Antigravity:', err.message));
+                    child.unref();
+                } else {
+                    const child = spawn('antigravity', ['--trust-workspace', folderPath], { timeout: 10000, detached: true, stdio: 'ignore', shell: platform === 'win32' });
+                    child.on('error', (err) => console.error('[!] Failed to launch antigravity:', err.message));
+                    child.unref();
                 }
-            });
-
-            child.unref();
-        } else {
-            // Windows/Linux: use spawn with shell:true on Windows (.cmd files need shell)
-            const child = spawn('antigravity', ['--trust-workspace', folderPath], {
-                timeout: 10000,
-                detached: true,
-                stdio: 'ignore',
-                shell: platform === 'win32', // Windows .cmd files require shell
-            });
-
-            child.on('error', (err) => {
-                console.error('[!] Failed to launch antigravity:', err.message);
-                // Don't crash the server, just log the error
-            });
-
-            child.unref();
-        }
-
-        // Poll for new LS instance (up to 30s)
-        const MAX_WAIT = 30000;
-        const POLL = 3000;
-        let elapsed = 0;
-        let found = null;
-
-        while (elapsed < MAX_WAIT) {
-            await new Promise(r => setTimeout(r, POLL));
-            elapsed += POLL;
-
-            const instances = await detectLanguageServers();
-            for (const inst of instances) {
-                if (beforePids.has(inst.pid)) continue; // already known
-                const ports = await detectPorts(inst.pid);
-                if (!ports.length) continue;
-                const result = await findApiPort(ports, inst.csrfToken);
-                if (result) {
-                    const name = inst.workspaceId
-                        ? inst.workspaceId.replace(/^file_.*_Projects_/, '').split('_').pop()
-                        : folderPath.split(/[/\\]/).pop();
-                    const folderUri = pathToFileUri(folderPath);
-                    found = {
-                        pid: inst.pid,
-                        csrfToken: inst.csrfToken,
-                        workspaceId: inst.workspaceId,
-                        workspaceName: name,
-                        workspaceFolderUri: folderUri,
-                        port: result.port,
-                        useTls: result.useTls,
-                        active: false
-                    };
-                    lsInstances.push(found);
-
-                    // Tell the LS about its workspace folder so cascades get bound to it
-                    // Field must be 'workspace' with a plain path (not file:// URI)
-                    try {
-                        const protocol = result.useTls ? 'https' : 'http';
-                        const host = result.useTls ? '127.0.0.1' : 'localhost';
-                        const plainPath = folderPath.replace(/\\/g, '/');
-                        const addWsOpts = {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Connect-Protocol-Version': '1',
-                                'X-Codeium-Csrf-Token': inst.csrfToken
-                            },
-                            body: JSON.stringify({ workspace: plainPath }),
-                            signal: AbortSignal.timeout(5000)
-                        };
-                        if (result.useTls) addWsOpts.agent = new (require('https').Agent)({ rejectUnauthorized: false });
-                        await fetch(`${protocol}://${host}:${result.port}/exa.language_server_pb.LanguageServerService/AddTrackedWorkspace`, addWsOpts);
-                        console.log(`[+] Bound workspace folder: ${plainPath}`);
-                    } catch (e) {
-                        console.log(`[!] AddTrackedWorkspace failed: ${e.message}`);
-                    }
-
-                    console.log(`[+] Workspace created: ${name} (PID: ${inst.pid}, Port: ${result.port})`);
-                    break;
-                }
+            } catch (e) {
+                console.error('[!] IDE launch error:', e.message);
             }
-            if (found) break;
-            console.log(`[*] Waiting for LS... ${elapsed / 1000}s`);
-        }
+        };
 
-        if (found) {
-            res.json({
-                created: true,
-                workspace: {
-                    pid: found.pid,
-                    workspaceName: found.workspaceName,
-                    port: found.port
-                }
-            });
-        } else {
-            res.json({ created: false, message: `LS not detected after ${MAX_WAIT / 1000}s. Auto-rescan will pick it up later.` });
-        }
-    });
+        let hub = getHub();
 
-    // Create a headless LS instance (no IDE UI) — requires running IDE for auth
-    app.post('/api/workspaces/create-headless', async (req, res) => {
-        const { getSettings } = require('../config');
-
-        let folderPath = req.body.path;
-        const name = req.body.name;
-
-        // Same path/name resolution as /api/workspaces/create
-        if (!folderPath && name) {
-            const settings = getSettings();
-            const root = settings.defaultWorkspaceRoot;
-            if (!fs.existsSync(root)) {
-                fs.mkdirSync(root, { recursive: true });
+        // Cold start: no hub yet → launch the IDE and wait for the hub to come up.
+        if (!hub) {
+            console.log('[*] No hub detected — launching Antigravity IDE and waiting for hub...');
+            launchIde();
+            const MAX_WAIT = 30000, POLL = 3000;
+            let elapsed = 0;
+            while (elapsed < MAX_WAIT && !hub) {
+                await new Promise(r => setTimeout(r, POLL));
+                elapsed += POLL;
+                await init(() => { }); // re-detect hub
+                hub = getHub();
+                if (!hub) console.log(`[*] Waiting for hub... ${elapsed / 1000}s`);
             }
-            folderPath = path.join(root, name);
+            if (!hub) {
+                return res.json({ created: false, message: `Hub not detected after ${MAX_WAIT / 1000}s. Make sure Antigravity IDE is installed/running; auto-rescan will pick it up.` });
+            }
+        } else {
+            // Hub already up — still open the GUI best-effort for the "Open with IDE" UX.
+            console.log(`[*] Opening Antigravity IDE (best-effort): ${folderPath}`);
+            launchIde();
         }
 
-        if (!folderPath) {
-            return res.status(400).json({ error: 'path or name is required, and defaultWorkspaceRoot must be configured' });
-        }
-
+        // Track the workspace on the hub and register a virtual instance — no waiting.
         try {
-            folderPath = validateWorkspacePath(folderPath);
-        } catch (error) {
-            return res.status(400).json({ error: error.message });
-        }
-
-        try {
-            const result = await launchHeadlessLS(folderPath);
-            res.json(result);
+            const inst = await ensureWorkspaceTracked(folderPath);
+            const ws = inst
+                ? { pid: inst.pid, workspaceName: inst.workspaceName, port: inst.port }
+                : { pid: hub.pid, workspaceName: folderPath.split(/[/\\]/).filter(Boolean).pop(), port: hub.port };
+            console.log(`[+] Workspace tracked on hub: ${ws.workspaceName} (${folderUri})`);
+            return res.json({ created: true, workspace: ws });
         } catch (e) {
-            console.error(`[Headless] Launch failed: ${e.message}`);
-            res.status(500).json({ error: e.message });
+            console.error(`[!] AddTrackedWorkspace failed: ${e.message}`);
+            return res.status(500).json({ created: false, error: `Failed to track workspace: ${e.message}` });
         }
     });
 
-    // Kill a headless LS instance — parameterized, AFTER static headless route
-    app.delete('/api/workspaces/headless/:pid', (req, res) => {
-        try {
-            const result = killHeadlessLS(req.params.pid);
-            res.json(result);
-        } catch (e) {
-            res.status(400).json({ error: e.message });
-        }
-    });
 };

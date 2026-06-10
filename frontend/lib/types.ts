@@ -110,6 +110,49 @@ export interface Step {
     };
     grepSearch?: unknown;
     find?: unknown;
+    requestedInteraction?: RequestedInteraction;
+}
+
+// === Interaction gates (Step.requestedInteraction) ===
+// A WAITING step declares the exact interaction member the LS expects.
+// The answer is sent as the same member name on CascadeUserInteraction
+// via POST /api/cascade/:id/accept { interaction: { <member>: ... } }.
+
+export interface AskQuestionOption {
+    id?: string;
+    text?: string;
+}
+
+export interface AskQuestionEntry {
+    question?: string;
+    options?: AskQuestionOption[];
+    isMultiSelect?: boolean;
+    selectedOptionIds?: string[];
+    writeInResponse?: string;
+    skipped?: boolean;
+}
+
+export interface RequestedInteraction {
+    permission?: {
+        resource?: { action?: string; target?: string };
+        suggestedPersistPattern?: string;
+        persistSuggestionType?: string;
+        reason?: string;
+    };
+    filePermission?: {
+        absolutePathUri?: string;
+        isDirectory?: boolean;
+        blockReason?: string | number;
+    };
+    askQuestion?: { questions?: AskQuestionEntry[] };
+    elicitation?: {
+        serverName?: string;
+        mode?: string;
+        message?: string;
+        requestedSchemaJson?: string;
+        url?: string;
+    };
+    [key: string]: unknown;
 }
 
 export interface StepDisplayConfig {

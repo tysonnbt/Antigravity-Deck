@@ -7,9 +7,10 @@ import { extractStepContent, exportToMarkdown } from '@/lib/step-utils';
 import { Timeline } from '@/components/timeline';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { MoreVertical, BarChart2, Download, Bell, BellOff, FolderSync, Star, WifiOff, FolderOpen, Rocket, Loader2, Check, Smartphone, Share2, X, Cable } from 'lucide-react';
+import { MoreVertical, BarChart2, Download, Bell, BellOff, FolderSync, Star, WifiOff, Rocket, Loader2, Check, Smartphone, Share2, X } from 'lucide-react';
 import { API_BASE } from '@/lib/config';
 import { authHeaders } from '@/lib/auth';
+import type { Project } from '@/lib/conversations';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,16 +21,13 @@ import {
 import { ChatView } from '@/components/chat-view';
 import { AppSidebar } from '@/components/app-sidebar';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { ConversationList } from '@/components/conversation-list';
 import { AccountInfoView } from '@/components/user-profile';
 import { SettingsView } from '@/components/settings-view';
 import { AuthGate } from '@/components/auth-gate';
 import { AgentLogsView } from '@/components/agent-logs-view';
-import { AgentHubView } from '@/components/agent-hub-view';
-import { AgentConnectPanel } from '@/components/agent-hub/connect-panel';
-import { OrchestratorView } from '@/components/orchestrator-view';
 import { SourceControlView } from '@/components/source-control-view';
 import { ResourceMonitorView } from '@/components/resource-monitor-view';
+import { ConversationHistoryView } from '@/components/conversation-history-view';
 import { WorkspaceOnboardModal } from '@/components/workspace-onboard-modal';
 import { notificationService } from '@/lib/notifications';
 import { initAppLogger } from '@/lib/app-logger';
@@ -150,18 +148,14 @@ export default function Home() {
   const [activeWorkspace, setActiveWorkspace] = useState<string | null>(() => getStoredValue('antigravity-active-workspace', null));
   // NEW: When true, show ChatView in "new chat" mode (no conversation yet)
   const [newChatMode, setNewChatMode] = useState(false);
+  // Folder URI to scope a project-scoped new conversation (null = global/loose new chat).
+  const [newChatWorkspaceUri, setNewChatWorkspaceUri] = useState<string | null>(null);
   // NEW: When true, show AccountInfoView in main panel
   const [showAccountInfo, setShowAccountInfo] = useState(() => getStoredValue('antigravity-show-account-info', false));
   // NEW: When true, show SettingsView in main panel
   const [showSettings, setShowSettings] = useState(() => getStoredValue('antigravity-show-settings', false));
   // NEW: When true, show AgentLogsView in main panel
   const [showLogs, setShowLogs] = useState(() => getStoredValue('antigravity-show-logs', false));
-  // NEW: When true, show Agent Bridge in main panel
-  const [showAgentHub, setShowAgentHub] = useState(() => getStoredValue('antigravity-show-agent-hub', false));
-  // NEW: When true, show Connect panel in main panel
-  const [showConnect, setShowConnect] = useState(() => getStoredValue('antigravity-show-connect', false));
-  // NEW: When true, show Orchestrator standalone view
-  const [showOrchestrator, setShowOrchestrator] = useState(() => getStoredValue('antigravity-show-orchestrator', false));
   // NEW: When true, show Source Control / IDE view in main panel
   const [showSourceControl, setShowSourceControl] = useState(false);
   const [showResources, setShowResources] = useState(false);
@@ -173,6 +167,8 @@ export default function Home() {
   const [showMemories, setShowMemories] = useState(false);
   // NEW: When true, show Repo Info panel in main panel
   const [showRepoInfo, setShowRepoInfo] = useState(false);
+  // Conversation History is the default main view; this filters it to a project (null = all).
+  const [historyProjectId, setHistoryProjectId] = useState<string | null>(null);
   // Bumped when sidebar creates a workspace, so panels refresh their lists
   const [wsVersion, setWsVersion] = useState(0);
 
@@ -190,9 +186,6 @@ export default function Home() {
   useEffect(() => { localStorage.setItem('antigravity-show-settings', JSON.stringify(showSettings)); }, [showSettings]);
   useEffect(() => { localStorage.setItem('antigravity-show-account-info', JSON.stringify(showAccountInfo)); }, [showAccountInfo]);
   useEffect(() => { localStorage.setItem('antigravity-show-logs', JSON.stringify(showLogs)); }, [showLogs]);
-  useEffect(() => { localStorage.setItem('antigravity-show-agent-hub', JSON.stringify(showAgentHub)); }, [showAgentHub]);
-  useEffect(() => { localStorage.setItem('antigravity-show-connect', JSON.stringify(showConnect)); }, [showConnect]);
-  useEffect(() => { localStorage.setItem('antigravity-show-orchestrator', JSON.stringify(showOrchestrator)); }, [showOrchestrator]);
   useEffect(() => { localStorage.setItem('antigravity-show-analytics', JSON.stringify(showAnalytics)); }, [showAnalytics]);
 
   // Persist currentConvId and restore on mount
@@ -230,9 +223,6 @@ export default function Home() {
     setShowAccountInfo(false);
     setShowSettings(false);
     setShowLogs(false);
-    setShowAgentHub(false);
-    setShowConnect(false);
-    setShowOrchestrator(false);
     setShowSourceControl(false);
     setShowResources(false);
     setShowMcp(false);
@@ -241,43 +231,50 @@ export default function Home() {
     setShowRepoInfo(false);
   }, []);
 
-  // === Sidebar: click workspace → show conversation list ===
-  const handleSelectWorkspace = useCallback((wsName: string) => {
-    setActiveWorkspace(wsName);
-    resetPanels();
-    selectConversation(null);
-  }, [selectConversation, resetPanels]);
-
-  // === Sidebar or ConversationList: click conversation → open chat ===
+  // === Sidebar or History: click conversation → open chat ===
   const handleSelectConversation = useCallback((convId: string | null, wsName: string) => {
     setActiveWorkspace(wsName);
     resetPanels();
     selectConversation(convId);
   }, [selectConversation, resetPanels]);
 
-  // === ConversationList: click conversation (workspace already set) ===
-  const handleConvListSelect = useCallback((convId: string) => {
-    resetPanels();
-    selectConversation(convId);
-  }, [selectConversation, resetPanels]);
-
-  // === New Chat from ConversationList — show ChatView in new chat mode ===
+  // === New Chat (from ChatView) — show ChatView in new chat mode ===
   const handleNewChat = useCallback(() => {
     selectConversation(null);
     resetPanels();
+    setNewChatWorkspaceUri(null);
     setNewChatMode(true);
   }, [selectConversation, resetPanels]);
 
-  // === Start conversation from sidebar (new chat button) ===
-  const handleStartConversation = useCallback(() => {
+  // === New Conversation (top action) — fresh chat against the hub, no project context ===
+  const handleNewConversation = useCallback(() => {
     selectConversation(null);
     resetPanels();
-    if (activeWorkspace !== null) {
-      setNewChatMode(true);
-    } else {
-      setActiveWorkspace(null);
-    }
-  }, [selectConversation, activeWorkspace, resetPanels]);
+    setActiveWorkspace(null);
+    setHistoryProjectId(null);
+    setNewChatWorkspaceUri(null);
+    setNewChatMode(true);
+  }, [selectConversation, resetPanels]);
+
+  // === New Project created — open it and start a fresh chat there ===
+  const handleProjectCreated = useCallback((name: string) => {
+    selectConversation(null);
+    resetPanels();
+    setHistoryProjectId(null);
+    setActiveWorkspace(name);
+    setNewChatWorkspaceUri(null);
+    setNewChatMode(true);
+  }, [selectConversation, resetPanels]);
+
+  // === New conversation in an existing project — scope it to the project folder ===
+  const handleNewProjectConversation = useCallback((project: Project) => {
+    selectConversation(null);
+    resetPanels();
+    setHistoryProjectId(null);
+    setActiveWorkspace(project.name);
+    setNewChatWorkspaceUri(project.folderUri || null);
+    setNewChatMode(true);
+  }, [selectConversation, resetPanels]);
 
   // === Show account info in main panel ===
   const handleShowAccountInfo = useCallback(() => {
@@ -301,30 +298,6 @@ export default function Home() {
     resetPanels();
     setActiveWorkspace(null);
     setShowLogs(true);
-  }, [selectConversation, resetPanels]);
-
-  // === Show Agent Hub ===
-  const handleShowAgentHub = useCallback(() => {
-    selectConversation(null);
-    resetPanels();
-    setActiveWorkspace(null);
-    setShowAgentHub(true);
-  }, [selectConversation, resetPanels]);
-
-  // === Show Orchestrator ===
-  const handleShowOrchestrator = useCallback(() => {
-    selectConversation(null);
-    resetPanels();
-    setActiveWorkspace(null);
-    setShowOrchestrator(true);
-  }, [selectConversation, resetPanels]);
-
-  // === Show Connect ===
-  const handleShowConnect = useCallback(() => {
-    selectConversation(null);
-    resetPanels();
-    setActiveWorkspace(null);
-    setShowConnect(true);
   }, [selectConversation, resetPanels]);
 
   // === Show Source Control / IDE ===
@@ -374,10 +347,19 @@ export default function Home() {
     setShowRepoInfo(true);
   }, [selectConversation, resetPanels]);
 
-  // === Go Home — reset all navigation state to welcome screen ===
+  // === Show Conversation History (default main view), optionally filtered to a project ===
+  const handleShowHistory = useCallback((projectId: string | null = null) => {
+    selectConversation(null);
+    resetPanels();
+    setActiveWorkspace(null);
+    setHistoryProjectId(projectId);
+  }, [selectConversation, resetPanels]);
+
+  // === Go Home — reset to the default Conversation History view ===
   const handleGoHome = useCallback(() => {
     selectConversation(null);
     setActiveWorkspace(null);
+    setHistoryProjectId(null);
     resetPanels();
   }, [selectConversation, resetPanels]);
 
@@ -387,16 +369,11 @@ export default function Home() {
     selectConversation(cascadeId);
   }, [selectConversation]);
 
-  // Bidirectional sync: bumped when any component creates/changes workspaces
-  const handleWorkspaceCreated = useCallback(() => {
-    setWsVersion(v => v + 1);
-  }, []);
-
   // Called when a conversation is deleted from the sidebar.
   // Navigates away if the deleted conversation is currently open.
-  // No need to bump wsVersion — app-sidebar's loadAll() already re-fetches.
-  const handleConvDeleted = useCallback((_convId: string, _wsName: string) => {
-    if (currentConvId === _convId) {
+  // The sidebar's loadIndex() already re-fetches, so no wsVersion bump needed.
+  const handleConvDeleted = useCallback((convId: string) => {
+    if (currentConvId === convId) {
       selectConversation(null);
       setNewChatMode(false);
     }
@@ -451,7 +428,7 @@ export default function Home() {
       // New conversation
       if (mod && e.key === 'n') {
         e.preventDefault();
-        handleStartConversation();
+        handleNewConversation();
       }
       // Export
       if (mod && e.shiftKey && e.key === 'E') {
@@ -471,7 +448,7 @@ export default function Home() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [detailOpen, navigateStep, toggleBookmark, handleStartConversation, handleExport]);
+  }, [detailOpen, navigateStep, toggleBookmark, handleNewConversation, handleExport]);
 
   // Refresh conversation handler — re-selects the same conversation to force re-fetch
   useEffect(() => {
@@ -491,10 +468,11 @@ export default function Home() {
   const currentConvInfo = currentConvId ? conversations[currentConvId] : null;
 
   // === Determine what to show in main panel ===
-  // When LS not detected, force welcome/detection screen regardless of stored state
+  // When LS not detected, force the detection screen regardless of stored state.
+  const anyOverlay = showAccountInfo || showSettings || showLogs || showSourceControl || showResources || showMcp || showWorkflows || showMemories || showRepoInfo;
   const showChat = detected && (currentConvId !== null || newChatMode);
-  const showConversationList = detected && !showChat && !showAccountInfo && !showSettings && !showLogs && !showAgentHub && !showConnect && !showOrchestrator && !showSourceControl && !showResources && !showMcp && !showWorkflows && !showMemories && !showRepoInfo && activeWorkspace !== null;
-  const showWelcome = !detected || (!showChat && !showConversationList && !showAccountInfo && !showSettings && !showLogs && !showAgentHub && !showConnect && !showOrchestrator && !showSourceControl && !showResources && !showMcp && !showWorkflows && !showMemories && !showRepoInfo);
+  // Conversation History is the default main view whenever nothing else is active.
+  const showHistoryView = detected && !showChat && !anyOverlay;
 
   return (
     <AuthGate>
@@ -504,26 +482,23 @@ export default function Home() {
           currentConvId={currentConvId}
           conversationsVersion={conversationsVersion}
           detected={detected}
-          activeWorkspace={activeWorkspace}
           workspaceResources={workspaceResources}
-          onSelectWorkspace={handleSelectWorkspace}
           onSelectConversation={handleSelectConversation}
+          onNewConversation={handleNewConversation}
+          onProjectCreated={handleProjectCreated}
+          onNewProjectConversation={handleNewProjectConversation}
           onShowAccountInfo={handleShowAccountInfo}
           onShowSettings={handleShowSettings}
           onShowLogs={handleShowLogs}
-          onShowAgentHub={handleShowAgentHub}
-          onShowOrchestrator={handleShowOrchestrator}
-          onShowConnect={handleShowConnect}
           onShowSourceControl={handleShowSourceControl}
           onShowResources={handleShowResources}
           onShowMcp={handleShowMcp}
           onShowWorkflows={handleShowWorkflows}
           onShowMemories={handleShowMemories}
           onShowRepoInfo={handleShowRepoInfo}
+          onShowHistory={handleShowHistory}
           onGoHome={handleGoHome}
-          onWorkspaceCreated={handleWorkspaceCreated}
           onConvDeleted={handleConvDeleted}
-          wsVersion={wsVersion}
         />
 
         {/* Main content */}
@@ -624,7 +599,7 @@ export default function Home() {
           )}
 
           {/* === Main panel content === */}
-          {showWelcome && !detected && (
+          {!detected && (
             <div className="flex-1 flex items-center justify-center">
               {swapping ? (
                 <div className="text-center space-y-4 max-w-sm">
@@ -676,20 +651,6 @@ export default function Home() {
             </div>
           )}
 
-          {showWelcome && detected && !activeWorkspace && (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center space-y-4">
-                <div className="flex items-center justify-center gap-3">
-                  <FolderOpen className="w-8 h-8 text-muted-foreground/50" />
-                  <h2 className="text-xl font-semibold text-foreground/80">No Workspace Selected</h2>
-                </div>
-                <p className="text-sm text-muted-foreground max-w-md">
-                  Select a workspace from the sidebar to view conversations, or start a new one.
-                </p>
-              </div>
-            </div>
-          )}
-
           {detected && showAccountInfo && <AccountInfoView />}
 
           {detected && showSettings && <SettingsView />}
@@ -697,27 +658,6 @@ export default function Home() {
           {/* Always mounted — WS stays alive, events accumulate in background */}
           <div className={detected && showLogs ? 'flex flex-col flex-1 min-h-0 overflow-hidden' : 'hidden'}>
             <AgentLogsView />
-          </div>
-
-          {/* Agent Hub panel */}
-          <div className={detected && showAgentHub ? 'flex flex-col flex-1 min-h-0 overflow-hidden' : 'hidden'}>
-            <AgentHubView />
-          </div>
-
-          {/* Connect panel */}
-          {detected && showConnect && (
-            <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-              <div className="flex items-center px-4 py-2 border-b border-border/30 shrink-0">
-                <Cable className="h-3.5 w-3.5 mr-2 text-muted-foreground/60" />
-                <span className="text-xs font-semibold text-foreground/80">Connect</span>
-              </div>
-              <AgentConnectPanel />
-            </div>
-          )}
-
-          {/* Orchestrator — always mounted so chat state persists across tab switches */}
-          <div className={detected && showOrchestrator ? 'flex flex-col flex-1 min-h-0 overflow-hidden' : 'hidden'}>
-            <OrchestratorView />
           </div>
 
           {/* Source Control / IDE panel */}
@@ -777,12 +717,13 @@ export default function Home() {
             </div>
           )}
 
-          {showConversationList && (
-            <ConversationList
-              workspaceName={activeWorkspace!}
-              wsVersion={wsVersion}
-              onSelectConversation={handleConvListSelect}
-              onNewChat={handleNewChat}
+          {/* Conversation History — default main view; grouped by project, searchable */}
+          {showHistoryView && (
+            <ConversationHistoryView
+              currentConvId={currentConvId}
+              version={conversationsVersion}
+              onSelectConversation={handleSelectConversation}
+              initialProjectId={historyProjectId}
             />
           )}
 
@@ -796,6 +737,7 @@ export default function Home() {
                 onLoadOlder={loadOlder}
                 currentConvId={currentConvId}
                 currentWorkspace={activeWorkspace}
+                newChatWorkspaceUri={newChatWorkspaceUri}
                 wsVersion={wsVersion}
                 cascadeStatus={cascadeStatus ?? undefined}
                 onCascadeCreated={handleCascadeCreated}

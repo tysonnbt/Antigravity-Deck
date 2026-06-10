@@ -15,11 +15,13 @@ import { CodeChangeViewer } from './code-change-viewer';
 interface ProcessingGroupProps {
     steps: { step: Step; originalIndex: number }[];
     cascadeId?: string | null;
-    totalStepCount?: number;
+    /** Highest step index (same indexing space as originalIndex) that reached a
+     *  terminal status — used to detect stale WAITING steps. */
+    lastTerminalIndex?: number;
     onStepAccepted?: () => void;
 }
 
-export const ProcessingGroup = memo(function ProcessingGroup({ steps: groupSteps, cascadeId, totalStepCount = 0, onStepAccepted }: ProcessingGroupProps) {
+export const ProcessingGroup = memo(function ProcessingGroup({ steps: groupSteps, cascadeId, lastTerminalIndex = -1, onStepAccepted }: ProcessingGroupProps) {
     const [expanded, setExpanded] = useState(false);
 
     // Separate WAITING steps that should be shown prominently
@@ -31,8 +33,10 @@ export const ProcessingGroup = memo(function ProcessingGroup({ steps: groupSteps
             // Handle both string status (JSON) and integer status (binary-decoded cache)
             const s = item.step.status as string | number;
             const isWaiting = s === 'CORTEX_STEP_STATUS_WAITING' || s === 9;
-            // If WAITING but there are steps AFTER it in the entire conversation, it's already processed
-            const isStale = isWaiting && totalStepCount > 0 && item.originalIndex < totalStepCount - 1;
+            // A WAITING step is live unless a LATER step already reached a terminal
+            // status. Queued PENDING steps behind a gate must NOT hide it — permission
+            // gates often have follow-up tool steps queued while the gate blocks.
+            const isStale = isWaiting && lastTerminalIndex > item.originalIndex;
             if (isWaiting && !isStale) {
                 waiting.push(item);
             } else if (
@@ -45,7 +49,7 @@ export const ProcessingGroup = memo(function ProcessingGroup({ steps: groupSteps
             }
         }
         return { waitingSteps: waiting, codeAckSteps: codeAck, normalSteps: normal };
-    }, [groupSteps, totalStepCount]);
+    }, [groupSteps, lastTerminalIndex]);
 
     const summary = useMemo(() => {
         const counts: Record<string, number> = {};

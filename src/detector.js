@@ -1,4 +1,16 @@
-// === Language Server Auto-Detection ===
+// === Language Server Auto-Detection (Antigravity 2.0.11 "hub" model) ===
+//
+// Antigravity 2.0.11 no longer spawns one language_server per workspace folder.
+// It runs a SINGLE standalone "hub" language server:
+//   language_server.exe --standalone --subclient_type hub ... --csrf_token <uuid>
+// with NO --workspace_id. Workspaces are tracked on the hub via AddTrackedWorkspace
+// and listed by GetWorkspaceInfos (workspace_infos[].workspace_uri). Cascades are
+// global (GetAllCascadeTrajectories returns all, each tagged with its workspace URI).
+//
+// We keep the rest of the app unchanged by modelling each tracked workspace as a
+// "virtual" LS instance that SHARES the hub's connection (pid/port/csrf/useTls) but
+// carries its own workspaceName + workspaceFolderUri. getInstanceByName / lsInstances
+// keep their old shape and contract — only the way we POPULATE them changed.
 const { exec } = require('child_process');
 const http = require('http');
 const https = require('https');
@@ -42,15 +54,6 @@ function connectPost(url, headers, body, timeoutMs = 3000) {
         req.write(body);
         req.end();
     });
-}
-
-// Lazy-load to avoid circular dependency (headless-ls requires config which is loaded here)
-let _isHeadlessPid = null;
-function isHeadlessPid(pid) {
-    if (!_isHeadlessPid) {
-        try { _isHeadlessPid = require('./headless-ls').isHeadlessPid; } catch { return false; }
-    }
-    return _isHeadlessPid(pid);
 }
 
 // Auto-detect Language Server process (macOS/Linux/Windows)
@@ -97,6 +100,9 @@ async function detectLanguageServers() {
 
             const instances = [];
 
+            // Antigravity 2.0.11 launches the hub with double-dash space-separated
+            // flags: "--csrf_token <uuid>" (NOT single-dash or "=" form). Keep this
+            // regex in sync with the real process command line.
             if (platform === 'win32') {
                 const blocks = stdout.split(/\r?\n\r?\n/);
                 for (const block of blocks) {
@@ -128,9 +134,9 @@ async function detectLanguageServers() {
                 });
             }
 
-            console.log(`[*] Found ${instances.length} language server instance(s)`);
+            console.log(`[*] Found ${instances.length} language server process(es)`);
             instances.forEach(inst => {
-                console.log(`    PID: ${inst.pid}, CSRF: ${inst.csrfToken.substring(0, 8)}..., workspace: ${inst.workspaceId || 'none'}`);
+                console.log(`    PID: ${inst.pid}, CSRF: ${inst.csrfToken.substring(0, 8)}..., workspace: ${inst.workspaceId || 'none (hub)'}`);
             });
             resolve(instances);
         }
@@ -216,138 +222,157 @@ async function findApiPort(ports, csrfToken) {
     return null;
 }
 
-// Helper: get workspace name + category + folderUri from LS instance via GetWorkspaceInfos API
-async function getWorkspaceInfo(port, csrfToken, useTls, workspaceId) {
-    try {
-        const protocol = useTls ? 'https' : 'http';
-        const host = useTls ? '127.0.0.1' : 'localhost';
-        const headers = { 'Content-Type': 'application/json', 'Connect-Protocol-Version': '1', 'X-Codeium-Csrf-Token': csrfToken };
-        const res = await connectPost(`${protocol}://${host}:${port}/exa.language_server_pb.LanguageServerService/GetWorkspaceInfos`, headers, '{}', 5000);
-        if (!res.ok) return { name: 'unknown', category: 'workspace', folderUri: null };
-        const data = await res.json();
-        const uris = (data.workspaceInfos || []).map(w => w.workspaceUri);
-        if (uris.length > 0) {
-            const uri = uris[0];
-            const decoded = decodeURIComponent(uri);
-            const parts = decoded.replace(/\/$/, '').split('/');
-            const name = parts[parts.length - 1] || 'unknown';
-            const isPlayground = decoded.includes('antigravity/playground') || decoded.includes('ag_skills');
-            return { name, category: isPlayground ? 'playground' : 'workspace', folderUri: uri };
-        }
-    } catch { }
+// === Hub state & virtual workspace instances ===
 
-    // Fallback: derive URI from workspaceId process arg
-    // Windows: "file_c_3A_Users_johndoe_Projects_MyProject" → "file:///c:/Users/johndoe/Projects/MyProject"
-    // macOS:   "file__Users_johndoe_Projects_MyProject"     → "file:///Users/johndoe/Projects/MyProject"
-    if (workspaceId) {
-        let decoded;
-        if (/_3A_/.test(workspaceId)) {
-            // Windows-style: has drive letter encoding
-            decoded = workspaceId
-                .replace(/^file_/, 'file:///')
-                .replace(/_3A_/, ':/')
-                .replace(/_/g, '/');
-        } else {
-            // macOS/Linux-style: no drive letter
-            decoded = workspaceId
-                .replace(/^file_/, 'file://')
-                .replace(/_/g, '/');
-        }
-        const parts = decoded.replace(/\/$/, '').split('/');
-        const name = parts[parts.length - 1] || 'unknown';
-        const isPlayground = decoded.includes('antigravity/playground') || decoded.includes('ag_skills');
-        return { name, category: isPlayground ? 'playground' : 'workspace', folderUri: decoded };
-    }
+// The single hub connection: { pid, csrfToken, port, useTls }. null when no hub.
+let hubInstance = null;
+// Guard so init() and rescanNow() never mutate hub state concurrently.
+let scanInProgress = false;
 
-    return { name: 'unknown', category: 'workspace', folderUri: null };
+// Derive a workspace display name + category from a file:// workspace URI.
+function deriveWorkspaceFromUri(uri) {
+    const decoded = decodeURIComponent(uri || '');
+    const parts = decoded.replace(/\/+$/, '').split('/');
+    const name = parts[parts.length - 1] || 'workspace';
+    const isPlayground = decoded.includes('antigravity/playground') || decoded.includes('ag_skills');
+    return { name, category: isPlayground ? 'playground' : 'workspace' };
 }
 
-// Initialize: detect ALL LS instances, resolve ports, connect to first one
-async function init(onReady) {
-    console.log(`[*] Detecting Language Server on ${platform}...`);
-    const instances = await detectLanguageServers();
+// Build a virtual LS instance for a workspace URI, backed by the hub's connection.
+// uri === null produces an untagged hub instance (used when no workspace is selected).
+function virtualInstance(hub, uri, active = false) {
+    const { name, category } = uri
+        ? deriveWorkspaceFromUri(uri)
+        : { name: `Hub-${hub.pid}`, category: 'workspace' };
+    return {
+        pid: hub.pid,
+        csrfToken: hub.csrfToken,
+        workspaceId: null,
+        workspaceName: name,
+        workspaceFolderUri: uri || `detached://${hub.pid}`,
+        category,
+        port: hub.port,
+        useTls: hub.useTls,
+        isHub: true,
+        active,
+    };
+}
 
-    if (!instances.length) {
-        console.log('[!] No language server instances found');
-        if (onReady) onReady();
-        return;
-    }
-
-    // Resolve ports for ALL instances and store them (dedup by workspaceFolderUri)
-    lsInstances.length = 0;
-    const seenFolderUris = new Set();
-    for (const inst of instances) {
-        const ports = await detectPorts(inst.pid);
-        if (!ports.length) {
-            console.log(`[!] PID ${inst.pid}: no listening ports found`);
-            continue;
-        }
-        console.log(`[~] PID ${inst.pid}: found ${ports.length} candidate port(s): ${ports.join(', ')}`);
-
-        const result = await findApiPort(ports, inst.csrfToken);
-        if (result) {
-            const { name, category, folderUri } = await getWorkspaceInfo(result.port, inst.csrfToken, result.useTls, inst.workspaceId);
-            // Allow instances without workspace folder — use fallback name
-            // (macOS Antigravity may not expose workspace via process args or API)
-            // Skip duplicate folder URIs (e.g. two LS processes for same workspace)
-            if (seenFolderUris.has(folderUri)) {
-                console.log(`[~] Skipping duplicate workspace: ${name} (PID: ${inst.pid}, same folder as existing)`);
-                continue;
-            }
-            const finalName = name || `LS-${inst.pid}`;
-            const finalUri = folderUri || `detached://${inst.pid}`;
-            if (folderUri) seenFolderUris.add(folderUri);
-            lsInstances.push({
-                pid: inst.pid,
-                csrfToken: inst.csrfToken,
-                workspaceId: inst.workspaceId,
-                workspaceName: finalName,
-                workspaceFolderUri: finalUri,
-                category: category || 'workspace',
-                port: result.port,
-                useTls: result.useTls,
-                active: false
-            });
-        }
-    }
-
-    if (lsInstances.length === 0) {
-        console.log('[!] Could not find working API port on any instance');
-        if (onReady) onReady();
-        return;
-    }
-
-    // Activate first instance
-    switchToInstance(0);
-    lastDetectedState = true;
-    // Broadcast detection status to all connected clients (they may have connected before init finished)
+// Query the hub for the list of currently tracked workspace URIs (GetWorkspaceInfos).
+async function getTrackedWorkspaceUris(hub) {
     try {
-        const { broadcastAll } = require('./ws');
-        broadcastAll({ type: 'status', detected: true, port: lsInstances[0]?.port || null });
-    } catch { }
+        const protocol = hub.useTls ? 'https' : 'http';
+        const host = hub.useTls ? '127.0.0.1' : 'localhost';
+        const headers = { 'Content-Type': 'application/json', 'Connect-Protocol-Version': '1', 'X-Codeium-Csrf-Token': hub.csrfToken };
+        const url = `${protocol}://${host}:${hub.port}/exa.language_server_pb.LanguageServerService/GetWorkspaceInfos`;
+        const res = await connectPost(url, headers, '{}', 5000);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.workspaceInfos || []).map(w => w.workspaceUri).filter(Boolean);
+    } catch {
+        return [];
+    }
+}
+
+// Locate the hub process among detected LS processes and resolve its API port.
+async function locateHub() {
+    const procs = await detectLanguageServers();
+    for (const proc of procs) {
+        const ports = await detectPorts(proc.pid);
+        if (!ports.length) continue;
+        const result = await findApiPort(ports, proc.csrfToken);
+        if (result) {
+            return { pid: proc.pid, csrfToken: proc.csrfToken, port: result.port, useTls: result.useTls };
+        }
+    }
+    return null;
+}
+
+// Rebuild lsInstances (virtual workspaces) from a list of tracked workspace URIs.
+// Preserves the previously-active workspace by name when possible.
+function rebuildInstances(hub, uris) {
+    const prevActiveName = (lsInstances.find(i => i.active) || {}).workspaceName;
+    // Dedup URIs case-insensitively (hub may report duplicates)
+    const seen = new Set();
+    const unique = [];
+    for (const uri of uris) {
+        const key = decodeURIComponent(uri).toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        unique.push(uri);
+    }
+    lsInstances.length = 0;
+    for (const uri of unique) lsInstances.push(virtualInstance(hub, uri, false));
+
+    // Restore active selection (or default to the first workspace)
+    let activeIdx = prevActiveName
+        ? lsInstances.findIndex(i => i.workspaceName === prevActiveName)
+        : -1;
+    if (activeIdx < 0 && lsInstances.length > 0) activeIdx = 0;
+    if (activeIdx >= 0) lsInstances[activeIdx].active = true;
+}
+
+function setHub(hub) {
+    hubInstance = hub;
+    lsConfig.port = hub.port;
+    lsConfig.csrfToken = hub.csrfToken;
+    lsConfig.useTls = hub.useTls;
+    lsConfig.detected = true;
+}
+
+function clearHub() {
+    hubInstance = null;
+    lsInstances.length = 0;
+    lsConfig.port = null;
+    lsConfig.csrfToken = null;
+    lsConfig.detected = false;
+}
+
+function getHub() { return hubInstance; }
+
+// Initialize: detect the hub, resolve its port, and enumerate tracked workspaces.
+async function init(onReady) {
+    console.log(`[*] Detecting Antigravity language server (hub model) on ${platform}...`);
+    scanInProgress = true;
+    try {
+        const hub = await locateHub();
+        if (hub) {
+            // Populate virtual instances BEFORE publishing the hub, so observers
+            // never see a hub with a half-built workspace list.
+            const uris = await getTrackedWorkspaceUris(hub);
+            rebuildInstances(hub, uris);
+            setHub(hub);
+            console.log(`[✓] Hub on port ${hub.port} (PID: ${hub.pid}) — ${lsInstances.length} tracked workspace(s)`);
+            lastDetectedState = true;
+            // Broadcast detection status (clients may have connected before init finished)
+            try {
+                const { broadcastAll } = require('./ws');
+                broadcastAll({ type: 'status', detected: true, port: hub.port });
+            } catch { }
+        } else {
+            console.log('[!] No language server hub found');
+        }
+    } finally {
+        scanInProgress = false;
+    }
     if (onReady) onReady();
 }
 
-// Switch active connection to a different LS instance
+// Switch active workspace selection (keeps lsConfig pointed at the hub connection).
 function switchToInstance(index) {
     if (index < 0 || index >= lsInstances.length) return false;
-
-    // Deactivate all
     lsInstances.forEach(i => i.active = false);
-
-    // Activate selected
     const inst = lsInstances[index];
     inst.active = true;
     lsConfig.port = inst.port;
     lsConfig.csrfToken = inst.csrfToken;
     lsConfig.detected = true;
     lsConfig.useTls = inst.useTls;
-
-    console.log(`[✓] Switched to: ${inst.workspaceName} (PID: ${inst.pid}, Port: ${inst.port})`);
+    console.log(`[✓] Active workspace: ${inst.workspaceName} (hub PID: ${inst.pid}, Port: ${inst.port})`);
     return true;
 }
 
-// Periodic re-scan for new LS instances (Adaptive)
+// Periodic re-scan for hub presence + tracked-workspace changes (Adaptive)
 const NORMAL_RESCAN_INTERVAL = 10000;
 const FAST_RESCAN_INTERVAL = 2000;
 let rescanTimer = null;
@@ -355,130 +380,130 @@ let lastDetectedState = false; // track detection state transitions
 
 function startAutoRescan() {
     if (rescanTimer) clearTimeout(rescanTimer);
-    rescanTimer = setTimeout(rescanLoop, lsInstances.length === 0 ? FAST_RESCAN_INTERVAL : NORMAL_RESCAN_INTERVAL);
+    rescanTimer = setTimeout(rescanLoop, hubInstance ? NORMAL_RESCAN_INTERVAL : FAST_RESCAN_INTERVAL);
 }
 
 async function rescanLoop() {
     await rescanNow();
-    rescanTimer = setTimeout(rescanLoop, lsInstances.length === 0 ? FAST_RESCAN_INTERVAL : NORMAL_RESCAN_INTERVAL);
+    rescanTimer = setTimeout(rescanLoop, hubInstance ? NORMAL_RESCAN_INTERVAL : FAST_RESCAN_INTERVAL);
 }
 
 async function rescanNow() {
+    if (scanInProgress) return; // don't overlap with init() or another rescan
+    scanInProgress = true;
     try {
-        const instances = await detectLanguageServers();
-        const knownPids = new Set(lsInstances.map(i => i.pid));
-        let changed = false;
+        const hub = await locateHub();
 
-        for (const inst of instances) {
-            if (knownPids.has(inst.pid)) continue; // already known
-            if (isHeadlessPid(inst.pid)) continue; // managed by headless-ls module
-
-            const ports = await detectPorts(inst.pid);
-            if (!ports.length) continue;
-
-            const result = await findApiPort(ports, inst.csrfToken);
-            if (result) {
-                const { name, category, folderUri } = await getWorkspaceInfo(result.port, inst.csrfToken, result.useTls, inst.workspaceId);
-                // Allow instances without workspace folder — use fallback
-                // (macOS Antigravity may not expose workspace via process args or API)
-                const finalName = name || `LS-${inst.pid}`;
-                const finalUri = folderUri || `detached://${inst.pid}`;
-                // Dedup: if same workspaceFolderUri already exists, replace the old one (PID may have changed after restart)
-                const existingIdx = folderUri ? lsInstances.findIndex(i => i.workspaceFolderUri === folderUri && i.pid !== inst.pid) : -1;
-                if (existingIdx >= 0) {
-                    const old = lsInstances[existingIdx];
-                    console.log(`[~] Replacing stale workspace: ${old.workspaceName} (PID: ${old.pid} → ${inst.pid})`);
-                    // Cleanup old instance's cascade state before replacing
-                    const { cleanupByInstance } = require('./cleanup');
-                    cleanupByInstance(old);
-                    const wasActive = old.active;
-                    lsInstances[existingIdx] = {
-                        pid: inst.pid,
-                        csrfToken: inst.csrfToken,
-                        workspaceId: inst.workspaceId,
-                        workspaceName: finalName,
-                        workspaceFolderUri: finalUri,
-                        category: category || 'workspace',
-                        port: result.port,
-                        useTls: result.useTls,
-                        active: wasActive
-                    };
-                    if (wasActive) switchToInstance(existingIdx);
-                    changed = true;
-                } else {
-                    lsInstances.push({
-                        pid: inst.pid,
-                        csrfToken: inst.csrfToken,
-                        workspaceId: inst.workspaceId,
-                        workspaceName: finalName,
-                        workspaceFolderUri: finalUri,
-                        category: category || 'workspace',
-                        port: result.port,
-                        useTls: result.useTls,
-                        active: false
-                    });
-                    changed = true;
-                    console.log(`[+] New workspace detected: ${finalName} (PID: ${inst.pid}, Port: ${result.port})`);
-                }
+        // Hub gone — clear everything and broadcast disconnect
+        if (!hub) {
+            const wasDetected = !!hubInstance;
+            clearHub();
+            if (wasDetected) {
+                try {
+                    const { cleanupAll } = require('./cleanup');
+                    cleanupAll();
+                } catch { }
+                lastDetectedState = false;
+                try {
+                    const { broadcastAll } = require('./ws');
+                    const { isSwapping } = require('./profile-manager');
+                    const msg = { type: 'status', detected: false, port: null };
+                    if (isSwapping()) msg.swapping = true;
+                    broadcastAll(msg);
+                    console.log('[WS] status broadcast: detected=false (hub gone)');
+                } catch { }
             }
+            return;
         }
 
-        // Also remove instances whose PID no longer exists
-        for (let i = lsInstances.length - 1; i >= 0; i--) {
-            if (!instances.find(inst => inst.pid === lsInstances[i].pid)) {
-                const removed = lsInstances[i];
-                // Headless instances handle their own cleanup via child.on('exit')
-                if (removed.headless) continue;
-                console.log(`[-] Workspace gone: ${removed.workspaceName} (PID: ${removed.pid})`);
-                // Cleanup cascade state for this dead instance before removing
-                const { cleanupByInstance } = require('./cleanup');
-                cleanupByInstance(removed);
-                // If this was the active instance, switch to another
-                if (removed.active && lsInstances.length > 1) {
-                    const nextIdx = i === 0 ? 1 : 0;
-                    switchToInstance(nextIdx > i ? nextIdx - 1 : nextIdx);
-                }
-                lsInstances.splice(i, 1);
-                changed = true;
-            }
-        }
+        const hubChanged = !hubInstance ||
+            hubInstance.pid !== hub.pid ||
+            hubInstance.port !== hub.port ||
+            hubInstance.csrfToken !== hub.csrfToken;
 
-        // Notify frontend when workspace list changes
-        if (changed) {
+        // Refresh the tracked-workspace list and rebuild virtual instances.
+        // Compare by URI (globally unique) not display name, then publish the hub.
+        const prevUris = lsInstances.map(i => i.workspaceFolderUri).sort().join('\n');
+        const uris = await getTrackedWorkspaceUris(hub);
+        rebuildInstances(hub, uris);
+        setHub(hub);
+        const newUris = lsInstances.map(i => i.workspaceFolderUri).sort().join('\n');
+
+        if (hubChanged || prevUris !== newUris) {
             try {
                 const { broadcastAll } = require('./ws');
                 broadcastAll({ type: 'conversations_updated' });
             } catch { }
         }
 
-        // Broadcast detection status when state transitions (detected ↔ not detected)
-        const nowDetected = lsInstances.length > 0;
-        if (nowDetected !== lastDetectedState) {
-            lastDetectedState = nowDetected;
+        // Broadcast detection status when state transitions (not detected → detected)
+        if (lastDetectedState !== true) {
+            lastDetectedState = true;
             try {
                 const { broadcastAll } = require('./ws');
-                // If profile swap is in progress, include swapping flag so frontend keeps showing swap UI
-                const { isSwapping } = require('./profile-manager');
-                const msg = { type: 'status', detected: nowDetected, port: lsInstances[0]?.port || null };
-                if (!nowDetected && isSwapping()) msg.swapping = true;
-                broadcastAll(msg);
-                console.log(`[WS] status broadcast: detected=${nowDetected}${msg.swapping ? ' swapping=true' : ''}`);
+                broadcastAll({ type: 'status', detected: true, port: hub.port });
+                console.log('[WS] status broadcast: detected=true (hub up)');
             } catch { }
         }
-    } catch { }
+    } catch { } finally {
+        scanInProgress = false;
+    }
+}
+
+// === Workspace tracking (used by the create/open routes) ===
+
+// Track a workspace folder on the hub (AddTrackedWorkspace) and register it as a
+// virtual instance. Returns the resulting instance, or null if no hub is present.
+async function ensureWorkspaceTracked(folderPath) {
+    if (!hubInstance) return null;
+    const plainPath = folderPath.replace(/\\/g, '/');
+    const { callApiOnInstance } = require('./api');
+    await callApiOnInstance(hubInstance, 'AddTrackedWorkspace', { workspace: plainPath });
+    // Re-read the hub's tracked list so our URI matches the hub's own formatting
+    const uris = await getTrackedWorkspaceUris(hubInstance);
+    rebuildInstances(hubInstance, uris);
+    // Match by URI (globally unique) — basenames collide across different parent dirs
+    const toUri = p => (p.startsWith('/') ? 'file://' + p : 'file:///' + p);
+    const norm = u => decodeURIComponent(u || '').toLowerCase().replace(/\/+$/, '');
+    const want = norm(toUri(plainPath));
+    return lsInstances.find(i => norm(i.workspaceFolderUri) === want) || null;
+}
+
+// Stop tracking a workspace folder on the hub (RemoveTrackedWorkspace).
+async function untrackWorkspace(folderPath) {
+    if (!hubInstance) return false;
+    const plainPath = folderPath.replace(/\\/g, '/');
+    const { callApiOnInstance } = require('./api');
+    try {
+        await callApiOnInstance(hubInstance, 'RemoveTrackedWorkspace', { workspace: plainPath });
+        const uris = await getTrackedWorkspaceUris(hubInstance);
+        rebuildInstances(hubInstance, uris);
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 // --- Instance resolution helpers ---
 
 function getInstanceByName(name) {
     const { lsInstances } = require('./config');
-    return lsInstances.find(i => i.workspaceName.toLowerCase() === name.toLowerCase()) || null;
+    if (!name) return null;
+    return lsInstances.find(i => i.workspaceName.toLowerCase() === String(name).toLowerCase()) || null;
 }
 
 function getFirstActiveInstance() {
     const { lsInstances } = require('./config');
-    return lsInstances.find(i => i.active) || lsInstances[0] || null;
+    const found = lsInstances.find(i => i.active) || lsInstances[0];
+    if (found) return found;
+    // No tracked workspace but the hub is up — return an untagged hub instance so
+    // global calls (models, user status, untargeted cascades) keep working.
+    if (hubInstance) return virtualInstance(hubInstance, null, false);
+    return null;
 }
 
-module.exports = { detectLanguageServers, detectPorts, findApiPort, init, switchToInstance, startAutoRescan, getInstanceByName, getFirstActiveInstance };
-
+module.exports = {
+    detectLanguageServers, detectPorts, findApiPort, init, switchToInstance,
+    startAutoRescan, getInstanceByName, getFirstActiveInstance,
+    getHub, ensureWorkspaceTracked, untrackWorkspace,
+};

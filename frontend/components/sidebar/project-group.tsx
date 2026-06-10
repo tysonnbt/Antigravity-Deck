@@ -1,11 +1,10 @@
 "use client"
 
 import { useState } from 'react'
-import { Trash2, ChevronRight, FolderIcon, MessageSquare, Terminal } from 'lucide-react'
+import { Trash2, ChevronRight, FolderGit2, MessageSquare, Plus } from 'lucide-react'
 import { API_BASE } from '@/lib/config'
 import { authHeaders } from '@/lib/auth'
-import { ResourceBar } from './resource-bar'
-import type { WorkspaceResources } from '@/lib/cascade-api'
+import type { ConvRow } from '@/lib/conversations'
 import {
     Collapsible,
     CollapsibleContent,
@@ -16,7 +15,6 @@ import {
     SidebarMenuAction,
     SidebarMenuButton,
     SidebarMenuItem,
-    SidebarMenuSkeleton,
     SidebarMenuSub,
     SidebarMenuSubButton,
     SidebarMenuSubItem,
@@ -31,56 +29,45 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import type { Workspace } from '@/lib/cascade-api'
 
-const SHOW_LIMIT = 4
+const SHOW_LIMIT = 6
 
-export interface ConvSummary {
-    id: string
-    summary: string
-    stepCount: number
-    lastModifiedTime: string
-}
-
-export interface WorkspaceData {
-    workspace: Workspace
-    conversations: ConvSummary[]
-    loading: boolean
-    expanded: boolean
-}
-
-export function WorkspaceGroup({
-    data,
-    arrayIdx,
-    showAll,
-    currentConvId,
-    showActiveIndicator = true,
-    resources,
-    onToggleExpand,
-    onSelectConv,
-    onToggleShowAll,
-    onDeleted,
-}: {
-    data: WorkspaceData
-    arrayIdx: number
-    showAll: boolean
+interface ProjectGroupProps {
+    name: string
+    /** Total conversation count for the "See all (N)" affordance. */
+    totalCount: number
+    conversations: ConvRow[]
     currentConvId: string | null
-    showActiveIndicator?: boolean
-    resources?: WorkspaceResources
-    onToggleExpand: () => void
+    expanded: boolean
+    onToggle: () => void
     onSelectConv: (convId: string) => void
-    onToggleShowAll: () => void
-    onDeleted?: (convId: string, wsName: string) => void
-}) {
-    const [deleteTarget, setDeleteTarget] = useState<ConvSummary | null>(null)
+    /** Open the full History view filtered to this project. */
+    onSeeAll: () => void
+    /** Start a fresh conversation scoped to this project's folder. */
+    onNewConversation: () => void
+    onDeleted?: (convId: string) => void
+}
 
-    const visibleConvs = showAll ? data.conversations : data.conversations.slice(0, SHOW_LIMIT)
-    const hasMore = !showAll && data.conversations.length > SHOW_LIMIT
+export function ProjectGroup({
+    name,
+    totalCount,
+    conversations,
+    currentConvId,
+    expanded,
+    onToggle,
+    onSelectConv,
+    onSeeAll,
+    onNewConversation,
+    onDeleted,
+}: ProjectGroupProps) {
+    const [deleteTarget, setDeleteTarget] = useState<ConvRow | null>(null)
+
+    const visible = conversations.slice(0, SHOW_LIMIT)
+    const hasMore = totalCount > visible.length
 
     const handleConfirmDelete = async () => {
         if (!deleteTarget) return
         const targetId = deleteTarget.id
-        // Optimistically close the dialog immediately for snappy UX
         setDeleteTarget(null)
         try {
             const res = await fetch(`${API_BASE}/api/cascade/${targetId}`, {
@@ -88,8 +75,7 @@ export function WorkspaceGroup({
                 headers: authHeaders(),
             })
             if (!res.ok) throw new Error(`Delete failed: ${res.status}`)
-            // Notify parent after successful deletion
-            onDeleted?.(targetId, data.workspace.workspaceName)
+            onDeleted?.(targetId)
         } catch (err) {
             console.error('Failed to delete conversation:', err)
         }
@@ -99,22 +85,26 @@ export function WorkspaceGroup({
         <>
             <SidebarMenu>
                 <SidebarMenuItem>
-                    <Collapsible
-                        open={data.expanded}
-                        onOpenChange={onToggleExpand}
-                        className="group/collapsible"
-                    >
+                    <Collapsible open={expanded} onOpenChange={onToggle} className="group/collapsible">
                         <CollapsibleTrigger asChild>
-                            <SidebarMenuButton tooltip={data.workspace.workspaceName} className="text-xs !pr-2">
-                                {data.workspace.headless
-                                    ? <Terminal className="shrink-0 text-emerald-500" />
-                                    : <FolderIcon className="shrink-0" />}
-                                <span className="flex-1 truncate min-w-0">{data.workspace.workspaceName}</span>
-                                {data.workspace.headless && (
-                                    <span className="shrink-0 text-[8px] font-medium text-emerald-500/70 bg-emerald-500/10 px-1 py-0.5 rounded">HL</span>
-                                )}
-                                {resources && <ResourceBar cpuPercent={resources.cpuPercent} memMB={resources.memMB} />}
-                                <span className="ml-auto flex h-4 w-4 shrink-0 items-center justify-center">
+                            <SidebarMenuButton tooltip={name} className="text-xs !pr-2">
+                                <FolderGit2 className="shrink-0" />
+                                <span className="flex-1 truncate min-w-0">{name}</span>
+                                <span
+                                    role="button"
+                                    tabIndex={0}
+                                    aria-label="New conversation in this project"
+                                    title="New conversation in this project"
+                                    onClick={(e) => { e.stopPropagation(); onNewConversation(); }}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onNewConversation(); } }}
+                                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+                                >
+                                    <Plus className="h-3.5 w-3.5" />
+                                </span>
+                                <span className="text-[10px] text-sidebar-foreground/40 tabular-nums shrink-0">
+                                    {totalCount}
+                                </span>
+                                <span className="flex h-4 w-4 shrink-0 items-center justify-center">
                                     <ChevronRight className="h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                                 </span>
                             </SidebarMenuButton>
@@ -122,16 +112,7 @@ export function WorkspaceGroup({
 
                         <CollapsibleContent>
                             <SidebarMenuSub>
-                                {data.loading ? (
-                                    <>
-                                        <SidebarMenuSubItem>
-                                            <SidebarMenuSkeleton showIcon />
-                                        </SidebarMenuSubItem>
-                                        <SidebarMenuSubItem>
-                                            <SidebarMenuSkeleton showIcon />
-                                        </SidebarMenuSubItem>
-                                    </>
-                                ) : data.conversations.length === 0 ? (
+                                {conversations.length === 0 ? (
                                     <SidebarMenuSubItem>
                                         <span className="px-2 py-1 text-[10px] text-sidebar-foreground/40 italic">
                                             No conversations
@@ -139,16 +120,16 @@ export function WorkspaceGroup({
                                     </SidebarMenuSubItem>
                                 ) : (
                                     <>
-                                        {visibleConvs.map(conv => (
+                                        {visible.map(conv => (
                                             <SidebarMenuSubItem key={conv.id} className="group/conv">
                                                 <SidebarMenuSubButton
                                                     isActive={conv.id === currentConvId}
                                                     onClick={() => onSelectConv(conv.id)}
-                                                    title={`${conv.summary}\n${conv.stepCount} steps · ${conv.id}`}
+                                                    title={`${conv.title}\n${conv.stepCount} steps · ${conv.id}`}
                                                     className="text-xs peer pr-8"
                                                 >
                                                     <MessageSquare className="h-3 w-3 shrink-0" />
-                                                    <span className="truncate min-w-0">{conv.summary}</span>
+                                                    <span className="truncate min-w-0">{conv.title}</span>
                                                 </SidebarMenuSubButton>
                                                 <SidebarMenuAction
                                                     className="!top-1/2 !-translate-y-1/2 opacity-100 sm:opacity-0 sm:group-hover/conv:opacity-100 text-sidebar-foreground/30 hover:text-destructive hover:bg-destructive/10"
@@ -165,10 +146,10 @@ export function WorkspaceGroup({
                                         {hasMore && (
                                             <SidebarMenuSubItem>
                                                 <SidebarMenuSubButton
-                                                    onClick={onToggleShowAll}
+                                                    onClick={onSeeAll}
                                                     className="text-sidebar-foreground/50 text-[10px]"
                                                 >
-                                                    {data.conversations.length - SHOW_LIMIT} more…
+                                                    See all ({totalCount})
                                                 </SidebarMenuSubButton>
                                             </SidebarMenuSubItem>
                                         )}
@@ -180,13 +161,12 @@ export function WorkspaceGroup({
                 </SidebarMenuItem>
             </SidebarMenu>
 
-            {/* Delete confirmation dialog */}
             <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>Delete conversation</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Delete &ldquo;{deleteTarget?.summary}&rdquo;? This action cannot be undone.
+                            Delete &ldquo;{deleteTarget?.title}&rdquo;? This action cannot be undone.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

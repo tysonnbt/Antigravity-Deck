@@ -143,13 +143,31 @@ class NotificationService {
     if (this._initialized) return;
     this._initialized = true;
 
-    // Register service worker
+    // Register service worker.
+    // In development (Turbopack/HMR), a caching SW serves stale JS bundles on a *normal* reload,
+    // causing "module factory not available" errors (the cached page.tsx still references modules
+    // removed in newer code). So in dev we do NOT register it, and actively unregister any existing
+    // SW + clear caches so every normal reload gets fresh code.
     if ('serviceWorker' in navigator) {
-      try {
-        this._swRegistration = await navigator.serviceWorker.register('/sw.js');
-        console.log('[Notifications] SW registered:', this._swRegistration.scope);
-      } catch (e) {
-        console.warn('[Notifications] SW registration failed:', e);
+      if (process.env.NODE_ENV === 'development') {
+        try {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map((r) => r.unregister()));
+          if ('caches' in window) {
+            const keys = await caches.keys();
+            await Promise.all(keys.map((k) => caches.delete(k)));
+          }
+          if (regs.length) console.log('[Notifications] Dev mode — unregistered SW + cleared caches');
+        } catch (e) {
+          console.warn('[Notifications] Dev SW cleanup failed:', e);
+        }
+      } else {
+        try {
+          this._swRegistration = await navigator.serviceWorker.register('/sw.js');
+          console.log('[Notifications] SW registered:', this._swRegistration.scope);
+        } catch (e) {
+          console.warn('[Notifications] SW registration failed:', e);
+        }
       }
     }
 

@@ -4,7 +4,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { Step } from '@/lib/types';
 import { extractStepContent, getStepConfig } from '@/lib/step-utils';
 import { cascadeSend, cascadeSubmit, cascadeCancel, cascadeInteract, getWorkspaces, getModels, getAutoAcceptState, setAutoAcceptState, saveMedia, clearConversationCache, fetchWorkflows } from '@/lib/cascade-api';
-import type { Workspace, CascadeModel, MediaItem, WorkflowItem } from '@/lib/cascade-api';
+import type { Workspace, CascadeModel, CascadeModelGroup, MediaItem, WorkflowItem } from '@/lib/cascade-api';
 import { API_BASE } from '@/lib/config';
 import { authHeaders } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,7 @@ import { SourceControlView } from './source-control-view';
 import {
     DropdownMenu,
     DropdownMenuContent,
+    DropdownMenuGroup,
     DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuSeparator,
@@ -34,6 +35,8 @@ interface ChatViewProps {
     onLoadOlder?: () => void;
     currentConvId: string | null;
     currentWorkspace: string | null;
+    /** Folder URI to bind a project-scoped new conversation to (null = global/loose). */
+    newChatWorkspaceUri?: string | null;
     wsVersion: number;
     cascadeStatus?: string;
     onCascadeCreated: (cascadeId: string) => void;
@@ -78,7 +81,7 @@ function generateThumbnail(base64: string, mimeType: string, maxSize = 128): Pro
 }
 
 // === Main Chat View ===
-export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = false, onLoadOlder, currentConvId, currentWorkspace, wsVersion, cascadeStatus, onCascadeCreated, onNewConversation, showTimeline, onSetShowTimeline, showAnalytics, onToggleAnalytics, onExport, onShowSettings }: ChatViewProps) {
+export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = false, onLoadOlder, currentConvId, currentWorkspace, newChatWorkspaceUri, wsVersion, cascadeStatus, onCascadeCreated, onNewConversation, showTimeline, onSetShowTimeline, showAnalytics, onToggleAnalytics, onExport, onShowSettings }: ChatViewProps) {
     const [input, setInput] = useState('');
     const [sending, setSending] = useState(false);
     // activeCascadeId: derived from currentConvId, with local override for new chats
@@ -96,6 +99,7 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
     const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
     const [selectedWs, setSelectedWs] = useState<number | null>(null);
     const [models, setModels] = useState<CascadeModel[]>([]);
+    const [modelGroups, setModelGroups] = useState<CascadeModelGroup[]>([]);
     const [selectedModel, setSelectedModel] = useState<string>('');
     const [showWsPicker, setShowWsPicker] = useState(false);
     const [showModelPicker, setShowModelPicker] = useState(false);
@@ -244,6 +248,7 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
                 if (modelsResp && !modelInitRef.current) {
                     modelInitRef.current = true;
                     setModels(modelsResp.models);
+                    setModelGroups(modelsResp.groups || []);
                     // Use settings default → API default → first model
                     const defaultFromSettings = settingsResp?.defaultModel;
                     const defaultFromApi = modelsResp.defaultModel;
@@ -320,7 +325,7 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
             if (activeCascadeId) {
                 await cascadeSend(activeCascadeId, text, selectedModel || undefined, mediaItems);
             } else {
-                const result = await cascadeSubmit(text, selectedModel || undefined, mediaItems, currentWorkspace || undefined);
+                const result = await cascadeSubmit(text, selectedModel || undefined, mediaItems, currentWorkspace || undefined, newChatWorkspaceUri || undefined);
                 const newId = result.cascadeId;
                 setLocalCascadeId(newId);
                 onCascadeCreated(newId);
@@ -332,7 +337,7 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
         } finally {
             setSending(false);
         }
-    }, [input, sending, activeCascadeId, selectedWs, selectedModel, pendingImages, onCascadeCreated]);
+    }, [input, sending, activeCascadeId, selectedWs, selectedModel, pendingImages, currentWorkspace, newChatWorkspaceUri, onCascadeCreated]);
 
     // Image handling — shared processor for adding files to pending images
     const processImageFile = useCallback((file: File) => {
@@ -492,12 +497,27 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
 
     const groups = useMemo(() => groupSteps(displaySteps), [displaySteps]);
 
+    // Highest step index with a terminal status — a WAITING gate is live unless a
+    // LATER step already completed past it (queued PENDING steps must not hide it).
+    const lastTerminalIndex = useMemo(() => {
+        const TERMINAL = new Set<string | number>([
+            'CORTEX_STEP_STATUS_DONE', 'CORTEX_STEP_STATUS_ERROR',
+            'CORTEX_STEP_STATUS_CANCELED', 'CORTEX_STEP_STATUS_CANCELLED',
+            'CORTEX_STEP_STATUS_BLOCKED', 3, 4, 5, 7,
+        ]);
+        let last = -1;
+        displaySteps.forEach((s, i) => { if (TERMINAL.has(s.status as string | number)) last = i; });
+        return last;
+    }, [displaySteps]);
+
     const isRunning = cascadeStatus === 'CASCADE_RUN_STATUS_RUNNING';
     const isWaiting = cascadeStatus === 'CASCADE_RUN_STATUS_WAITING_FOR_USER';
     const isActive = isRunning || isWaiting;
 
     const selectedWsName = selectedWs !== null && workspaces[selectedWs] ? workspaces[selectedWs].workspaceName : 'No workspace';
     const selectedModelLabel = models.find(m => m.modelId === selectedModel)?.label || 'Default';
+    // Render grouped exactly like the IDE picker; fall back to a single flat section.
+    const modelDisplayGroups: CascadeModelGroup[] = modelGroups.length ? modelGroups : (models.length ? [{ name: '', models }] : []);
 
     return (
         <div className="flex-1 flex flex-col min-h-0">
@@ -595,7 +615,7 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
                                         const { step, originalIndex } = group.steps[0];
                                         return <div key={`img-${gIdx}`} className={animClass}><GeneratedImageStep step={step} originalIndex={originalIndex} /></div>;
                                     }
-                                    return <div key={`p-${gIdx}`} className={animClass}><ProcessingGroup steps={group.steps} cascadeId={activeCascadeId} totalStepCount={displaySteps.length} /></div>;
+                                    return <div key={`p-${gIdx}`} className={animClass}><ProcessingGroup steps={group.steps} cascadeId={activeCascadeId} lastTerminalIndex={lastTerminalIndex} /></div>;
                                 })}
                                 {isRunning && <StreamingIndicator />}
                                 <div ref={bottomRef} className="h-4" />
@@ -644,24 +664,34 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="start" className="w-72">
-                                        {models.map(m => (
-                                            <DropdownMenuItem
-                                                key={m.modelId}
-                                                onClick={() => setSelectedModel(m.modelId)}
-                                                className={cn('cursor-pointer flex items-center justify-between gap-2',
-                                                    m.modelId === selectedModel && 'text-primary')}
-                                            >
-                                                <div className="flex items-center gap-2 min-w-0">
-                                                    <span className="truncate">{m.label}</span>
-                                                    {m.isRecommended && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 shrink-0"><Star className="w-2.5 h-2.5 text-amber-400" /></Badge>}
-                                                </div>
-                                                <div className="flex items-center gap-1.5 shrink-0">
-                                                    {m.supportsImages && <span className="text-[9px]"><ImageIcon className="h-3 w-3" /></span>}
-                                                    <div className="w-12 h-1.5 rounded-full bg-muted overflow-hidden">
-                                                        <div className="h-full rounded-full bg-emerald-500/70" style={{ width: `${Math.round(m.quota * 100)}%` }} />
-                                                    </div>
-                                                </div>
-                                            </DropdownMenuItem>
+                                        {modelDisplayGroups.map((group, gi) => (
+                                            <DropdownMenuGroup key={group.name || `g${gi}`}>
+                                                {/* IDE shows a flat list when there's a single group; only label real sub-groups. */}
+                                                {modelDisplayGroups.length > 1 && group.name && (
+                                                    <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground/70 py-1">{group.name}</DropdownMenuLabel>
+                                                )}
+                                                {group.models.map(m => (
+                                                    <DropdownMenuItem
+                                                        key={m.modelId || m.label}
+                                                        onClick={() => setSelectedModel(m.modelId)}
+                                                        className={cn('cursor-pointer flex items-center justify-between gap-2',
+                                                            m.modelId === selectedModel && 'text-primary')}
+                                                    >
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                            <span className="truncate">{m.label}</span>
+                                                            {m.tagTitle && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 shrink-0" title={m.tagDescription || undefined}>{m.tagTitle}</Badge>}
+                                                            {m.isRecommended && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 shrink-0"><Star className="w-2.5 h-2.5 text-amber-400" /></Badge>}
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5 shrink-0">
+                                                            {m.supportsImages && <span className="text-[9px]"><ImageIcon className="h-3 w-3" /></span>}
+                                                            <div className="w-12 h-1.5 rounded-full bg-muted overflow-hidden">
+                                                                <div className="h-full rounded-full bg-emerald-500/70" style={{ width: `${Math.round(m.quota * 100)}%` }} />
+                                                            </div>
+                                                        </div>
+                                                    </DropdownMenuItem>
+                                                ))}
+                                                {gi < modelDisplayGroups.length - 1 && <DropdownMenuSeparator />}
+                                            </DropdownMenuGroup>
                                         ))}
                                     </DropdownMenuContent>
                                 </DropdownMenu>

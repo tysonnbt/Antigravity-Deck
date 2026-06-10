@@ -282,6 +282,8 @@ server.listen(PORT, async () => {
   const { startResourceMonitor } = require('./src/resource-monitor');
   startResourceMonitor();
   startAutoRescan();
+  // Subscribe to the hub's Jetbox streams for the FULL conversation history + projects
+  try { require('./src/jetbox').start(); } catch (e) { console.warn('  ⚠️  Jetbox start failed:', e.message); }
 
   // Auto-start Agent Bridge if configured in settings.json
   const { getSettings } = require('./src/config');

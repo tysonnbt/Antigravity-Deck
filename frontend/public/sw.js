@@ -1,7 +1,7 @@
 // === Antigravity Deck — Service Worker ===
 // Handles: PWA install, app shell caching, notification display, notification click
 
-const SW_VERSION = '1.1.0';
+const SW_VERSION = '1.1.1';
 const CACHE_NAME = `ag-deck-${SW_VERSION}`;
 
 // === Install ===
@@ -24,6 +24,10 @@ self.addEventListener('activate', (event) => {
 // === Fetch — stale-while-revalidate for app shell, network-first for API ===
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  // Dev safety: never intercept/cache on localhost. Turbopack/HMR bundles change content without
+  // changing their URL, so serving a cached bundle causes stale "module factory not available"
+  // errors on a normal reload. In dev, let the browser fetch everything fresh.
+  if (self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1') return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 

@@ -129,7 +129,9 @@ async function getStatsUnix(pids) {
 
     return new Promise((resolve) => {
         const pidList = pids.join(',');
-        const cmd = `ps -p ${pidList} -o pid,%cpu,rss --no-headers 2>/dev/null`;
+        // `keyword=` (empty header) suppresses the header row on BOTH BSD ps (macOS)
+        // and GNU ps (Linux). `--no-headers` is GNU-only and errors on macOS.
+        const cmd = `ps -p ${pidList} -o pid=,%cpu=,rss= 2>/dev/null`;
 
         exec(cmd, { timeout: 5000 }, (err, stdout) => {
             const result = new Map();
@@ -289,7 +291,7 @@ async function sampleAll() {
     const workspaces = {};
     for (const [pid, stats] of resourceData) {
         const inst = lsInstances.find(i => String(i.pid) === pid);
-        workspaces[pid] = { ...stats, name: inst?.workspaceName || pid, headless: inst?.headless || false };
+        workspaces[pid] = { ...stats, name: inst?.workspaceName || pid };
     }
 
     history.push({
@@ -313,7 +315,7 @@ function getResourceSnapshot() {
     const workspaces = {};
     for (const [pid, stats] of resourceData) {
         const inst = lsInstances.find(i => String(i.pid) === pid);
-        workspaces[pid] = { ...stats, name: inst?.workspaceName || pid, headless: inst?.headless || false };
+        workspaces[pid] = { ...stats, name: inst?.workspaceName || pid };
     }
 
     return {

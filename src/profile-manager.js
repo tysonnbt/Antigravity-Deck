@@ -7,6 +7,20 @@ const { getSettings, saveSettings } = require('./config');
 
 const PS_PATH = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
 
+// Profile swap is Windows-only: it manipulates %APPDATA%\Antigravity and drives the
+// IDE via PowerShell. On macOS the account data lives in ~/Library/Application Support
+// and PowerShell doesn't exist — runPs() failures are swallowed, so gracefulCloseIde()
+// would wrongly conclude the IDE is closed and swap folders out from under a running
+// IDE. Block every mutating operation explicitly until a native port exists.
+const PROFILE_SWAP_SUPPORTED = process.platform === 'win32';
+
+function assertProfileSwapSupported() {
+    if (PROFILE_SWAP_SUPPORTED) return;
+    const err = new Error('Profile management is currently Windows-only. On macOS/Linux, switch accounts directly inside the Antigravity IDE.');
+    err.code = 'EPLATFORM';
+    throw err;
+}
+
 // 3 folders that hold account-specific data (OAuth, Gemini cache, extensions)
 const SWAP_FOLDERS = [
     { name: 'Antigravity', source: () => path.join(process.env.APPDATA || '', 'Antigravity') },
@@ -240,6 +254,7 @@ function validateProfileName(name) {
 
 // --- Main orchestrator: swap to a target profile ---
 async function swapProfile(targetProfile) {
+    assertProfileSwapSupported();
     if (_swapping) throw new Error('Profile swap already in progress');
     validateProfileName(targetProfile);
 
@@ -295,6 +310,7 @@ function findProfileByEmail(email) {
 
 // --- Save current IDE state as a named profile (copies 3 folders + metadata) ---
 function createProfile(name, metadata = null, { force = false } = {}) {
+    assertProfileSwapSupported();
     validateProfileName(name);
     const dir = path.join(getProfilesDir(), name);
     if (fs.existsSync(dir)) throw new Error(`Profile "${name}" already exists`);
@@ -368,6 +384,7 @@ function deleteProfile(name) {
 
 // --- Start "Add New Account" flow: save current → clear folders → launch fresh IDE ---
 async function startAddAccount() {
+    assertProfileSwapSupported();
     if (_swapping) throw new Error('Profile operation already in progress');
     const currentProfile = getActiveProfile();
     if (!currentProfile) throw new Error('No active profile set. Save your current account first.');
@@ -403,6 +420,7 @@ async function startAddAccount() {
 
 // --- Cancel add account: restore previous profile ---
 async function cancelAddAccount(previousProfile) {
+    assertProfileSwapSupported();
     if (!previousProfile) throw new Error('No previous profile to restore');
     const profilesDir = getProfilesDir();
     const prevDir = path.join(profilesDir, previousProfile);
@@ -438,4 +456,4 @@ async function cancelAddAccount(previousProfile) {
 
 function isSwapping() { return _swapping; }
 
-module.exports = { listProfiles, getActiveProfile, swapProfile, createProfile, deleteProfile, getProfileMetadata, findProfileByEmail, startAddAccount, cancelAddAccount, isSwapping };
+module.exports = { listProfiles, getActiveProfile, swapProfile, createProfile, deleteProfile, getProfileMetadata, findProfileByEmail, startAddAccount, cancelAddAccount, isSwapping, assertProfileSwapSupported };

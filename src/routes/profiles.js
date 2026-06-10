@@ -1,9 +1,12 @@
 // === Profile Routes ===
 // /api/profiles/*
 
-const { listProfiles, getActiveProfile, swapProfile, createProfile, deleteProfile, getProfileMetadata, startAddAccount, cancelAddAccount } = require('../profile-manager');
+const { listProfiles, getActiveProfile, swapProfile, createProfile, deleteProfile, getProfileMetadata, startAddAccount, cancelAddAccount, assertProfileSwapSupported } = require('../profile-manager');
 const { callApi } = require('../api');
 const { getFirstActiveInstance } = require('../detector');
+
+// Profile mutations are Windows-only (EPLATFORM from profile-manager) → 501 Not Implemented
+const errStatus = (e, fallback) => (e.code === 'EPLATFORM' ? 501 : fallback);
 
 module.exports = function setupProfilesRoutes(app) {
     app.get('/api/profiles', (req, res) => {
@@ -27,13 +30,16 @@ module.exports = function setupProfilesRoutes(app) {
             .then(result => res.json(result))
             .catch(e => {
                 const status = e.message.includes('already in progress') ? 409
-                    : e.message.includes('not found') ? 404 : 500;
+                    : e.message.includes('not found') ? 404 : errStatus(e, 500);
                 res.status(status).json({ error: e.message });
             });
     });
 
     // Auto-create default profile from current IDE account (onboarding — only when 0 profiles exist)
     app.post('/api/profiles/auto-onboard', (req, res) => {
+        // Short-circuit before touching the LS API — frontend auto-calls this on
+        // every mount; on macOS/Linux it must get a consistent 501 immediately.
+        try { assertProfileSwapSupported(); } catch (e) { return res.status(501).json({ error: e.message }); }
         const active = getActiveProfile();
         const existing = listProfiles();
         // Run onboard when: no profiles exist OR we're in "adding" state (activeProfile=null but profiles exist)
@@ -54,7 +60,7 @@ module.exports = function setupProfilesRoutes(app) {
             const result = createProfile(autoName, metadata);
             res.json({ ...result, autoName });
         }).catch(e => {
-            res.status(400).json({ error: e.message });
+            res.status(errStatus(e, 400)).json({ error: e.message });
         });
     });
 
@@ -78,7 +84,7 @@ module.exports = function setupProfilesRoutes(app) {
             const result = createProfile(name, metadata, { force: !!force });
             res.json(result);
         }).catch(e => {
-            const status = e.message.includes('already saved as profile') ? 409 : 400;
+            const status = e.message.includes('already saved as profile') ? 409 : errStatus(e, 400);
             res.status(status).json({ error: e.message });
         });
     });
@@ -95,7 +101,7 @@ module.exports = function setupProfilesRoutes(app) {
     app.post('/api/profiles/add-account', (req, res) => {
         startAddAccount()
             .then(result => res.json(result))
-            .catch(e => res.status(500).json({ error: e.message }));
+            .catch(e => res.status(errStatus(e, 500)).json({ error: e.message }));
     });
 
     // Cancel add account — restore previous profile
@@ -104,6 +110,6 @@ module.exports = function setupProfilesRoutes(app) {
         if (!previousProfile) return res.status(400).json({ error: 'previousProfile required' });
         cancelAddAccount(previousProfile)
             .then(result => res.json(result))
-            .catch(e => res.status(500).json({ error: e.message }));
+            .catch(e => res.status(errStatus(e, 500)).json({ error: e.message }));
     });
 };

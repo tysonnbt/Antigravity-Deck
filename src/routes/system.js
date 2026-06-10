@@ -25,11 +25,12 @@ function getParentPid(pid) {
 }
 
 module.exports = function setupSystemRoutes(app) {
-    // Status
+    // Status — hub model (2.0.11): detection = the shared hub LS is up (lsConfig.detected),
+    // independent of how many workspaces are tracked (lsInstances). The hub is usable for
+    // new chats + history even with 0 tracked workspaces.
     app.get('/api/status', (req, res) => {
-        const { lsInstances } = require('../config');
-        const firstInst = lsInstances[0];
-        res.json({ detected: lsInstances.length > 0, port: firstInst?.port || null });
+        const { lsConfig } = require('../config');
+        res.json({ detected: lsConfig.detected, port: lsConfig.port || null });
     });
 
     // Launch IDE — fire-and-forget, opens the Antigravity IDE application
@@ -130,12 +131,6 @@ module.exports = function setupSystemRoutes(app) {
             // Clear all LS instances since we killed the processes
             const killedCount = lsInstances.length;
             lsInstances.length = 0;
-
-            // Also kill any headless instances
-            try {
-                const { killAllHeadless } = require('../headless-ls');
-                if (killAllHeadless) killAllHeadless();
-            } catch { }
 
             console.log(`[*] Kill IDE: cleared ${killedCount} LS instances`);
             res.json({ killed: true, platform, instancesCleared: killedCount, preciseKill: parentPids.size > 0, pidCount: parentPids.size });

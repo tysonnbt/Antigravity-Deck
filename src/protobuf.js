@@ -109,6 +109,94 @@ const NESTED_FIELD_MAPS = {
     viewFile: { 1: 'absolutePathUri', 2: 'startLine', 3: 'endLine', 4: 'content', 11: 'numLines', 12: 'numBytes' },
 };
 
+// RequestedInteraction oneof (gemini_coder.Step field 56) — member field numbers from
+// exa.cortex_pb.RequestedInteraction. Decoded so accept/auto-accept can answer the member
+// the LS actually expects (see auto-accept.js buildFromRequestedInteraction). Without this,
+// the binary-fallback path is blind to gates like the outside-of-project `permission` one.
+const REQUESTED_INTERACTION_MEMBERS = {
+    2: 'deploy', 3: 'runCommand', 4: 'openBrowserUrl', 5: 'runExtensionCode',
+    7: 'executeBrowserJavascript', 8: 'captureBrowserScreenshot', 9: 'clickBrowserPixel',
+    13: 'browserAction', 14: 'openBrowserSetup', 15: 'confirmBrowserSetup',
+    16: 'sendCommandInput', 17: 'readUrlContent', 18: 'mcp', 19: 'filePermission',
+    20: 'elicitation', 21: 'permission', 22: 'askQuestion', 23: 'approvalInteraction',
+};
+
+// PermissionInteractionSpec { resource=1 { action=1, target=2 }, suggested_persist_pattern=2,
+//                             persist_suggestion_type=3, reason=4 }
+function decodePermissionSpec(buf) {
+    const reader = protobuf.Reader.create(buf);
+    const spec = {};
+    while (reader.pos < reader.len) {
+        try {
+            const tag = reader.uint32();
+            const fn = tag >>> 3;
+            const wt = tag & 7;
+            if (fn === 1 && wt === 2) {
+                const r = protobuf.Reader.create(Buffer.from(reader.bytes()));
+                const resource = {};
+                while (r.pos < r.len) {
+                    const t2 = r.uint32();
+                    const f2 = t2 >>> 3;
+                    const w2 = t2 & 7;
+                    if (f2 === 1 && w2 === 2) resource.action = Buffer.from(r.bytes()).toString('utf-8');
+                    else if (f2 === 2 && w2 === 2) resource.target = Buffer.from(r.bytes()).toString('utf-8');
+                    else r.skipType(w2);
+                }
+                spec.resource = resource;
+            } else if (fn === 2 && wt === 2) {
+                spec.suggestedPersistPattern = Buffer.from(reader.bytes()).toString('utf-8');
+            } else if (fn === 3 && wt === 0) {
+                spec.persistSuggestionType = reader.uint32(); // 0=UNSPECIFIED 1=SUGGESTED 2=BLOCKED
+            } else if (fn === 4 && wt === 2) {
+                spec.reason = Buffer.from(reader.bytes()).toString('utf-8');
+            } else {
+                reader.skipType(wt);
+            }
+        } catch { break; }
+    }
+    return spec;
+}
+
+// FilePermissionInteractionSpec { absolute_path_uri=1, is_directory=2, block_reason=3 }
+function decodeFilePermissionSpec(buf) {
+    const reader = protobuf.Reader.create(buf);
+    const spec = {};
+    while (reader.pos < reader.len) {
+        try {
+            const tag = reader.uint32();
+            const fn = tag >>> 3;
+            const wt = tag & 7;
+            if (fn === 1 && wt === 2) spec.absolutePathUri = Buffer.from(reader.bytes()).toString('utf-8');
+            else if (fn === 2 && wt === 0) spec.isDirectory = reader.uint32() !== 0;
+            else if (fn === 3 && wt === 0) spec.blockReason = reader.uint32();
+            else reader.skipType(wt);
+        } catch { break; }
+    }
+    return spec;
+}
+
+function decodeRequestedInteraction(buf) {
+    const reader = protobuf.Reader.create(buf);
+    const out = {};
+    while (reader.pos < reader.len) {
+        try {
+            const tag = reader.uint32();
+            const fn = tag >>> 3;
+            const wt = tag & 7;
+            const member = REQUESTED_INTERACTION_MEMBERS[fn];
+            if (member && wt === 2) {
+                const bytes = Buffer.from(reader.bytes());
+                if (member === 'permission') out.permission = decodePermissionSpec(bytes);
+                else if (member === 'filePermission') out.filePermission = decodeFilePermissionSpec(bytes);
+                else out[member] = bytes.length ? decodeGenericMessage(bytes, null) : {};
+            } else {
+                reader.skipType(wt);
+            }
+        } catch { break; }
+    }
+    return out;
+}
+
 // Count steps in a binary protobuf response (field 1 = repeated Step)
 function countBinarySteps(buf) {
     const reader = protobuf.Reader.create(buf);
@@ -164,6 +252,11 @@ function decodeStepMessage(buf) {
             } else if (fn === 5 && wt === 2) {
                 const metaBytes = reader.bytes();
                 step.metadata = decodeMetadata(Buffer.from(metaBytes));
+            } else if (fn === 56 && wt === 2) {
+                // requested_interaction — which CascadeUserInteraction member the LS expects
+                const riBytes = reader.bytes();
+                const ri = decodeRequestedInteraction(Buffer.from(riBytes));
+                if (Object.keys(ri).length > 0) step.requestedInteraction = ri;
             } else if (wt === 2 && CONTENT_FIELD_MAP[fn]) {
                 const bytes = reader.bytes();
                 const key = CONTENT_FIELD_MAP[fn];
@@ -308,9 +401,11 @@ module.exports = {
     decodeMetadata,
     decodeTimestamp,
     decodeGenericMessage,
+    decodeRequestedInteraction,
     looksLikeString,
     STEP_TYPE_MAP,
     STEP_STATUS_MAP,
     CONTENT_FIELD_MAP,
     NESTED_FIELD_MAPS,
+    REQUESTED_INTERACTION_MEMBERS,
 };

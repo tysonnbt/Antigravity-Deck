@@ -1,7 +1,7 @@
 // === WebSocket Handling ===
 // Manages WS connections, per-client conversation tracking, and broadcasting.
 
-const { lsInstances } = require('./config');
+const { lsConfig } = require('./config');
 const { getInstanceForCascade } = require('./poller');
 
 const viewers = new Set();
@@ -25,7 +25,10 @@ function setupWebSocket(wss, { ensureCached, stepCache }) {
             }
         }
         viewers.add(ws);
-        ws.send(JSON.stringify({ type: 'status', detected: lsInstances.length > 0, port: lsInstances[0]?.port || null }));
+        // Hub model (2.0.11): detection = the shared hub LS is up (lsConfig.detected),
+        // NOT whether any workspace is tracked (lsInstances is empty until a workspace
+        // is opened/created, but the hub is still usable for new chats + history).
+        ws.send(JSON.stringify({ type: 'status', detected: lsConfig.detected, port: lsConfig.port || null }));
 
         ws.on('message', async (raw) => {
             try {

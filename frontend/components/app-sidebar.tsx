@@ -1,11 +1,12 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react"
-import { getWorkspaces, createWorkspace, createHeadlessWorkspace, getWorkspaceFolders } from "@/lib/cascade-api"
-import type { Workspace, WorkspaceFolder, WorkspaceResources, ResourceSnapshot } from "@/lib/cascade-api"
+import { createWorkspace } from "@/lib/cascade-api"
+import type { ResourceSnapshot } from "@/lib/cascade-api"
+import { loadConversationIndex, groupByProject } from "@/lib/conversations"
+import type { Project, ConvRow } from "@/lib/conversations"
 import { cn } from "@/lib/utils"
 import { useTheme } from "@/lib/theme"
-import { PluginManager } from "./plugin-manager"
 import { API_BASE } from "@/lib/config"
 import { authHeaders } from "@/lib/auth"
 import { Input } from "@/components/ui/input"
@@ -43,10 +44,9 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Settings, User, Plug, Book, Globe, Moon, Sun, Plus, FolderOpen, FolderPlus, EllipsisVertical, Activity, Bot, FolderSync, Loader2, Circle, GitBranch, Terminal, Monitor, Cable, Workflow, Brain } from "lucide-react"
+import { Settings, User, Plug, Book, Globe, Moon, Sun, Plus, FolderPlus, EllipsisVertical, Activity, FolderSync, Loader2, GitBranch, Monitor, Workflow, Brain, History, MessageSquare } from "lucide-react"
 
-import { WorkspaceGroup } from "./sidebar/workspace-group"
-import type { ConvSummary, WorkspaceData } from "./sidebar/workspace-group"
+import { ProjectGroup } from "./sidebar/project-group"
 import { SystemResourceSummary } from "./sidebar/system-resource-summary"
 
 interface AppSidebarProps {
@@ -55,86 +55,83 @@ interface AppSidebarProps {
     /** Whether Antigravity Language Server is detected by backend */
     detected: boolean
     onSelectConversation: (convId: string | null, wsName: string) => void
-    onSelectWorkspace: (wsName: string) => void
+    /** Start a fresh conversation (no project/workspace required). */
+    onNewConversation: () => void
+    /** A new project folder was created — launch straight into a new chat there. */
+    onProjectCreated: (name: string) => void
+    /** Start a fresh conversation scoped to an existing project's folder. */
+    onNewProjectConversation: (project: Project) => void
     onShowAccountInfo: () => void
     onShowSettings: () => void
     onShowLogs: () => void
-    onShowAgentHub: () => void
-    onShowOrchestrator: () => void
-    onShowConnect: () => void
     onShowSourceControl: () => void
     onShowResources: () => void
     onShowMcp: () => void
     onShowWorkflows: () => void
     onShowMemories: () => void
     onShowRepoInfo: () => void
+    /** Open the full Conversation History view, optionally filtered to a project. */
+    onShowHistory: (projectId?: string | null) => void
     onGoHome: () => void
-    activeWorkspace: string | null
     workspaceResources?: ResourceSnapshot | null
-    wsVersion?: number
-    onWorkspaceCreated?: () => void
-    /** Called after a conversation is successfully deleted, with the deleted conv ID */
-    onConvDeleted?: (convId: string, wsName: string) => void
+    /** Called after a conversation is deleted, with the deleted conv ID */
+    onConvDeleted?: (convId: string) => void
 }
+
+const LOOSE_LIMIT = 8
 
 export function AppSidebar({
     currentConvId,
     conversationsVersion,
     detected,
     onSelectConversation,
-    onSelectWorkspace,
+    onNewConversation,
+    onProjectCreated,
+    onNewProjectConversation,
     onShowAccountInfo,
     onShowSettings,
     onShowLogs,
-    onShowAgentHub,
-    onShowOrchestrator,
-    onShowConnect,
     onShowSourceControl,
     onShowResources,
     onShowMcp,
     onShowWorkflows,
     onShowMemories,
     onShowRepoInfo,
+    onShowHistory,
     onGoHome,
-    activeWorkspace,
     workspaceResources,
-    wsVersion,
-    onWorkspaceCreated,
     onConvDeleted,
 }: AppSidebarProps) {
     const { isDark, toggle: toggleTheme } = useTheme()
     const { isMobile } = useSidebar()
 
-    const [wsData, setWsData] = useState<WorkspaceData[]>([])
-    const [folders, setFolders] = useState<WorkspaceFolder[]>([])
+    const [projects, setProjects] = useState<Project[]>([])
+    const [byProject, setByProject] = useState<Map<string, ConvRow[]>>(new Map())
+    const [loose, setLoose] = useState<ConvRow[]>([])
     const [loading, setLoading] = useState(true)
-    const [openingFolder, setOpeningFolder] = useState<string | null>(null)
-    const [newWsName, setNewWsName] = useState("")
+    const [expandedMap, setExpandedMap] = useState<Record<string, boolean>>({})
+
+    const [newName, setNewName] = useState("")
     const [creating, setCreating] = useState(false)
     const [createError, setCreateError] = useState("")
-    const [showPlugins, setShowPlugins] = useState(false)
     const [showCreateDialog, setShowCreateDialog] = useState(false)
-    const [showAllMap, setShowAllMap] = useState<Record<string, boolean>>({})
-    const [headlessMode, setHeadlessMode] = useState(false)
-    const [selectedFolder, setSelectedFolder] = useState<WorkspaceFolder | null>(null)
 
     // User profile state
     const [userProfile, setUserProfile] = useState<{ name: string; tier: string; avatar: string | null } | null>(null)
 
     const hasLoadedRef = useRef(false)
+    const didInitExpandRef = useRef(false)
 
     const nameValidationError = useMemo(() => {
-        const trimmed = newWsName.trim()
+        const trimmed = newName.trim()
         if (!trimmed) return ""
         if (/[/\\:*?"<>|]/.test(trimmed)) return "Invalid characters in name"
         if (trimmed.length > 100) return "Name too long (max 100)"
         const lower = trimmed.toLowerCase()
-        if (wsData.some((d) => d.workspace.workspaceName.toLowerCase() === lower))
-            return "Workspace already active"
-        if (folders.some((f) => f.name.toLowerCase() === lower))
-            return "Folder already exists — open it from Available Workspaces"
+        if (projects.some((p) => p.name.toLowerCase() === lower))
+            return "Project already exists"
         return ""
-    }, [newWsName, wsData, folders])
+    }, [newName, projects])
 
     // Fetch user profile on mount and when connection is established
     const fetchUserProfile = useCallback(() => {
@@ -163,7 +160,6 @@ export function AppSidebar({
     // Re-fetch profile when profile swap happens
     useEffect(() => {
         const handler = () => {
-            // Retry a few times — IDE takes ~5-10s to restart
             const attempts = [5000, 8000, 12000];
             attempts.forEach(delay => setTimeout(() => fetchUserProfile(), delay));
         }
@@ -171,53 +167,20 @@ export function AppSidebar({
         return () => window.removeEventListener('profile-swapped', handler)
     }, [fetchUserProfile])
 
-    const loadAll = useCallback(async () => {
+    const loadIndex = useCallback(async () => {
         try {
-            const wss = await getWorkspaces()
-
-            // Fetch conversations for all workspaces in parallel
-            const conversationsData = await Promise.all(
-                wss.map(async (ws) => {
-                    try {
-                        const res = await fetch(`${API_BASE}/api/workspaces/${encodeURIComponent(ws.workspaceName)}/conversations`, { headers: authHeaders() })
-                        if (!res.ok) return [] as ConvSummary[]
-                        const data = await res.json()
-                        // API returns { trajectorySummaries: { [id]: info, ... } } — not an array
-                        const summaries = data.trajectorySummaries || {}
-                        return Object.entries(summaries).map(([id, info]: [string, any]) => ({
-                            id,
-                            summary: info.summary || 'Untitled',
-                            stepCount: info.stepCount ?? 0,
-                            lastModifiedTime: info.lastModifiedTime ?? '',
-                        })).sort((a, b) => (b.lastModifiedTime).localeCompare(a.lastModifiedTime)) as ConvSummary[]
-                    } catch {
-                        return [] as ConvSummary[]
-                    }
-                })
-            )
-
-            // Build a map keyed by workspace name
-            const convMap = new Map<string, ConvSummary[]>()
-            wss.forEach((ws, i) => convMap.set(ws.workspaceName, conversationsData[i] || []))
-
-            setWsData((prev) => {
-                // Build a map of previous expanded state keyed by workspace index
-                const prevExpandedMap = new Map<string, boolean>(prev.map((d) => [d.workspace.workspaceName, d.expanded]))
-                return wss.map((ws) => ({
-                    workspace: ws,
-                    conversations: convMap.get(ws.workspaceName) || [],
-                    // Preserve user's manual expand/collapse; first workspace defaults to expanded
-                    expanded: prevExpandedMap.has(ws.workspaceName) ? prevExpandedMap.get(ws.workspaceName)! : false,
-                    loading: false,
-                }))
-            })
-
-            try {
-                const { folders: f } = await getWorkspaceFolders()
-                setFolders(f)
-            } catch { }
+            const { projects: projs, rows } = await loadConversationIndex()
+            const { byProject: bp, loose: lo } = groupByProject(rows)
+            setProjects(projs)
+            setByProject(bp)
+            setLoose(lo)
+            // Expand the first project once, the first time we get data (AG IDE behaviour).
+            if (!didInitExpandRef.current && projs.length > 0) {
+                didInitExpandRef.current = true
+                setExpandedMap({ [projs[0].id]: true })
+            }
         } catch {
-            setLoading(false)
+            // keep previous state on transient failures
         } finally {
             setLoading(false)
         }
@@ -226,156 +189,67 @@ export function AppSidebar({
     useEffect(() => {
         if (!hasLoadedRef.current) {
             hasLoadedRef.current = true
-            loadAll()
+            loadIndex()
         }
-    }, [loadAll])
+    }, [loadIndex])
 
+    // Refresh when backend broadcasts conversations_updated via WS
     useEffect(() => {
-        if (wsVersion && wsVersion > 0) loadAll()
-    }, [wsVersion, loadAll])
+        if (conversationsVersion > 0) loadIndex()
+    }, [conversationsVersion, loadIndex])
 
-    // Refresh workspace list when backend broadcasts conversations_updated or status change via WS
-    useEffect(() => {
-        if (conversationsVersion > 0) loadAll()
-    }, [conversationsVersion, loadAll])
+    const toggleProject = useCallback((projectId: string) => {
+        setExpandedMap((prev) => ({ ...prev, [projectId]: !prev[projectId] }))
+    }, [])
 
-    // TODO: Temporarily disabled 30s polling — workspace updates now driven by WS events
-    // (conversationsVersion from useWebSocket). Re-enable if WS proves unreliable.
-    // useEffect(() => {
-    //     let interval: ReturnType<typeof setInterval> | null = null
-    //     const start = () => {
-    //         if (!interval) interval = setInterval(loadAll, 30000)
-    //     }
-    //     const stop = () => {
-    //         if (interval) {
-    //             clearInterval(interval)
-    //             interval = null
-    //         }
-    //     }
-    //     const onVisibility = () => (document.hidden ? stop() : start())
-    //
-    //     start()
-    //     document.addEventListener("visibilitychange", onVisibility)
-    //     return () => {
-    //         stop()
-    //         document.removeEventListener("visibilitychange", onVisibility)
-    //     }
-    // }, [loadAll])
-
-    const handleWorkspaceClick = useCallback(
-        (arrayIdx: number) => {
-            const wd = wsData[arrayIdx]
-            if (!wd) return
-            // Always expand when selecting; only collapse if already expanded (toggle)
-            setWsData((prev) => prev.map((d, i) => {
-                if (i !== arrayIdx) return d
-                // If clicking the already-expanded workspace, collapse it; otherwise always expand
-                return { ...d, expanded: !d.expanded }
-            }))
-            onSelectWorkspace(wd.workspace.workspaceName)
-        },
-        [wsData, onSelectWorkspace]
-    )
-
-    const handleSelectConv = useCallback(
-        async (convId: string, arrayIdx: number) => {
-            const wd = wsData[arrayIdx]
-            if (!wd) return
-            onSelectConversation(convId, wd.workspace.workspaceName)
-        },
-        [wsData, onSelectConversation]
-    )
-
-    // Called by WorkspaceGroup after a conversation is successfully deleted.
-    // Optimistically removes the conv from local state so the UI updates instantly,
-    // then re-fetches from the server to stay in sync.
     const handleConvDeleted = useCallback(
-        (convId: string, wsName: string) => {
-            setWsData((prev) =>
-                prev.map((wd) => {
-                    // Only touch the workspace that owned this conversation —
-                    // all others return the same reference (no re-render).
-                    if (wd.workspace.workspaceName !== wsName) return wd
-                    return {
-                        ...wd,
-                        conversations: wd.conversations.filter((c) => c.id !== convId),
+        (convId: string) => {
+            // Optimistically drop from both buckets, then re-fetch for consistency.
+            setByProject((prev) => {
+                const next = new Map(prev)
+                for (const [pid, list] of next) {
+                    if (list.some((c) => c.id === convId)) {
+                        next.set(pid, list.filter((c) => c.id !== convId))
                     }
-                })
-            )
-            // Notify page.tsx so it can navigate away if viewing the deleted conv
-            onConvDeleted?.(convId, wsName)
-            // Re-fetch in the background to ensure full consistency
-            loadAll()
+                }
+                return next
+            })
+            setLoose((prev) => prev.filter((c) => c.id !== convId))
+            onConvDeleted?.(convId)
+            loadIndex()
         },
-        [loadAll, onConvDeleted]
+        [loadIndex, onConvDeleted]
     )
 
-    const handleCreateByName = useCallback(async () => {
-        const name = newWsName.trim()
+    const handleCreateProject = useCallback(async () => {
+        const name = newName.trim()
         if (!name || creating || nameValidationError) return
         setCreating(true)
         setCreateError("")
         try {
-            if (headlessMode) {
-                await createHeadlessWorkspace(name, true)
-            } else {
-                await createWorkspace(name, true)
-            }
-            setNewWsName("")
-            await loadAll()
-            onWorkspaceCreated?.()
-            onSelectWorkspace(name)
+            const res = await createWorkspace(name, true)
+            const createdName = res.workspace?.workspaceName || name
+            setNewName("")
             setShowCreateDialog(false)
-            setHeadlessMode(false)
+            await loadIndex()
+            onProjectCreated(createdName)
         } catch (e) {
-            const msg = e instanceof Error ? e.message : "Failed to create workspace"
+            const msg = e instanceof Error ? e.message : "Failed to create project"
             setCreateError(msg)
         } finally {
             setCreating(false)
         }
-    }, [newWsName, creating, nameValidationError, headlessMode, loadAll, onWorkspaceCreated, onSelectWorkspace])
+    }, [newName, creating, nameValidationError, loadIndex, onProjectCreated])
 
-    const handleOpenFolder = useCallback(
-        async (folder: WorkspaceFolder) => {
-            if (folder.open || openingFolder === folder.name) return
-            setOpeningFolder(folder.name)
-            try {
-                await createWorkspace(folder.path)
-                await loadAll()
-                onWorkspaceCreated?.()
-                onSelectWorkspace(folder.name)
-            } catch (e) {
-                console.error("Open failed:", e)
-            } finally {
-                setOpeningFolder(null)
-            }
-        },
-        [openingFolder, loadAll, onWorkspaceCreated, onSelectWorkspace]
+    // Build the ordered project list with their conversations + total counts.
+    const projectRows = useMemo(
+        () => projects.map((p) => ({
+            project: p,
+            conversations: byProject.get(p.id) || [],
+            total: p.conversationCount || (byProject.get(p.id) || []).length,
+        })),
+        [projects, byProject]
     )
-
-    const handleOpenFolderHeadless = useCallback(
-        async (folder: WorkspaceFolder) => {
-            if (openingFolder === folder.name) return
-            setOpeningFolder(folder.name)
-            try {
-                await createHeadlessWorkspace(folder.path)
-                await loadAll()
-                onWorkspaceCreated?.()
-                onSelectWorkspace(folder.name)
-            } catch (e) {
-                console.error("Open headless failed:", e)
-            } finally {
-                setOpeningFolder(null)
-            }
-        },
-        [openingFolder, loadAll, onWorkspaceCreated, onSelectWorkspace]
-    )
-
-    const regularWs = wsData.filter((d) => d.workspace.category !== "playground")
-    const playgroundWs = wsData.filter((d) => d.workspace.category === "playground")
-
-    const activeWsNames = new Set(wsData.map((d) => d.workspace.workspaceName.toLowerCase()))
-    const closedFolders = folders.filter((f) => !f.open && !activeWsNames.has(f.name.toLowerCase()))
 
     return (
         <>
@@ -400,128 +274,108 @@ export function AppSidebar({
 
                 <SidebarContent>
                     <SidebarSeparator className="mx-0" />
+
+                    {/* Top actions: New Conversation + Conversation History */}
                     <SidebarGroup>
-                        <SidebarGroupLabel>Active Workspaces</SidebarGroupLabel>
                         <SidebarGroupContent>
-                            {loading && <div className="px-3 py-4 text-xs text-muted-foreground text-center">Loading...</div>}
-                            {regularWs.map((wd) => {
-                                const arrayIdx = wsData.indexOf(wd)
-                                return (
-                                    <WorkspaceGroup
-                                        key={wd.workspace.workspaceName}
-                                        data={wd}
-                                        arrayIdx={arrayIdx}
-                                        showAll={!!showAllMap[arrayIdx]}
-                                        currentConvId={currentConvId}
-                                        resources={workspaceResources?.workspaces?.[wd.workspace.pid]}
-                                        onToggleExpand={() => handleWorkspaceClick(arrayIdx)}
-                                        onSelectConv={(convId) => handleSelectConv(convId, arrayIdx)}
-                                        onToggleShowAll={() => setShowAllMap((prev) => ({ ...prev, [arrayIdx]: true }))}
-                                        onDeleted={handleConvDeleted}
-                                    />
-                                )
-                            })}
+                            <div className="px-2 pb-1">
+                                <Button
+                                    size="sm"
+                                    onClick={onNewConversation}
+                                    className="w-full h-8 text-xs gap-1.5 justify-start"
+                                >
+                                    <Plus className="h-3.5 w-3.5" />
+                                    New Conversation
+                                </Button>
+                            </div>
+                            <SidebarMenu>
+                                <SidebarMenuItem>
+                                    <SidebarMenuButton onClick={() => onShowHistory(null)} tooltip="Conversation History" className="text-xs">
+                                        <History className="shrink-0" />
+                                        <span>Conversation History</span>
+                                    </SidebarMenuButton>
+                                </SidebarMenuItem>
+                            </SidebarMenu>
                         </SidebarGroupContent>
                     </SidebarGroup>
 
-                    {closedFolders.length > 0 && (
+                    <SidebarSeparator className="mx-0" />
+
+                    {/* Projects */}
+                    <SidebarGroup>
+                        <SidebarGroupLabel>Projects</SidebarGroupLabel>
+                        <SidebarGroupAction title="New Project" onClick={() => setShowCreateDialog(true)}>
+                            <Plus /> <span className="sr-only">New Project</span>
+                        </SidebarGroupAction>
+                        <SidebarGroupContent>
+                            {loading && projectRows.length === 0 && (
+                                <div className="px-3 py-4 text-xs text-muted-foreground text-center">Loading...</div>
+                            )}
+                            {!loading && projectRows.length === 0 && (
+                                <div className="px-3 py-3 text-[11px] text-muted-foreground/50 text-center">
+                                    No projects yet. Open a folder in Antigravity, or create one with ＋.
+                                </div>
+                            )}
+                            {projectRows.map(({ project, conversations, total }) => (
+                                <ProjectGroup
+                                    key={project.id}
+                                    name={project.name}
+                                    totalCount={total}
+                                    conversations={conversations}
+                                    currentConvId={currentConvId}
+                                    expanded={!!expandedMap[project.id]}
+                                    onToggle={() => toggleProject(project.id)}
+                                    onSelectConv={(convId) => onSelectConversation(convId, project.name)}
+                                    onSeeAll={() => onShowHistory(project.id)}
+                                    onNewConversation={() => onNewProjectConversation(project)}
+                                    onDeleted={handleConvDeleted}
+                                />
+                            ))}
+                        </SidebarGroupContent>
+                    </SidebarGroup>
+
+                    {/* Loose conversations (no project) */}
+                    {loose.length > 0 && (
                         <>
                             <SidebarSeparator className="mx-0" />
                             <SidebarGroup>
-                                <SidebarGroupLabel>Available Workspaces</SidebarGroupLabel>
+                                <SidebarGroupLabel>Conversations</SidebarGroupLabel>
                                 <SidebarGroupContent>
                                     <SidebarMenu>
-                                        {closedFolders.map((folder) => (
-                                            <SidebarMenuItem key={folder.name}>
+                                        {loose.slice(0, LOOSE_LIMIT).map((conv) => (
+                                            <SidebarMenuItem key={conv.id}>
                                                 <SidebarMenuButton
-                                                    onClick={() => setSelectedFolder(folder)}
-                                                    disabled={openingFolder === folder.name}
-                                                    tooltip={folder.name}
-                                                    className="text-xs !pr-2"
+                                                    isActive={conv.id === currentConvId}
+                                                    onClick={() => onSelectConversation(conv.id, conv.projectName || 'unknown')}
+                                                    tooltip={conv.title}
+                                                    className="text-xs"
                                                 >
-                                                    <FolderOpen className="shrink-0" />
-                                                    <span className="flex-1 truncate min-w-0">{folder.name}</span>
-                                                    <span className="ml-auto opacity-0 group-hover/menu-item:opacity-100 text-[9px] text-muted-foreground/50 transition-opacity shrink-0">
-                                                        {openingFolder === folder.name ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Open'}
-                                                    </span>
+                                                    <MessageSquare className="shrink-0" />
+                                                    <span className="truncate min-w-0">{conv.title}</span>
                                                 </SidebarMenuButton>
                                             </SidebarMenuItem>
                                         ))}
+                                        {loose.length > LOOSE_LIMIT && (
+                                            <SidebarMenuItem>
+                                                <SidebarMenuButton
+                                                    onClick={() => onShowHistory(null)}
+                                                    className="text-sidebar-foreground/50 text-[10px]"
+                                                >
+                                                    See all ({loose.length})
+                                                </SidebarMenuButton>
+                                            </SidebarMenuItem>
+                                        )}
                                     </SidebarMenu>
                                 </SidebarGroupContent>
                             </SidebarGroup>
                         </>
                     )}
 
-                    <SidebarSeparator className="mx-0" />
-
-                    <div className="px-4 py-3">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setShowCreateDialog(true)}
-                            className="w-full h-8 text-xs gap-1.5"
-                        >
-                            <Plus className="h-3.5 w-3.5" />
-                            New Workspace
-                        </Button>
-                    </div>
-
-                    {playgroundWs.length > 0 && (
-                        <>
-                            <SidebarSeparator className="mx-0" />
-                            <SidebarGroup>
-                                <SidebarGroupLabel className="flex items-center justify-between">
-                                    <span>Playground</span>
-                                    <Circle className="h-3 w-3 text-muted-foreground/30" />
-                                </SidebarGroupLabel>
-                                <SidebarGroupContent>
-                                    {playgroundWs.map((wd) => {
-                                        const arrayIdx = wsData.indexOf(wd)
-                                        return (
-                                            <WorkspaceGroup
-                                                key={wd.workspace.workspaceName}
-                                                data={wd}
-                                                arrayIdx={arrayIdx}
-                                                showAll={!!showAllMap[arrayIdx]}
-                                                currentConvId={currentConvId}
-                                                showActiveIndicator={false}
-                                                resources={workspaceResources?.workspaces?.[wd.workspace.pid]}
-                                                onToggleExpand={() => handleWorkspaceClick(arrayIdx)}
-                                                onSelectConv={(convId) => handleSelectConv(convId, arrayIdx)}
-                                                onToggleShowAll={() => setShowAllMap((prev) => ({ ...prev, [arrayIdx]: true }))}
-                                                onDeleted={handleConvDeleted}
-                                            />
-                                        )
-                                    })}
-                                </SidebarGroupContent>
-                            </SidebarGroup>
-                        </>
-                    )}
+                    {/* Tools (kept Deck features) */}
                     <SidebarSeparator className="mx-0" />
                     <SidebarGroup>
                         <SidebarGroupContent>
                             <SidebarMenu>
-                                <SidebarMenuItem>
-                                    <SidebarMenuButton onClick={onShowAgentHub} tooltip="Agent Hub" className="text-xs">
-                                        <Bot className="shrink-0" />
-                                        <span>Agent Hub</span>
-                                    </SidebarMenuButton>
-                                </SidebarMenuItem>
-                                {/* Orchestrator hidden while chat-first redesign is in progress
-                                <SidebarMenuItem>
-                                    <SidebarMenuButton onClick={onShowOrchestrator} tooltip="Orchestrator" className="text-xs">
-                                        <Workflow className="shrink-0" />
-                                        <span>Orchestrator</span>
-                                    </SidebarMenuButton>
-                                </SidebarMenuItem>
-                                */}
-                                <SidebarMenuItem>
-                                    <SidebarMenuButton onClick={onShowConnect} tooltip="Connect" className="text-xs">
-                                        <Cable className="shrink-0" />
-                                        <span>Connect</span>
-                                    </SidebarMenuButton>
-                                </SidebarMenuItem>
                                 <SidebarMenuItem>
                                     <SidebarMenuButton onClick={onShowMcp} tooltip="MCP Servers" className="text-xs">
                                         <Plug className="shrink-0" />
@@ -609,10 +463,6 @@ export function AppSidebar({
                                         <span>{isDark ? "Light Mode" : "Dark Mode"}</span>
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem onClick={() => setShowPlugins(true)}>
-                                        <Plug className="mr-2 h-4 w-4" />
-                                        <span>Plugins</span>
-                                    </DropdownMenuItem>
                                     <DropdownMenuItem disabled>
                                         <Book className="mr-2 h-4 w-4 text-muted-foreground" />
                                         <span className="text-muted-foreground">Knowledge (Coming Soon)</span>
@@ -631,68 +481,41 @@ export function AppSidebar({
                         </SidebarMenuItem>
                     </SidebarMenu>
                 </SidebarFooter>
-
-                <PluginManager open={showPlugins} onClose={() => setShowPlugins(false)} />
             </Sidebar>
 
             <Dialog open={showCreateDialog} onOpenChange={(open) => {
                 setShowCreateDialog(open)
-                if (!open) { setNewWsName(""); setCreateError(""); setHeadlessMode(false) }
+                if (!open) { setNewName(""); setCreateError("") }
             }}>
                 <DialogContent className="sm:max-w-[420px]">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <FolderPlus className="h-5 w-5" />
-                            New Workspace
+                            New Project
                         </DialogTitle>
                         <DialogDescription>
-                            Create a new workspace to start coding with Antigravity.
+                            Create a new project folder and jump straight into a conversation.
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="space-y-4 py-2">
                         <div className="space-y-2.5">
-                            <label className="text-xs font-medium text-muted-foreground">Workspace Name</label>
+                            <label className="text-xs font-medium text-muted-foreground">Project Name</label>
                             <Input
-                                value={newWsName}
-                                onChange={(e) => { setNewWsName(e.target.value); setCreateError("") }}
-                                onKeyDown={(e) => e.key === "Enter" && !nameValidationError && handleCreateByName()}
+                                value={newName}
+                                onChange={(e) => { setNewName(e.target.value); setCreateError("") }}
+                                onKeyDown={(e) => e.key === "Enter" && !nameValidationError && handleCreateProject()}
                                 placeholder="my-awesome-project"
-                                className={cn(nameValidationError && newWsName.trim() && "border-destructive focus-visible:ring-destructive")}
+                                className={cn(nameValidationError && newName.trim() && "border-destructive focus-visible:ring-destructive")}
                                 disabled={creating}
                                 autoFocus
                             />
-                            {(nameValidationError || createError) && newWsName.trim() && (
+                            {(nameValidationError || createError) && newName.trim() && (
                                 <p className="text-xs text-destructive">{nameValidationError || createError}</p>
                             )}
                             <p className="text-xs text-muted-foreground">
-                                This will create a folder in your workspace root directory.
+                                Creates a folder in your workspace root directory, opens it, and starts a new chat.
                             </p>
-                        </div>
-
-                        <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
-                            <div className="flex items-center gap-2">
-                                <Terminal className="h-4 w-4 text-muted-foreground" />
-                                <div>
-                                    <p className="text-xs font-medium">Headless Mode</p>
-                                    <p className="text-[10px] text-muted-foreground">No IDE UI — requires running IDE for auth</p>
-                                </div>
-                            </div>
-                            <button
-                                type="button"
-                                role="switch"
-                                aria-checked={headlessMode}
-                                onClick={() => setHeadlessMode(!headlessMode)}
-                                className={cn(
-                                    "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
-                                    headlessMode ? "bg-primary" : "bg-muted"
-                                )}
-                            >
-                                <span className={cn(
-                                    "pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform",
-                                    headlessMode ? "translate-x-4" : "translate-x-0"
-                                )} />
-                            </button>
                         </div>
                     </div>
 
@@ -700,64 +523,20 @@ export function AppSidebar({
                         <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => { setShowCreateDialog(false); setNewWsName(""); setCreateError("") }}
+                            onClick={() => { setShowCreateDialog(false); setNewName(""); setCreateError("") }}
                             disabled={creating}
                         >
                             Cancel
                         </Button>
                         <Button
                             size="sm"
-                            onClick={async () => { await handleCreateByName() }}
-                            disabled={creating || !newWsName.trim() || !!nameValidationError}
+                            onClick={async () => { await handleCreateProject() }}
+                            disabled={creating || !newName.trim() || !!nameValidationError}
                         >
-                            {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : headlessMode ? <Terminal className="h-3.5 w-3.5 mr-1.5" /> : <Plus className="h-3.5 w-3.5 mr-1.5" />}
-                            {headlessMode ? 'Create Headless' : 'Create Workspace'}
+                            {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Plus className="h-3.5 w-3.5 mr-1.5" />}
+                            Create Project
                         </Button>
                     </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            <Dialog open={!!selectedFolder} onOpenChange={(open) => { if (!open) setSelectedFolder(null) }}>
-                <DialogContent className="sm:max-w-[380px]">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            <FolderOpen className="h-5 w-5" />
-                            Open Workspace
-                        </DialogTitle>
-                        <DialogDescription>
-                            Choose how to open <span className="font-medium text-foreground">{selectedFolder?.name}</span>
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="grid grid-cols-2 gap-3 py-2">
-                        <button
-                            onClick={() => { if (selectedFolder) { handleOpenFolder(selectedFolder); setSelectedFolder(null) } }}
-                            disabled={openingFolder === selectedFolder?.name}
-                            className="flex flex-col items-center gap-2.5 rounded-xl border border-border/50 bg-card/50 p-4 hover:bg-blue-500/5 hover:border-blue-500/30 transition-all cursor-pointer group"
-                        >
-                            <div className="p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 group-hover:bg-blue-500/15 transition-colors">
-                                <FolderOpen className="h-5 w-5 text-blue-400" />
-                            </div>
-                            <div className="text-center">
-                                <p className="text-sm font-medium">Open with IDE</p>
-                                <p className="text-[10px] text-muted-foreground mt-0.5">Full Antigravity editor</p>
-                            </div>
-                        </button>
-
-                        <button
-                            onClick={() => { if (selectedFolder) { handleOpenFolderHeadless(selectedFolder); setSelectedFolder(null) } }}
-                            disabled={openingFolder === selectedFolder?.name}
-                            className="flex flex-col items-center gap-2.5 rounded-xl border border-border/50 bg-card/50 p-4 hover:bg-emerald-500/5 hover:border-emerald-500/30 transition-all cursor-pointer group"
-                        >
-                            <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 group-hover:bg-emerald-500/15 transition-colors">
-                                <Terminal className="h-5 w-5 text-emerald-400" />
-                            </div>
-                            <div className="text-center">
-                                <p className="text-sm font-medium">Open Headless</p>
-                                <p className="text-[10px] text-muted-foreground mt-0.5">No IDE UI — agent mode</p>
-                            </div>
-                        </button>
-                    </div>
                 </DialogContent>
             </Dialog>
         </>

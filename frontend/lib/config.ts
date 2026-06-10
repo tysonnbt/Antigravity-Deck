@@ -68,25 +68,5 @@ function _refreshWsUrlCache() {
 }
 
 
-/**
- * Agent WebSocket URL — derived from UI WS URL by appending /agent path.
- * Example: ws://localhost:3500 → ws://localhost:3500/ws/agent
- */
-export async function getAgentWsUrl(): Promise<string> {
-    const uiWsUrl = await getWsUrl();
-    // getWsUrl() returns e.g. "ws://localhost:3500" (no path)
-    // Agent WS is at /ws/agent
-    return `${uiWsUrl}/ws/agent`;
-}
-
-/**
- * Orchestrator WebSocket URL — derived from UI WS URL.
- * Example: ws://localhost:3500 → ws://localhost:3500/ws/orchestrator
- */
-export async function getOrchestratorWsUrl(): Promise<string> {
-    const uiWsUrl = await getWsUrl();
-    return `${uiWsUrl}/ws/orchestrator`;
-}
-
 // Legacy sync export (used as initial value — overridden when getWsUrl() resolves)
 export const WS_URL = '';

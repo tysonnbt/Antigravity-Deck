@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { cascadeSend, cascadeSubmit, getWorkspaces, getModels } from '@/lib/cascade-api';
-import type { Workspace, CascadeModel } from '@/lib/cascade-api';
+import type { Workspace, CascadeModel, CascadeModelGroup } from '@/lib/cascade-api';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Image as ImageIcon, Star } from 'lucide-react';
@@ -44,6 +44,7 @@ export function CascadePanel({ currentConvId, currentWorkspace, wsVersion, onCas
 
     // Model state
     const [models, setModels] = useState<CascadeModel[]>([]);
+    const [modelGroups, setModelGroups] = useState<CascadeModelGroup[]>([]);
     const [selectedModelId, setSelectedModelId] = useState<string>('');
     const [modelPickerOpen, setModelPickerOpen] = useState(false);
     const modelPickerRef = useRef<HTMLDivElement>(null);
@@ -62,8 +63,9 @@ export function CascadePanel({ currentConvId, currentWorkspace, wsVersion, onCas
 
     // Load models on mount
     useEffect(() => {
-        getModels().then(({ models: m, defaultModel }) => {
+        getModels().then(({ models: m, groups, defaultModel }) => {
             setModels(m);
+            setModelGroups(groups || []);
             setSelectedModelId(prev => prev || defaultModel || m[0]?.modelId || '');
         }).catch(() => { });
     }, []);
@@ -288,33 +290,42 @@ export function CascadePanel({ currentConvId, currentWorkspace, wsVersion, onCas
                                 <div className="px-3 py-1.5 text-[10px] text-muted-foreground font-medium uppercase tracking-wider border-b border-border/50">
                                     Model ({models.length})
                                 </div>
-                                {models.map((m) => (
-                                    <button
-                                        key={m.modelId}
-                                        onClick={() => { setSelectedModelId(m.modelId); setModelPickerOpen(false); }}
-                                        className={cn(
-                                            'w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-accent/50 transition-colors text-left',
-                                            m.modelId === selectedModelId && 'bg-accent/30'
+                                {(modelGroups.length ? modelGroups : [{ name: '', models }]).map((group, gi) => (
+                                    <div key={group.name || `g${gi}`}>
+                                        {/* IDE shows a flat list when there's a single group; only label real sub-groups. */}
+                                        {modelGroups.length > 1 && group.name && (
+                                            <div className="px-3 pt-2 pb-1 text-[9px] text-muted-foreground/60 font-medium uppercase tracking-wider">{group.name}</div>
                                         )}
-                                    >
-                                        <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', m.modelId === selectedModelId ? 'bg-sky-400' : 'bg-muted-foreground/30')} />
-                                        <div className="flex-1 min-w-0">
-                                            <div className="font-medium truncate flex items-center gap-1">
-                                                {m.label}
-                                                {m.isRecommended && <Star className="w-2.5 h-2.5 text-amber-400" />}
-                                                {m.supportsImages && <ImageIcon className="h-2.5 w-2.5 text-muted-foreground/50" />}
-                                            </div>
-                                            <div className="flex items-center gap-1.5 mt-0.5">
-                                                <div className="h-1 flex-1 rounded-full bg-muted overflow-hidden">
-                                                    <div
-                                                        className={cn('h-full rounded-full transition-all', m.quota > 0.5 ? 'bg-emerald-400' : m.quota > 0.2 ? 'bg-amber-400' : 'bg-red-400')}
-                                                        style={{ width: `${Math.round(m.quota * 100)}%` }}
-                                                    />
+                                        {group.models.map((m) => (
+                                            <button
+                                                key={m.modelId || m.label}
+                                                onClick={() => { setSelectedModelId(m.modelId); setModelPickerOpen(false); }}
+                                                className={cn(
+                                                    'w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-accent/50 transition-colors text-left',
+                                                    m.modelId === selectedModelId && 'bg-accent/30'
+                                                )}
+                                            >
+                                                <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', m.modelId === selectedModelId ? 'bg-sky-400' : 'bg-muted-foreground/30')} />
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="font-medium truncate flex items-center gap-1">
+                                                        {m.label}
+                                                        {m.tagTitle && <span className="text-[8px] px-1 rounded bg-accent text-accent-foreground/80 shrink-0" title={m.tagDescription || undefined}>{m.tagTitle}</span>}
+                                                        {m.isRecommended && <Star className="w-2.5 h-2.5 text-amber-400 shrink-0" />}
+                                                        {m.supportsImages && <ImageIcon className="h-2.5 w-2.5 text-muted-foreground/50 shrink-0" />}
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                                        <div className="h-1 flex-1 rounded-full bg-muted overflow-hidden">
+                                                            <div
+                                                                className={cn('h-full rounded-full transition-all', m.quota > 0.5 ? 'bg-emerald-400' : m.quota > 0.2 ? 'bg-amber-400' : 'bg-red-400')}
+                                                                style={{ width: `${Math.round(m.quota * 100)}%` }}
+                                                            />
+                                                        </div>
+                                                        <span className="text-[9px] text-muted-foreground/50 w-7 text-right">{Math.round(m.quota * 100)}%</span>
+                                                    </div>
                                                 </div>
-                                                <span className="text-[9px] text-muted-foreground/50 w-7 text-right">{Math.round(m.quota * 100)}%</span>
-                                            </div>
-                                        </div>
-                                    </button>
+                                            </button>
+                                        ))}
+                                    </div>
                                 ))}
                             </div>
                         )}

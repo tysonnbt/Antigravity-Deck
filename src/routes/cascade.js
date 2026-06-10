@@ -1,5 +1,5 @@
 // === Cascade Routes ===
-// /api/cascade/*, /api/auto-accept, /api/user/profile, /api/plugins/*, /api/ls/:method
+// /api/cascade/*, /api/auto-accept, /api/user/profile, /api/ls/:method
 
 const { callApi, callApiFireAndForgetOnInstance } = require('../api');
 const { getAutoAccept, setAutoAccept, buildAcceptPayload } = require('../cache');
@@ -49,13 +49,16 @@ module.exports = function setupCascadeRoutes(app) {
     // Start a new cascade and send a message (non-blocking)
     app.post('/api/cascade/submit', async (req, res) => {
         try {
-            const { message, modelId, images, imageBase64 } = req.body;
+            const { message, modelId, images, imageBase64, workspaceUri } = req.body;
             if (!message) {
                 return res.status(400).json({ error: 'message is required' });
             }
-            // Start cascade synchronously, then fire-and-forget the message
+            // Start cascade synchronously, then fire-and-forget the message.
+            // workspaceUri (a project folder file:// URI) binds the new cascade to that
+            // project so it appears under it; without it the hub creates a detached convo.
             const inst = resolveInst(req);
-            const cascadeId = await startCascade(inst);
+            const startOpts = workspaceUri ? { workspaceUris: [workspaceUri] } : {};
+            const cascadeId = await startCascade(inst, startOpts);
             registerCascadeInstance(cascadeId, inst);
             const opts = { modelId, inst };
             if (images && images.length > 0) {
@@ -93,46 +96,59 @@ module.exports = function setupCascadeRoutes(app) {
         const { lsInstances } = require('../config');
         const cascadeId = req.params.id;
         const isReject = !!req.body?.reject;
-        console.log(`[ManualInteract] ${isReject ? 'REJECT' : 'ACCEPT'} request for ${cascadeId.substring(0, 8)}, instances: ${lsInstances.length}`);
+        // Hub model: with no tracked workspace lsInstances is empty, but the hub
+        // connection still serves every cascade — fall back to it.
+        let instances = lsInstances;
+        if (!instances.length) {
+            const { getFirstActiveInstance } = require('../detector');
+            const hub = getFirstActiveInstance();
+            instances = hub ? [hub] : [];
+        }
+        console.log(`[ManualInteract] ${isReject ? 'REJECT' : 'ACCEPT'} request for ${cascadeId.substring(0, 8)}, instances: ${instances.length}`);
         try {
-            for (const inst of lsInstances) {
+            for (const inst of instances) {
                 try {
-                    const payload = await buildAcceptPayload(cascadeId, inst);
-                    if (!payload) {
-                        console.log(`[ManualInteract] Skip ${inst.workspaceName}:${inst.port} — no WAITING step`);
-                        continue;
-                    }
-
                     let body;
                     if (req.body?.interaction) {
-                        body = { cascadeId, interaction: req.body.interaction };
-                    } else if (isReject) {
-                        // Build reject payload: flip allow to false, remove scope
-                        const rejectInteraction = { ...payload.interaction };
-                        if (rejectInteraction.filePermission) {
-                            rejectInteraction.filePermission = {
-                                absolutePathUri: rejectInteraction.filePermission.absolutePathUri,
-                                // No 'allow' field and no 'scope' — LS treats this as reject
-                            };
-                        } else if (rejectInteraction.runCommand) {
-                            rejectInteraction.runCommand = {
-                                ...rejectInteraction.runCommand,
-                                confirm: false,
-                            };
-                        } else if (rejectInteraction.codeAction) {
-                            rejectInteraction.codeAction = { confirm: false };
-                        } else if (rejectInteraction.sendCommandInput) {
-                            rejectInteraction.sendCommandInput = {
-                                ...rejectInteraction.sendCommandInput,
-                                confirm: false,
-                            };
+                        // Custom interaction from the UI (gate answers: ask_question responses,
+                        // permission allow-once/always/deny, elicitation, …). Don't go through
+                        // buildAcceptPayload — it returns null for gates that need a user answer.
+                        const provided = req.body.interaction;
+                        if (provided.trajectoryId && provided.stepIndex !== undefined) {
+                            body = { cascadeId, interaction: provided };
                         } else {
-                            rejectInteraction.confirm = false;
+                            // Fill in trajectoryId + stepIndex from the live WAITING step.
+                            const { locateWaitingSteps } = require('../auto-accept');
+                            const candidates = await locateWaitingSteps(cascadeId, inst);
+                            if (!candidates.length) {
+                                console.log(`[ManualInteract] Skip ${inst.workspaceName}:${inst.port} — no WAITING step (custom interaction)`);
+                                continue;
+                            }
+                            // With multiple pending gates, target the one whose requested
+                            // member matches what the UI answered (e.g. `permission`).
+                            const memberKey = Object.keys(provided)
+                                .find(k => !['trajectoryId', 'stepIndex', 'timedOut'].includes(k));
+                            const match = (memberKey && candidates.find(c =>
+                                c.step?.requestedInteraction?.[memberKey] !== undefined
+                            )) || candidates[0];
+                            body = { cascadeId, interaction: { trajectoryId: match.trajectoryId, stepIndex: match.stepIndex, ...provided } };
                         }
-                        body = { cascadeId, interaction: rejectInteraction };
-                        console.log(`[ManualInteract] Reject payload:`, JSON.stringify(body.interaction));
+                        console.log(`[ManualInteract] Custom interaction payload:`, JSON.stringify(body.interaction).slice(0, 400));
                     } else {
-                        body = payload;
+                        const payload = await buildAcceptPayload(cascadeId, inst);
+                        if (!payload) {
+                            console.log(`[ManualInteract] Skip ${inst.workspaceName}:${inst.port} — no WAITING step`);
+                            continue;
+                        }
+                        if (isReject) {
+                            // Flip the built accept payload into a reject — generic across every
+                            // interaction member (run_command/mcp/approval/permission/deploy/…).
+                            const { denyInteraction } = require('../auto-accept');
+                            body = { cascadeId, interaction: denyInteraction(payload.interaction) };
+                            console.log(`[ManualInteract] Reject payload:`, JSON.stringify(body.interaction));
+                        } else {
+                            body = payload;
+                        }
                     }
 
                     console.log(`[ManualInteract] >>> ${isReject ? 'Rejecting' : 'Accepting'} ${cascadeId.substring(0, 8)} on ${inst.workspaceName}:${inst.port}`);
@@ -149,6 +165,42 @@ module.exports = function setupCascadeRoutes(app) {
             }
             console.log(`[ManualInteract] No instance could ${isReject ? 'reject' : 'accept'} ${cascadeId.substring(0, 8)}`);
             res.status(404).json({ error: 'No WAITING step found on any LS instance' });
+        } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
+    // Gate options — what choices the IDE would show for the current WAITING interaction.
+    // Lets the UI render the exact dynamic option set (esp. permission gates) instead of
+    // hardcoding buttons. Returns { kind, ... } or { kind:null } when no gate is pending.
+    app.get('/api/cascade/:id/gate', async (req, res) => {
+        const cascadeId = req.params.id;
+        try {
+            const { lsInstances } = require('../config');
+            let instances = lsInstances;
+            if (!instances.length) {
+                const { getFirstActiveInstance } = require('../detector');
+                const hub = getFirstActiveInstance();
+                instances = hub ? [hub] : [];
+            }
+            const { locateWaitingSteps } = require('../auto-accept');
+            for (const inst of instances) {
+                const candidates = await locateWaitingSteps(cascadeId, inst);
+                const gate = candidates.find(c => c.step?.requestedInteraction &&
+                    Object.keys(c.step.requestedInteraction).length > 0);
+                if (!gate) continue;
+                const ri = gate.step.requestedInteraction;
+                if (ri.permission) {
+                    const { buildPermissionOptions } = require('../interaction-options');
+                    const { getSummaries } = require('./../jetbox');
+                    const projectId = getSummaries()?.[cascadeId]?.trajectoryMetadata?.projectId || '';
+                    const toolName = gate.step.metadata?.toolCall?.name || '';
+                    return res.json(buildPermissionOptions(ri.permission, { toolName, projectId }));
+                }
+                // Other gate kinds (ask_question / elicitation) are rendered by the UI from
+                // the step's requestedInteraction spec directly.
+                const kind = Object.keys(ri)[0];
+                return res.json({ kind, spec: ri[kind] });
+            }
+            return res.json({ kind: null });
         } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
@@ -208,20 +260,6 @@ module.exports = function setupCascadeRoutes(app) {
             cleanupCascade(req.params.id);
             res.json({ success: true });
         } catch (e) { res.status(500).json({ error: e.message }); }
-    });
-
-    // Plugin management
-    app.get('/api/plugins', async (req, res) => {
-        try { res.json(await callApi('GetAvailableCascadePlugins', {}, resolveInst(req))); }
-        catch (e) { res.status(500).json({ error: e.message }); }
-    });
-    app.post('/api/plugins/install', async (req, res) => {
-        try { res.json(await callApi('InstallCascadePlugin', req.body, resolveInst(req))); }
-        catch (e) { res.status(500).json({ error: e.message }); }
-    });
-    app.delete('/api/plugins/:id', async (req, res) => {
-        try { res.json(await callApi('DeletePlugin', { pluginId: req.params.id }, resolveInst(req))); }
-        catch (e) { res.status(500).json({ error: e.message }); }
     });
 
     // === Generic LS Proxy — call any method ===

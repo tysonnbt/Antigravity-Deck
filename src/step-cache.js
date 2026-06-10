@@ -11,6 +11,16 @@ const fetchingSet = new Set(); // per-conversation fetching lock
 // --- Step count ---
 
 async function getStepCountAndStatus(convId, callFn = null) {
+    // Prefer the Jetbox summary: it holds the FULL history with accurate stepCounts, even for
+    // conversations not in the hub's recent/active set. GetAllCascadeTrajectories returns 0 in
+    // hub-only mode (no tracked workspaces), which would make every historical conversation look
+    // empty — yet GetCascadeTrajectorySteps still serves their steps by cascadeId.
+    try {
+        const jb = require('./jetbox').getSummaries()[convId];
+        if (jb && typeof jb.stepCount === 'number') {
+            return { stepCount: jb.stepCount, status: jb.status || null, trajectoryId: jb.trajectoryId || null };
+        }
+    } catch { }
     const apiFn = callFn || ((m, b) => callApi(m, b));
     const summaries = await apiFn('GetAllCascadeTrajectories', {});
     const info = summaries?.trajectorySummaries?.[convId];
@@ -124,11 +134,24 @@ async function fetchAllSteps(convId, totalSteps, inst = null, fromIndex = 0) {
 // --- Ensure cached ---
 
 async function ensureCached(convId, inst = null) {
-    if (stepCache[convId]) return;
     if (fetchingSet.has(convId)) return; // per-conversation lock
-    if (lsInstances.length === 0) {
+    // Hub model (2.0.11): the usable connection is the per-cascade instance when known,
+    // otherwise the shared hub (lsConfig). lsInstances can be empty (0 tracked workspaces)
+    // while the hub is fully usable, so gate on the effective connection, not instance count.
+    const conn = inst || lsConfig;
+    if (!conn.port || !conn.csrfToken) {
         console.log(`[!] ensureCached skipped — LS not configured yet`);
         return; // Don't cache empty — will retry after init
+    }
+    // Reuse the cache only while it's current. When new steps have streamed in (the live Jetbox
+    // stepCount is beyond the cached window end), fall through and re-fetch so the OPEN conversation
+    // updates. This is the hub-only live-update path: with 0 tracked workspaces no per-workspace
+    // poller runs, so the re-fetch is driven by the Jetbox 'conversations_updated' signal.
+    const existing = stepCache[convId];
+    if (existing) {
+        let liveCount = existing.stepCount;
+        try { const jb = require('./jetbox').getSummaries()[convId]; if (jb && typeof jb.stepCount === 'number') liveCount = jb.stepCount; } catch { }
+        if (liveCount <= ((existing.baseIndex || 0) + existing.steps.length)) return;
     }
     fetchingSet.add(convId);
 

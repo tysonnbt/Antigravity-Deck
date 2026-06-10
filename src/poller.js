@@ -74,7 +74,14 @@ async function pollNow() {
         const convToPoll = new Map(); // convId → { status, trajectoryId, inst }
         let anyActive = false;
 
+        // Antigravity 2.0.11 uses a single shared hub LS, so many virtual workspace
+        // instances share one connection (port+csrf) and GetAllCascadeTrajectories is
+        // global. Poll each unique connection once to avoid redundant identical calls.
+        const seenConns = new Set();
         for (const inst of lsInstances) {
+            const connKey = `${inst.useTls ? 's' : ''}${inst.port}:${inst.csrfToken}`;
+            if (seenConns.has(connKey)) continue;
+            seenConns.add(connKey);
             try {
                 const summaries = await callApiOnInstance(inst, 'GetAllCascadeTrajectories');
                 const trajectories = summaries?.trajectorySummaries || {};
