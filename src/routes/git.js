@@ -4,13 +4,27 @@
 const { getInstanceByName } = require('../detector');
 const { execGitSafe, validateGitPath, uriToFsPath } = require('./route-helpers');
 
+// Resolve a workspace name to a filesystem cwd. Tracked hub workspaces win;
+// otherwise fall back to Jetbox projects (name -> folderUri), so Source Control
+// works for IDE projects that aren't tracked on the hub.
+function resolveWorkspaceCwd(rawName) {
+    const name = decodeURIComponent(String(rawName || ''));
+    const inst = getInstanceByName(name);
+    if (inst) {
+        const cwd = uriToFsPath(inst.workspaceFolderUri);
+        if (cwd) return cwd;
+    }
+    const target = name.toLowerCase();
+    const project = require('../jetbox').getProjects()
+        .find(p => p.name && p.name.toLowerCase() === target);
+    return project ? uriToFsPath(project.folderUri) : null;
+}
+
 module.exports = function setupGitRoutes(app) {
     // Git status: list changed files with stats
     app.get('/api/workspaces/:name/git/status', async (req, res) => {
-        const inst = getInstanceByName(decodeURIComponent(req.params.name));
-        if (!inst) return res.status(400).json({ error: 'Unknown workspace' });
-        const cwd = uriToFsPath(inst.workspaceFolderUri);
-        if (!cwd) return res.status(400).json({ error: 'No workspace folder' });
+        const cwd = resolveWorkspaceCwd(req.params.name);
+        if (!cwd) return res.status(400).json({ error: 'Unknown workspace' });
 
         try {
             // Check if it's a git repository
@@ -55,10 +69,8 @@ module.exports = function setupGitRoutes(app) {
 
     // Git diff: unified diff (all files or specific file)
     app.get('/api/workspaces/:name/git/diff', async (req, res) => {
-        const inst = getInstanceByName(decodeURIComponent(req.params.name));
-        if (!inst) return res.status(400).json({ error: 'Unknown workspace' });
-        const cwd = uriToFsPath(inst.workspaceFolderUri);
-        if (!cwd) return res.status(400).json({ error: 'No workspace folder' });
+        const cwd = resolveWorkspaceCwd(req.params.name);
+        if (!cwd) return res.status(400).json({ error: 'Unknown workspace' });
 
         try {
             const file = req.query.file;
@@ -84,10 +96,8 @@ module.exports = function setupGitRoutes(app) {
 
     // Git show: original file content from HEAD
     app.get('/api/workspaces/:name/git/show', async (req, res) => {
-        const inst = getInstanceByName(decodeURIComponent(req.params.name));
-        if (!inst) return res.status(400).json({ error: 'Unknown workspace' });
-        const cwd = uriToFsPath(inst.workspaceFolderUri);
-        if (!cwd) return res.status(400).json({ error: 'No workspace folder' });
+        const cwd = resolveWorkspaceCwd(req.params.name);
+        if (!cwd) return res.status(400).json({ error: 'Unknown workspace' });
         const file = req.query.file;
         if (!file) return res.status(400).json({ error: 'file parameter required' });
 
@@ -119,10 +129,8 @@ module.exports = function setupGitRoutes(app) {
     app.get('/api/workspaces/:name/file/read', (req, res) => {
         const path = require('path');
         const fs = require('fs');
-        const inst = getInstanceByName(decodeURIComponent(req.params.name));
-        if (!inst) return res.status(400).json({ error: 'Unknown workspace' });
-        const cwd = uriToFsPath(inst.workspaceFolderUri);
-        if (!cwd) return res.status(400).json({ error: 'No workspace folder' });
+        const cwd = resolveWorkspaceCwd(req.params.name);
+        if (!cwd) return res.status(400).json({ error: 'Unknown workspace' });
         const file = req.query.file;
         if (!file) return res.status(400).json({ error: 'file parameter required' });
 
@@ -176,10 +184,8 @@ module.exports = function setupGitRoutes(app) {
     app.get('/api/workspaces/:name/fs/list', (req, res) => {
         const path = require('path');
         const fs = require('fs');
-        const inst = getInstanceByName(decodeURIComponent(req.params.name));
-        if (!inst) return res.status(400).json({ error: 'Unknown workspace' });
-        const cwd = uriToFsPath(inst.workspaceFolderUri);
-        if (!cwd) return res.status(400).json({ error: 'No workspace folder' });
+        const cwd = resolveWorkspaceCwd(req.params.name);
+        if (!cwd) return res.status(400).json({ error: 'Unknown workspace' });
 
         const subpath = req.query.path || '';
         const showHidden = req.query.showHidden === 'true';
