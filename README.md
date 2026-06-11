@@ -1,6 +1,8 @@
 # 🔮 Antigravity Deck
 
-Full-featured web dashboard for [Antigravity](https://antigravity.google). View, send, and manage AI conversations from any device — with a searchable all-time history across every project, live cascade control, resource monitoring, source control, IDE tools, and secure remote access.
+**Remote control for [Antigravity](https://antigravity.google) — manage AI conversations, cascades, and workspaces from any device.**
+
+Full-featured web dashboard for Antigravity. View, send, and manage AI conversations from any device — with a searchable all-time history across every project, live cascade control, resource monitoring, source control, IDE tools, and secure remote access.
 
 > Built for **Antigravity 2.0.11+**, which runs a single shared **hub** Language Server. The Deck auto-detects the hub, tracks your workspaces on it, and streams full conversation history out of the IDE's Jetbox subsystem.
 
