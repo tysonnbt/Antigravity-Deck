@@ -44,21 +44,35 @@ async function fetchAllSteps(convId, totalSteps, inst = null, fromIndex = 0) {
     const jsonSteps = jsonData.steps || [];
     const jsonCount = jsonSteps.length;
 
-    // Check if JSON returned enough (respects fromIndex or returned from 0)
     const expectedCount = maxSteps - fromIndex;
-    if (jsonCount >= expectedCount) {
-        return { steps: jsonSteps.slice(0, expectedCount), hasGaps: false };
+    const jsonActualStart = detectApiStartIndex(jsonSteps, expectedCount, fromIndex);
+    const jsonActualEnd = jsonActualStart + jsonCount;
+    const desiredEnd = maxSteps;
+
+    // If JSON response fully covers the desired range, slice and return
+    if (jsonActualStart <= fromIndex && jsonActualEnd >= desiredEnd) {
+        const sliceStart = fromIndex - jsonActualStart;
+        const sliceEnd = desiredEnd - jsonActualStart;
+        return { steps: jsonSteps.slice(sliceStart, sliceEnd), hasGaps: false };
     }
 
     // Step 2: Binary protobuf for remaining steps
     const { callApiBinary } = require('./api');
-    console.log(`[*] JSON returned ${jsonCount}/${expectedCount} steps (from ${fromIndex}). Using binary protobuf for remaining...`);
+    console.log(`[*] JSON returned ${jsonCount} steps (actual range: [${jsonActualStart}-${jsonActualEnd}]). Expected range: [${fromIndex}-${desiredEnd}]. Using binary protobuf for remaining...`);
 
-    const allSteps = [...jsonSteps];
+    const allSteps = [];
+
+    // Extract overlapping part from JSON steps
+    if (jsonActualEnd > fromIndex) {
+        const jsonSliceStart = Math.max(0, fromIndex - jsonActualStart);
+        const jsonSliceEnd = Math.min(jsonCount, desiredEnd - jsonActualStart);
+        if (jsonSliceStart < jsonSliceEnd) {
+            allSteps.push(...jsonSteps.slice(jsonSliceStart, jsonSliceEnd));
+        }
+    }
+
     let hasGaps = false;
-    // Detect if JSON API ignored our fromIndex and returned from 0
-    const jsonActualStart = jsonCount > expectedCount ? 0 : fromIndex;
-    let binaryStart = jsonActualStart + jsonCount;
+    let binaryStart = fromIndex + allSteps.length;
     let consecutiveEmptyRanges = 0;
     const MAX_EMPTY_RANGES = 5;
     const SUB_BATCH_SIZE = 50;
@@ -173,11 +187,45 @@ async function ensureCached(convId, inst = null) {
     }
 }
 
+// --- Helper: Extract actual step index from a step object ---
+function getStepIndex(step) {
+    if (!step) return undefined;
+    if (step.metadata) {
+        if (typeof step.metadata.stepIndex === 'number') return step.metadata.stepIndex;
+        if (typeof step.metadata.step_index === 'number') return step.metadata.step_index;
+    }
+    if (typeof step.stepIndex === 'number') return step.stepIndex;
+    if (typeof step.step_index === 'number') return step.step_index;
+    return undefined;
+}
+
 // --- Shared helper: Antigravity LS API startIndex workaround ---
 // Antigravity LS JSON API may ignore startIndex and return from 0 (both macOS & Windows).
 // Detect: if we got more steps than the range we requested, API started at 0.
-function detectApiStartIndex(stepsLength, expectedRange, requestedFrom) {
-    return stepsLength > expectedRange ? 0 : requestedFrom;
+function detectApiStartIndex(steps, expectedRange, requestedFrom) {
+    if (!steps || steps.length === 0) return requestedFrom;
+
+    // Support backward compatibility if length (number) is passed instead of array
+    if (typeof steps === 'number') {
+        return steps > expectedRange ? 0 : requestedFrom;
+    }
+
+    const firstIdx = getStepIndex(steps[0]);
+    if (firstIdx !== undefined) {
+        return firstIdx;
+    }
+
+    // Fallback: If requestedFrom > 0 but first step is obviously the beginning of conversation
+    const firstType = steps[0].type || '';
+    if (requestedFrom > 0 && 
+        (firstType === 'CORTEX_STEP_TYPE_CONVERSATION_HISTORY' || 
+         firstType === 'CORTEX_STEP_TYPE_USER_INPUT' ||
+         firstType === 'CONVERSATION_HISTORY' ||
+         firstType === 'USER_INPUT')) {
+        return 0;
+    }
+
+    return steps.length > expectedRange ? 0 : requestedFrom;
 }
 
 module.exports = { stepCache, ensureCached, getStepCountAndStatus, fetchAllSteps, detectApiStartIndex, fetchingSet };
