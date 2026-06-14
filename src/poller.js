@@ -268,7 +268,7 @@ async function pollConversation(activeConvId, info) {
 
         // Use Antigravity LS API workaround (JSON may ignore startIndex)
         const expectedRange = fetchTo - fetchFrom;
-        const apiStartedAt = detectApiStartIndex(freshSteps.length, expectedRange, fetchFrom);
+        const apiStartedAt = detectApiStartIndex(freshSteps, expectedRange, fetchFrom);
 
         // Process the fresh steps — map each to the correct cache index
         let updatedCount = 0;
