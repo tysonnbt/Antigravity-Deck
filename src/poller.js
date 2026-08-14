@@ -189,13 +189,15 @@ async function pollNow() {
 
             // Poll conversations to keep cache up to date:
             // - RUNNING/WAITING: always poll (streaming content updates)
-            // - IDLE: poll if server has more steps than cache (catch up after transition)
+            // - IDLE: poll if server has more/fewer steps than cache (catch up after transition or rollback)
             const isRunning = info.status === 'CASCADE_RUN_STATUS_RUNNING' ||
                 info.status === 'CASCADE_RUN_STATUS_WAITING_FOR_USER';
             const cached = stepCache[cascadeId];
-            const serverAhead = cached && info.stepCount > (cached.baseIndex || 0) + cached.steps.length;
+            const cachedLen = cached ? (cached.baseIndex || 0) + cached.steps.length : 0;
+            const serverAhead = cached && info.stepCount > cachedLen;
+            const serverBehind = cached && info.stepCount < cachedLen;
 
-            if (isRunning || serverAhead) {
+            if (isRunning || serverAhead || serverBehind) {
                 await pollConversation(cascadeId, info);
             }
 
@@ -376,6 +378,20 @@ async function pollConversation(activeConvId, info) {
         }
 
         cache.stepCount = newStepCount;
+
+        // Rollback: server has fewer steps than cache — drop the stale steps
+        // and tell the UI, otherwise the rolled-back steps stay visible forever.
+        const keep = Math.max(0, newStepCount - baseIdx);
+        if (keep < cache.steps.length) {
+            cache.steps.length = keep;
+            _broadcast({
+                type: 'steps_truncated',
+                conversationId: activeConvId,
+                stepCount: newStepCount,
+                baseIndex: baseIdx,
+            }, activeConvId);
+            console.log(`[poll] rollback detected: server=${newStepCount} cached=${cachedLen} — truncated cache to ${keep} steps`);
+        }
 
         if (updatedCount > 0 || newCount > 0) {
             if (!quietPoll) console.log(`[poll] ${updatedCount} updated, ${newCount} new (${cache.steps.length}/${newStepCount})`);
