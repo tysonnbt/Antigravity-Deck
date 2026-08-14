@@ -263,6 +263,16 @@ export function useWebSocket() {
             });
         });
 
+        const offStepsTruncated = wsService.on('steps_truncated', (data) => {
+            // Rollback: backend dropped steps beyond the new stepCount
+            setState(prev => {
+                if (data.conversationId && data.conversationId !== prev.currentConvId) return prev;
+                const keep = Math.max(0, (data.stepCount as number) - prev.baseIndex);
+                if (keep >= prev.steps.length) return prev;
+                return { ...prev, steps: prev.steps.slice(0, keep), stepCount: data.stepCount as number, lastUpdate: new Date().toLocaleTimeString() };
+            });
+        });
+
         const offCascadeStatus = wsService.on('cascade_status', (data) => {
             setState(prev => {
                 if (data.conversationId && data.conversationId !== prev.currentConvId) return prev;
@@ -306,6 +316,7 @@ export function useWebSocket() {
             offStepsInit();
             offStepsNew();
             offStepUpdated();
+            offStepsTruncated();
             offCascadeStatus();
             offConvUpdated();
             offResources();
