@@ -205,17 +205,6 @@ export async function getModels(): Promise<{ models: CascadeModel[]; groups: Cas
     return res.json();
 }
 
-// Preview what reverting to a step would do
-export async function cascadeRevertPreview(cascadeId: string, stepIndex: number): Promise<object> {
-    const res = await fetch(`${API_BASE}/api/cascade/${cascadeId}/revert-preview`, {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ stepIndex }),
-    });
-    if (!res.ok) throw new Error(`Revert preview failed: ${res.status}`);
-    return res.json();
-}
-
 // Revert cascade to a specific step (rollback)
 export async function cascadeRevert(cascadeId: string, stepIndex: number): Promise<object> {
     const res = await fetch(`${API_BASE}/api/cascade/${cascadeId}/revert`, {
