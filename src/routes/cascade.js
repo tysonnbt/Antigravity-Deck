@@ -262,14 +262,20 @@ module.exports = function setupCascadeRoutes(app) {
         } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
-    // Revert preview — show what rolling back to a step would do
-    app.post('/api/cascade/:id/revert-preview', async (req, res) => {
+    // Revert to a previous step — shared by preview and actual revert.
+    // stepIndex is the LS's absolute step index (the UI sends one less than the
+    // clicked message so the message itself is rolled back too; -1 clears all).
+    const revertRoute = (lsMethod) => async (req, res) => {
         try {
+            const { stepIndex } = req.body || {};
+            if (!Number.isInteger(stepIndex) || stepIndex < -1) {
+                return res.status(400).json({ error: 'stepIndex must be an integer >= -1' });
+            }
             const inst = resolveInst(req);
             if (!inst) return res.status(503).json({ error: 'No language server connected' });
-            const result = await callApi('GetRevertPreview', {
+            const result = await callApi(lsMethod, {
                 cascadeId: req.params.id,
-                stepIndex: req.body.stepIndex,
+                stepIndex,
                 metadata: {},
                 overrideConfig: {
                     plannerConfig: {
@@ -283,30 +289,13 @@ module.exports = function setupCascadeRoutes(app) {
             }, inst);
             res.json(result);
         } catch (e) { res.status(500).json({ error: e.message }); }
-    });
+    };
+
+    // Revert preview — show what rolling back to a step would do
+    app.post('/api/cascade/:id/revert-preview', revertRoute('GetRevertPreview'));
 
     // Revert cascade to a specific step (rollback)
-    app.post('/api/cascade/:id/revert', async (req, res) => {
-        try {
-            const inst = resolveInst(req);
-            if (!inst) return res.status(503).json({ error: 'No language server connected' });
-            const result = await callApi('RevertToCascadeStep', {
-                cascadeId: req.params.id,
-                stepIndex: req.body.stepIndex,
-                metadata: {},
-                overrideConfig: {
-                    plannerConfig: {
-                        conversational: { plannerMode: 'CONVERSATIONAL_PLANNER_MODE_DEFAULT', agenticMode: true },
-                        requestedModel: { model: req.body.modelId || 'MODEL_PLACEHOLDER_M26' },
-                        ephemeralMessagesConfig: { enabled: true },
-                        knowledgeConfig: { enabled: true }
-                    },
-                    conversationHistoryConfig: { enabled: true }
-                }
-            }, inst);
-            res.json(result);
-        } catch (e) { res.status(500).json({ error: e.message }); }
-    });
+    app.post('/api/cascade/:id/revert', revertRoute('RevertToCascadeStep'));
 
     // === Generic LS Proxy — call any method ===
     // Security: Method whitelist to prevent arbitrary LS method invocation
