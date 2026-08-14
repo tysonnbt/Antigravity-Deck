@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend — syntax + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Syntax check (src + tools)
+        run: node --check server.js && for f in $(find src tools scripts -name "*.js"); do node --check "$f" || exit 1; done
+
+      - name: Run unit tests
+        run: node test/*.test.js
+
+  frontend:
+    name: Frontend — lint + types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --prefix frontend
+
+      - name: ESLint
+        run: npm run lint --prefix frontend
+
+      - name: TypeScript check
+        run: npx --prefix frontend tsc --noEmit
+
+  pr-title:
+    name: PR title follows Conventional Commits
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            chore
+            refactor
+            test
+            style
+            perf
+            build
+            ci
+            revert
+          requireScope: false
