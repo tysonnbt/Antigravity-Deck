@@ -588,10 +588,10 @@
     padding-left: env(safe-area-inset-left);
   }
 
-  /* Main content column — shift entire area below notch, above home indicator */
+  /* Main content column — shift entire area below notch; bottom handled by input bar / footer */
   .pwa-main-content {
     padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
+    padding-bottom: 0;
   }
 }
 

@@ -26,6 +26,15 @@ import { Settings, Folder, Zap, BarChart2, RefreshCcw, SendHorizontal, Square, P
 import { Switch } from '@/components/ui/switch';
 import { notificationService, NOTIFICATION_SETTINGS_CHANGED } from '@/lib/notifications';
 
+function formatThinkingLevel(label: string): string {
+    if (!label) return 'Default';
+    return label
+        .replace(/\(\s*Low\s*\)/gi, '(S)')
+        .replace(/\(\s*Small\s*\)/gi, '(S)')
+        .replace(/\(\s*Medium\s*\)/gi, '(M)')
+        .replace(/\(\s*High\s*\)/gi, '(H)');
+}
+
 // === Props ===
 interface ChatViewProps {
     steps: Step[];
@@ -635,7 +644,7 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
                     </div>
 
                     {/* Input bar */}
-                    <div className="border-t border-border bg-background/80 backdrop-blur px-2 sm:px-4 py-2 sm:py-3"
+                    <div className="border-t border-border bg-background/80 backdrop-blur px-2 sm:px-4 pt-2 sm:pt-3 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
                         onDragOver={handleDragOver}
                         onDragLeave={handleDragLeave}
                         onDrop={handleDrop}
@@ -660,8 +669,8 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
                                         <DropdownMenuTrigger asChild>
                                             <Button variant="ghost" size="sm" className="gap-1 sm:gap-1.5 text-muted-foreground h-7 px-1.5 sm:px-2 font-normal shrink min-w-0 max-w-full">
                                                 <span><Brain className="h-3.5 w-3.5 shrink-0" /></span>
-                                                <span className="truncate max-w-[110px] xs:max-w-[150px] sm:max-w-[240px]" title={selectedModelLabel}>
-                                                    {selectedModelLabel.replace(/\s*\([^)]*\)$/, '') || selectedModelLabel}
+                                                <span className="truncate max-w-[140px] xs:max-w-[180px] sm:max-w-[240px]" title={selectedModelLabel}>
+                                                    {formatThinkingLevel(selectedModelLabel)}
                                                 </span>
                                                 <ChevronDown className="h-3 w-3 opacity-50 shrink-0" />
                                             </Button>
@@ -681,7 +690,7 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
                                                                 m.modelId === selectedModel && 'text-primary')}
                                                         >
                                                             <div className="flex items-center gap-2 min-w-0">
-                                                                <span className="truncate">{m.label}</span>
+                                                                <span className="truncate">{formatThinkingLevel(m.label)}</span>
                                                                 {m.tagTitle && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 shrink-0" title={m.tagDescription || undefined}>{m.tagTitle}</Badge>}
                                                                 {m.isRecommended && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 shrink-0"><Star className="w-2.5 h-2.5 text-amber-400" /></Badge>}
                                                             </div>
