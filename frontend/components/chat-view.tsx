@@ -570,7 +570,7 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
                         </div>
                     )}
                     {/* Chat messages */}
-                    <div ref={containerRef} onScroll={handleScroll} className="relative flex-1 overflow-y-auto px-3 sm:px-6 py-3 sm:py-5">
+                    <div ref={containerRef} onScroll={handleScroll} className="relative flex-1 overflow-y-auto px-2 sm:px-6 py-2 sm:py-5">
                         {displaySteps.length === 0 ? (
                             <div className="flex items-center justify-center h-full">
                                 <div className="text-center space-y-4">
@@ -653,79 +653,84 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
                         )}
                         <div className="max-w-4xl mx-auto space-y-2">
                             {/* Pickers row */}
-                            <div className="flex items-center gap-1.5 sm:gap-2 text-xs flex-wrap">
-                                {/* Model picker */}
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground h-7 px-2 font-normal">
-                                            <span><Brain className="h-3.5 w-3.5" /></span>
-                                            <span className="truncate max-w-[200px] sm:max-w-[240px]">{selectedModelLabel}</span>
-                                            <ChevronDown className="h-3 w-3 opacity-50" />
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="start" className="w-72">
-                                        {modelDisplayGroups.map((group, gi) => (
-                                            <DropdownMenuGroup key={group.name || `g${gi}`}>
-                                                {/* IDE shows a flat list when there's a single group; only label real sub-groups. */}
-                                                {modelDisplayGroups.length > 1 && group.name && (
-                                                    <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground/70 py-1">{group.name}</DropdownMenuLabel>
-                                                )}
-                                                {group.models.map(m => (
-                                                    <DropdownMenuItem
-                                                        key={m.modelId || m.label}
-                                                        onClick={() => setSelectedModel(m.modelId)}
-                                                        className={cn('cursor-pointer flex items-center justify-between gap-2',
-                                                            m.modelId === selectedModel && 'text-primary')}
-                                                    >
-                                                        <div className="flex items-center gap-2 min-w-0">
-                                                            <span className="truncate">{m.label}</span>
-                                                            {m.tagTitle && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 shrink-0" title={m.tagDescription || undefined}>{m.tagTitle}</Badge>}
-                                                            {m.isRecommended && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 shrink-0"><Star className="w-2.5 h-2.5 text-amber-400" /></Badge>}
-                                                        </div>
-                                                        <div className="flex items-center gap-1.5 shrink-0">
-                                                            {m.supportsImages && <span className="text-[9px]"><ImageIcon className="h-3 w-3" /></span>}
-                                                            <div className="w-12 h-1.5 rounded-full bg-muted overflow-hidden">
-                                                                <div className="h-full rounded-full bg-emerald-500/70" style={{ width: `${Math.round(m.quota * 100)}%` }} />
+                            <div className="flex items-center justify-between gap-1 text-xs w-full min-w-0">
+                                <div className="flex items-center gap-1 min-w-0 flex-1">
+                                    {/* Model picker */}
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="ghost" size="sm" className="gap-1 sm:gap-1.5 text-muted-foreground h-7 px-1.5 sm:px-2 font-normal shrink min-w-0 max-w-full">
+                                                <span><Brain className="h-3.5 w-3.5 shrink-0" /></span>
+                                                <span className="truncate max-w-[110px] xs:max-w-[150px] sm:max-w-[240px]" title={selectedModelLabel}>
+                                                    {selectedModelLabel.replace(/\s*\([^)]*\)$/, '') || selectedModelLabel}
+                                                </span>
+                                                <ChevronDown className="h-3 w-3 opacity-50 shrink-0" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="start" className="w-72">
+                                            {modelDisplayGroups.map((group, gi) => (
+                                                <DropdownMenuGroup key={group.name || `g${gi}`}>
+                                                    {/* IDE shows a flat list when there's a single group; only label real sub-groups. */}
+                                                    {modelDisplayGroups.length > 1 && group.name && (
+                                                        <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground/70 py-1">{group.name}</DropdownMenuLabel>
+                                                    )}
+                                                    {group.models.map(m => (
+                                                        <DropdownMenuItem
+                                                            key={m.modelId || m.label}
+                                                            onClick={() => setSelectedModel(m.modelId)}
+                                                            className={cn('cursor-pointer flex items-center justify-between gap-2',
+                                                                m.modelId === selectedModel && 'text-primary')}
+                                                        >
+                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                <span className="truncate">{m.label}</span>
+                                                                {m.tagTitle && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 shrink-0" title={m.tagDescription || undefined}>{m.tagTitle}</Badge>}
+                                                                {m.isRecommended && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 shrink-0"><Star className="w-2.5 h-2.5 text-amber-400" /></Badge>}
                                                             </div>
-                                                        </div>
-                                                    </DropdownMenuItem>
-                                                ))}
-                                                {gi < modelDisplayGroups.length - 1 && <DropdownMenuSeparator />}
-                                            </DropdownMenuGroup>
-                                        ))}
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
+                                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                                {m.supportsImages && <span className="text-[9px]"><ImageIcon className="h-3 w-3" /></span>}
+                                                                <div className="w-12 h-1.5 rounded-full bg-muted overflow-hidden">
+                                                                    <div className="h-full rounded-full bg-emerald-500/70" style={{ width: `${Math.round(m.quota * 100)}%` }} />
+                                                                </div>
+                                                            </div>
+                                                        </DropdownMenuItem>
+                                                    ))}
+                                                    {gi < modelDisplayGroups.length - 1 && <DropdownMenuSeparator />}
+                                                </DropdownMenuGroup>
+                                            ))}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
 
-                                {/* Status indicator */}
-                                {isActive && (
-                                    <div className="flex items-center gap-1.5 text-[10px] text-purple-400/70 ml-1">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
-                                        {isWaiting ? (autoAccept ? 'Auto-accepting...' : 'Waiting for approval') : 'Running'}
-                                    </div>
-                                )}
+                                    {/* Status indicator */}
+                                    {isActive && (
+                                        <div className="flex items-center gap-1 text-[10px] text-purple-400/70 shrink-0">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+                                            <span className="hidden sm:inline">{isWaiting ? (autoAccept ? 'Auto-accepting...' : 'Waiting for approval') : 'Running'}</span>
+                                            <span className="sm:hidden">{isWaiting ? 'Waiting' : 'Running'}</span>
+                                        </div>
+                                    )}
+                                </div>
 
-                                <div className="flex-1" />
+                                <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+                                    {/* New chat button */}
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={handleNewChat}
+                                        className="gap-1 h-7 px-1.5 sm:px-2 text-muted-foreground hover:text-foreground"
+                                        title="New Chat"
+                                    >
+                                        <Plus className="h-3.5 w-3.5" />
+                                        <span className="hidden sm:inline">New Chat</span>
+                                    </Button>
 
-                                {/* New chat button */}
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={handleNewChat}
-                                    className="gap-1 h-7 text-muted-foreground hover:text-foreground"
-                                >
-                                    <Plus className="h-3.5 w-3.5" />
-                                    <span className="hidden sm:inline">New Chat</span>
-                                </Button>
-
-                                {/* Chat Settings Dropdown */}
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="sm" className="gap-1.5 h-7 text-muted-foreground hover:text-foreground">
-                                            <Settings className="w-3.5 h-3.5" />
-                                            <span className="hidden sm:inline">Settings</span>
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" className="w-56 mb-1 bg-popover/95 backdrop-blur-sm shadow-xl rounded-lg border-border">
+                                    {/* Chat Settings Dropdown */}
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="ghost" size="sm" className="gap-1.5 h-7 px-1.5 sm:px-2 text-muted-foreground hover:text-foreground" title="Settings">
+                                                <Settings className="w-3.5 h-3.5" />
+                                                <span className="hidden sm:inline">Settings</span>
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="w-56 mb-1 bg-popover/95 backdrop-blur-sm shadow-xl rounded-lg border-border">
                                         <DropdownMenuLabel className="flex items-center gap-2 text-xs font-normal text-muted-foreground px-2 py-1.5">
                                             <Folder className="w-3.5 h-3.5" />
                                             <span className="truncate flex-1 min-w-0">{selectedWsName}</span>
@@ -796,6 +801,7 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
                                         </DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>
+                                </div>
                             </div>
 
                             {/* Token usage display */}

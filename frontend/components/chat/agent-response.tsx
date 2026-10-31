@@ -102,8 +102,8 @@ export const AgentResponse = memo(function AgentResponse({ step, index }: { step
     }, [step]);
 
     return (
-        <div className="flex justify-start mb-4">
-            <div className="max-w-[85%] group relative rounded-lg rounded-bl-md px-4 py-3 bg-gradient-to-r from-purple-950/20 to-transparent border border-purple-500/10 overflow-hidden min-w-0">
+        <div className="flex justify-start mb-3 sm:mb-4">
+            <div className="w-full sm:max-w-[85%] group relative rounded-lg rounded-bl-md px-3 sm:px-4 py-2.5 sm:py-3 bg-gradient-to-r from-purple-950/20 to-transparent border border-purple-500/10 overflow-hidden min-w-0">
                 <div className="flex items-center gap-2 mb-1.5">
                     <div className="w-5 h-5 rounded-full bg-purple-500/20 flex items-center justify-center text-[10px]"><Bot className="h-2.5 w-2.5 text-purple-400" /></div>
                     <span className="text-[10px] font-bold text-purple-400 uppercase tracking-widest">Agent</span>

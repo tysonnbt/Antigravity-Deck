@@ -255,13 +255,12 @@
 /* === Markdown renderer (react-markdown) === */
 .markdown-body {
   font-size: 0.875rem;
-  line-height: 1.7;
+  line-height: 1.65;
   color: inherit;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  overflow-wrap: break-word;
+  word-break: normal;
   min-width: 0;
   max-width: 100%;
-  overflow: hidden;
 }
 
 .markdown-body h1,
@@ -319,6 +318,14 @@
 .markdown-body a {
   color: oklch(0.7 0.15 250);
   text-decoration: underline;
+  text-underline-offset: 2px;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.markdown-body a .inline-code {
+  color: inherit;
+  text-decoration: inherit;
 }
 
 .markdown-body strong {
@@ -337,9 +344,9 @@
   font-size: 0.85em;
   font-family: var(--font-mono), 'Fira Code', monospace;
   color: oklch(0.75 0.1 250);
-  word-break: break-all;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
+  word-break: normal;
+  overflow-wrap: break-word;
+  white-space: break-spaces;
 }
 
 .code-block {

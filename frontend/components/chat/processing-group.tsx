@@ -75,7 +75,7 @@ export const ProcessingGroup = memo(function ProcessingGroup({ steps: groupSteps
 
             {/* Render code acknowledgements as diff cards */}
             {codeAckSteps.map(({ step, originalIndex }) => (
-                <div key={`ack-${originalIndex}`} className="mb-3 mx-4">
+                <div key={`ack-${originalIndex}`} className="mb-3 mx-0.5 sm:mx-4">
                     <CodeChangeViewer
                         infos={step.codeAcknowledgement?.codeAcknowledgementInfos || []}
                         isAccept={step.codeAcknowledgement?.isAccept}
@@ -85,13 +85,13 @@ export const ProcessingGroup = memo(function ProcessingGroup({ steps: groupSteps
 
             {/* Render normal steps in collapsed group */}
             {normalSteps.length > 0 && (
-                <div className="mb-3 mx-4">
+                <div className="mb-3 mx-0.5 sm:mx-4">
                     <Collapsible open={expanded} onOpenChange={setExpanded}>
                         <CollapsibleTrigger asChild>
                             <Button
                                 variant="ghost"
                                 className={cn(
-                                    'w-full flex items-center justify-start gap-2.5 px-4 py-2 h-auto text-xs',
+                                    'w-full flex items-center justify-start gap-2.5 px-2.5 sm:px-4 py-2 h-auto text-xs',
                                     'border border-transparent rounded-lg',
                                     expanded ? 'bg-muted/40 border-border/50 rounded-b-none' : 'bg-muted/20 hover:bg-muted/40 hover:border-border/30'
                                 )}
