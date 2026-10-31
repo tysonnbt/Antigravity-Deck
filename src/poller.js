@@ -247,6 +247,23 @@ async function pollConversation(activeConvId, info) {
             return;
         }
 
+        // Gap recovery: if server is ahead of cache by more than 10 steps, reload window cleanly
+        if (newStepCount > cachedLen + 10) {
+            console.log(`[poll] ${activeConvId.substring(0, 8)} gap detected (${cachedLen} -> ${newStepCount}) — re-caching window`);
+            await ensureCached(activeConvId, info?.inst, true);
+            const freshCache = stepCache[activeConvId];
+            if (freshCache) {
+                _broadcast({
+                    type: 'steps_init',
+                    conversationId: activeConvId,
+                    steps: freshCache.steps,
+                    baseIndex: freshCache.baseIndex || 0,
+                    stepCount: newStepCount
+                }, activeConvId);
+            }
+            return;
+        }
+
         // Fetch last 20 steps from cache + any new steps beyond cache
         // REFRESH_TAIL=20 ensures streaming content updates are caught
         const REFRESH_TAIL = 20;
@@ -389,6 +406,7 @@ async function pollConversation(activeConvId, info) {
                 conversationId: activeConvId,
                 steps: newStepsToAdd,
                 total: cache.steps.length,
+                stepCount: newStepCount,
                 baseIndex: cache.baseIndex || 0,
             }, activeConvId);
             console.log(`[WS] broadcast steps_new: ${newStepsToAdd.length} steps for ${activeConvId.substring(0, 8)} (total: ${cache.steps.length})`);

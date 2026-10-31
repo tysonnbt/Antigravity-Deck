@@ -44,20 +44,22 @@ async function fetchAllSteps(convId, totalSteps, inst = null, fromIndex = 0) {
     const jsonSteps = jsonData.steps || [];
     const jsonCount = jsonSteps.length;
 
-    // Check if JSON returned enough (respects fromIndex or returned from 0)
+    // Detect if JSON API ignored our fromIndex and returned from 0
     const expectedCount = maxSteps - fromIndex;
-    if (jsonCount >= expectedCount) {
-        return { steps: jsonSteps.slice(0, expectedCount), hasGaps: false };
+    const jsonActualStart = jsonCount > expectedCount ? 0 : fromIndex;
+    const sliceStart = Math.max(0, fromIndex - jsonActualStart);
+    const sliceEnd = sliceStart + expectedCount;
+
+    if (jsonCount >= sliceEnd) {
+        return { steps: jsonSteps.slice(sliceStart, sliceEnd), hasGaps: false };
     }
 
     // Step 2: Binary protobuf for remaining steps
     const { callApiBinary } = require('./api');
     console.log(`[*] JSON returned ${jsonCount}/${expectedCount} steps (from ${fromIndex}). Using binary protobuf for remaining...`);
 
-    const allSteps = [...jsonSteps];
+    const allSteps = jsonSteps.slice(sliceStart);
     let hasGaps = false;
-    // Detect if JSON API ignored our fromIndex and returned from 0
-    const jsonActualStart = jsonCount > expectedCount ? 0 : fromIndex;
     let binaryStart = jsonActualStart + jsonCount;
     let consecutiveEmptyRanges = 0;
     const MAX_EMPTY_RANGES = 5;
@@ -133,7 +135,7 @@ async function fetchAllSteps(convId, totalSteps, inst = null, fromIndex = 0) {
 
 // --- Ensure cached ---
 
-async function ensureCached(convId, inst = null) {
+async function ensureCached(convId, inst = null, forceRefresh = false) {
     if (fetchingSet.has(convId)) return; // per-conversation lock
     // Hub model (2.0.11): the usable connection is the per-cascade instance when known,
     // otherwise the shared hub (lsConfig). lsInstances can be empty (0 tracked workspaces)
@@ -143,21 +145,22 @@ async function ensureCached(convId, inst = null) {
         console.log(`[!] ensureCached skipped — LS not configured yet`);
         return; // Don't cache empty — will retry after init
     }
-    // Reuse the cache only while it's current. When new steps have streamed in (the live Jetbox
-    // stepCount is beyond the cached window end), fall through and re-fetch so the OPEN conversation
-    // updates. This is the hub-only live-update path: with 0 tracked workspaces no per-workspace
-    // poller runs, so the re-fetch is driven by the Jetbox 'conversations_updated' signal.
     const existing = stepCache[convId];
-    if (existing) {
+    if (existing && !forceRefresh) {
         let liveCount = existing.stepCount;
         try { const jb = require('./jetbox').getSummaries()[convId]; if (jb && typeof jb.stepCount === 'number') liveCount = jb.stepCount; } catch { }
-        if (liveCount <= ((existing.baseIndex || 0) + existing.steps.length)) return;
+        const cachedEnd = (existing.baseIndex || 0) + existing.steps.length;
+        if (liveCount <= cachedEnd && existing.steps.length > 0) return;
     }
     fetchingSet.add(convId);
 
     try {
         const callFn = inst ? (m, b) => callApi(m, b, inst) : null;
         const stepCount = await getStepCountAndStatus(convId, callFn).then(r => r.stepCount);
+        const cachedEnd = existing ? (existing.baseIndex || 0) + existing.steps.length : 0;
+        if (!forceRefresh && existing && stepCount <= cachedEnd && existing.steps.length > 0) {
+            return;
+        }
         console.log(`[*] Loading ${convId.substring(0, 8)} (stepCount: ${stepCount}, batches: ${Math.ceil(stepCount / BATCH_SIZE)})...`);
 
         // Only fetch the tail window (last STEP_WINDOW_SIZE steps)

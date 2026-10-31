@@ -189,7 +189,7 @@ export function useWebSocket() {
                 if (prev.baseIndex === incomingBase && prev.steps.length === incoming.length) {
                     let anyChanged = false;
                     const merged = prev.steps.map((oldStep, i) => {
-                        if (i >= incoming.length - 5 && JSON.stringify(oldStep) !== JSON.stringify(incoming[i])) {
+                        if (JSON.stringify(oldStep) !== JSON.stringify(incoming[i])) {
                             anyChanged = true;
                             return incoming[i];
                         }
@@ -231,20 +231,36 @@ export function useWebSocket() {
                 }
                 const newSteps = (data.steps as Step[]) || [];
                 if (newSteps.length === 0) return prev;
-                // Dedup: only append steps beyond current length
-                const currentLen = prev.steps.length;
-                const expectedStart = data.total ? (data.total as number) - newSteps.length : currentLen;
-                const skipCount = Math.max(0, currentLen - expectedStart);
+
+                const incomingBase = (data.baseIndex as number) ?? prev.baseIndex;
+                const newStepCount = (data.stepCount as number) ?? (prev.stepCount + newSteps.length);
+
+                const currentEnd = prev.baseIndex + prev.steps.length;
+                const newStart = incomingBase + (typeof data.total === 'number' ? data.total - newSteps.length : (newStepCount - newSteps.length));
+
+                if (newStart > currentEnd + 5) {
+                    wsService?.send({ type: 'set_conversation', conversationId: prev.currentConvId });
+                    return prev;
+                }
+
+                // Dedup against current steps
+                const skipCount = Math.max(0, currentEnd - newStart);
                 const actualNew = newSteps.slice(skipCount);
-                console.log(`[WS] steps_new: ${newSteps.length} incoming, currentLen=${currentLen}, total=${data.total}, expectedStart=${expectedStart}, skipCount=${skipCount}, actualNew=${actualNew.length}`);
                 if (actualNew.length === 0) return prev;
-                // Update stepCount from backend metadata
-                const newStepCount = data.baseIndex !== undefined
-                    ? ((data.baseIndex as number) + ((data.total as number) || (currentLen + actualNew.length)))
-                    : prev.stepCount + actualNew.length;
+
+                const combined = [...prev.steps, ...actualNew];
+                let finalSteps = combined;
+                let finalBase = prev.baseIndex;
+                if (finalSteps.length > 600) {
+                    const excess = finalSteps.length - 500;
+                    finalSteps = finalSteps.slice(excess);
+                    finalBase += excess;
+                }
+
                 return {
                     ...prev,
-                    steps: [...prev.steps, ...actualNew],
+                    steps: finalSteps,
+                    baseIndex: finalBase,
                     stepCount: newStepCount,
                     lastUpdate: new Date().toLocaleTimeString(),
                 };
