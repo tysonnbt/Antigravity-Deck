@@ -237,17 +237,38 @@ async function pollConversation(activeConvId, info) {
         const cachedLen = (cache.baseIndex || 0) + cache.steps.length; // server-absolute end of cached window
         if (!quietPoll && newStepCount !== cachedLen) console.log(`[poll] ${activeConvId.substring(0, 8)}: cached=${cachedLen} server=${newStepCount} status=${cascadeStatus}`);
 
-        // Status changes are now detected at pollNow() level (before isRunning/isUIViewed filter)
-        // to ensure RUNNING→DONE transitions are caught for ALL cascades including bridge
-
         // Nothing to do if no steps exist
         if (newStepCount === 0 && cachedLen === 0) return;
+
+        // Desynchronization guard: if cache has more steps than server, cache is corrupted or truncated
+        if (cachedLen > newStepCount) {
+            console.log(`[poll] ${activeConvId.substring(0, 8)} desync detected (cached ${cachedLen} > server ${newStepCount}) — resetting cache`);
+            delete stepCache[activeConvId];
+            return;
+        }
+
+        // Gap recovery: if server is ahead of cache by more than 10 steps, reload window cleanly
+        if (newStepCount > cachedLen + 10) {
+            console.log(`[poll] ${activeConvId.substring(0, 8)} gap detected (${cachedLen} -> ${newStepCount}) — re-caching window`);
+            await ensureCached(activeConvId, info?.inst, true);
+            const freshCache = stepCache[activeConvId];
+            if (freshCache) {
+                _broadcast({
+                    type: 'steps_init',
+                    conversationId: activeConvId,
+                    steps: freshCache.steps,
+                    baseIndex: freshCache.baseIndex || 0,
+                    stepCount: newStepCount
+                }, activeConvId);
+            }
+            return;
+        }
 
         // Fetch last 20 steps from cache + any new steps beyond cache
         // REFRESH_TAIL=20 ensures streaming content updates are caught
         const REFRESH_TAIL = 20;
-        const fetchFrom = Math.max(0, cachedLen - REFRESH_TAIL);
-        const fetchTo = Math.max(newStepCount, cachedLen);
+        const fetchTo = newStepCount;
+        const fetchFrom = Math.max(0, Math.min(fetchTo, cachedLen - REFRESH_TAIL));
 
         if (fetchTo <= 0) return;
 
@@ -271,8 +292,8 @@ async function pollConversation(activeConvId, info) {
         const apiStartedAt = detectApiStartIndex(freshSteps.length, expectedRange, fetchFrom);
 
         // Process the fresh steps — map each to the correct cache index
-        let updatedCount = 0;
         let newCount = 0;
+        const changedUpdates = [];
         const newStepsToAdd = [];
         const baseIdx = cache.baseIndex || 0; // server index of cache.steps[0]
 
@@ -288,13 +309,7 @@ async function pollConversation(activeConvId, info) {
                     const newJson = JSON.stringify(freshSteps[i]);
                     if (oldJson !== newJson) {
                         cache.steps[localIdx] = freshSteps[i];
-                        _broadcast({
-                            type: 'step_updated',
-                            conversationId: activeConvId,
-                            index: serverIdx,
-                            step: freshSteps[i]
-                        }, activeConvId);
-                        updatedCount++;
+                        changedUpdates.push({ index: serverIdx, step: freshSteps[i] });
                     }
                 }
             } else if (serverIdx >= cachedLen) {
@@ -303,6 +318,27 @@ async function pollConversation(activeConvId, info) {
                     newStepsToAdd.push(freshSteps[i]);
                     newCount++;
                 }
+            }
+        }
+
+        // Broadcast updates — if too many changed at once, re-init instead of flooding WS
+        if (changedUpdates.length > 10) {
+            console.log(`[poll] Large update batch (${changedUpdates.length}) — broadcasting steps_init`);
+            _broadcast({
+                type: 'steps_init',
+                conversationId: activeConvId,
+                steps: cache.steps,
+                baseIndex: cache.baseIndex || 0,
+                stepCount: newStepCount
+            }, activeConvId);
+        } else {
+            for (const u of changedUpdates) {
+                _broadcast({
+                    type: 'step_updated',
+                    conversationId: activeConvId,
+                    index: u.index,
+                    step: u.step
+                }, activeConvId);
             }
         }
 
@@ -370,6 +406,7 @@ async function pollConversation(activeConvId, info) {
                 conversationId: activeConvId,
                 steps: newStepsToAdd,
                 total: cache.steps.length,
+                stepCount: newStepCount,
                 baseIndex: cache.baseIndex || 0,
             }, activeConvId);
             console.log(`[WS] broadcast steps_new: ${newStepsToAdd.length} steps for ${activeConvId.substring(0, 8)} (total: ${cache.steps.length})`);
