@@ -196,16 +196,100 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
         }
     }, [input]);
 
+    // Merge optimistic pending message into displayed steps
+    const displaySteps = useMemo(() => {
+        if (!pendingMessage) return steps;
+        const lastUserStep = [...steps].reverse().find(s => s.type === 'CORTEX_STEP_TYPE_USER_INPUT');
+        if (lastUserStep) {
+            const lastText = extractStepContent(lastUserStep) || '';
+            if (lastText === pendingMessage) return steps;
+        }
+        const optimisticStep: Step & { _media?: typeof pendingMediaRef.current } = {
+            type: 'CORTEX_STEP_TYPE_USER_INPUT',
+            status: 'CORTEX_STEP_STATUS_DONE',
+            userInput: { items: [{ text: pendingMessage }] },
+        };
+        if (pendingMediaRef.current.length > 0) {
+            optimisticStep._media = pendingMediaRef.current;
+        }
+        return [...steps, optimisticStep];
+    }, [steps, pendingMessage]);
+
+    // Clear pending message when real steps pick it up
+    useEffect(() => {
+        if (!pendingMessage) return;
+        const lastUserStep = [...steps].reverse().find(s => s.type === 'CORTEX_STEP_TYPE_USER_INPUT');
+        if (lastUserStep) {
+            const lastText = extractStepContent(lastUserStep) || '';
+            if (lastText === pendingMessage) {
+                setPendingMessage(null);
+                pendingMediaRef.current = [];
+            }
+        }
+    }, [steps, pendingMessage]);
+
+    const INITIAL_VISIBLE_GROUPS = 25;
+    const [visibleGroupCount, setVisibleGroupCount] = useState(INITIAL_VISIBLE_GROUPS);
+    const prevConvIdRef = useRef(currentConvId);
+    const isInitialRenderRef = useRef(true);
+
+    // Reset visible window when switching conversation
+    useEffect(() => {
+        if (currentConvId !== prevConvIdRef.current) {
+            setVisibleGroupCount(INITIAL_VISIBLE_GROUPS);
+            prevConvIdRef.current = currentConvId;
+            isInitialRenderRef.current = true;
+        }
+    }, [currentConvId]);
+
+    const groups = useMemo(() => groupSteps(displaySteps), [displaySteps]);
+
+    const visibleGroups = useMemo(() => {
+        if (groups.length <= visibleGroupCount) return groups;
+        return groups.slice(-visibleGroupCount);
+    }, [groups, visibleGroupCount]);
+
+    const hiddenGroupsCount = Math.max(0, groups.length - visibleGroupCount);
+
+    const loadOlderVisibleGroups = useCallback(() => {
+        const el = containerRef.current;
+        if (!el) return;
+        const prevScrollHeight = el.scrollHeight;
+        const prevScrollTop = el.scrollTop;
+
+        setVisibleGroupCount(prev => prev + 25);
+
+        requestAnimationFrame(() => {
+            if (el) {
+                const heightDiff = el.scrollHeight - prevScrollHeight;
+                if (heightDiff > 0) {
+                    el.scrollTop = prevScrollTop + heightDiff;
+                }
+            }
+        });
+    }, []);
+
     // Auto-scroll: triggers on new steps (length change) AND streaming content updates (wsVersion)
     useEffect(() => {
-        if (autoScrollRef.current && bottomRef.current) {
+        if (!containerRef.current || !bottomRef.current) return;
+        const isNewConv = currentConvId !== prevConvIdRef.current;
+        const stepDiff = steps.length - prevStepsLenRef.current;
+
+        if (isNewConv || isInitialRenderRef.current || stepDiff > 5) {
+            // Initial load, conversation switch, or reconnect: instant jump to bottom
+            containerRef.current.scrollTop = containerRef.current.scrollHeight;
+            bottomRef.current.scrollIntoView({ behavior: 'instant' });
+            autoScrollRef.current = true;
+            isInitialRenderRef.current = false;
+            window.matchMedia('(pointer: fine)').matches && inputRef.current?.focus();
+        } else if (autoScrollRef.current) {
+            // Live single step streaming: smooth scroll
             bottomRef.current.scrollIntoView({ behavior: 'smooth' });
-        } else if (steps.length > prevStepsLenRef.current) {
-            // New steps arrived but user is scrolled up — show button
+        } else if (stepDiff > 0) {
             setShowScrollBtn(true);
         }
         prevStepsLenRef.current = steps.length;
-    }, [steps.length, wsVersion]);
+    }, [steps.length, wsVersion, currentConvId]);
 
     // Preserve scroll position when older steps are prepended (baseIndex decreased)
     useEffect(() => {
@@ -223,17 +307,20 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
         if (!containerRef.current) return;
         const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
         // Only update autoScroll state from REAL user scrolls (wheel/touch)
-        // Programmatic scrollIntoView fires scroll events but NOT wheel/touch events
         if (isUserScrollingRef.current) {
             const atBottom = scrollHeight - scrollTop <= clientHeight + 100;
             autoScrollRef.current = atBottom;
             if (atBottom) setShowScrollBtn(false);
         }
-        // Always check: load older steps when near top
-        if (scrollTop < 100 && baseIndex > 0 && !loadingOlder && onLoadOlder) {
-            onLoadOlder();
+        // Lazy load older steps when near top
+        if (scrollTop < 120 && isUserScrollingRef.current) {
+            if (hiddenGroupsCount > 0) {
+                loadOlderVisibleGroups();
+            } else if (baseIndex > 0 && !loadingOlder && onLoadOlder) {
+                onLoadOlder();
+            }
         }
-    }, [baseIndex, loadingOlder, onLoadOlder]);
+    }, [hiddenGroupsCount, loadOlderVisibleGroups, baseIndex, loadingOlder, onLoadOlder]);
 
     const scrollToBottom = useCallback(() => {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -273,18 +360,6 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
 
     // Reset localCascadeId when currentConvId changes
     useEffect(() => { setLocalCascadeId(null); }, [currentConvId]);
-
-    // Scroll to bottom when entering/switching conversations
-    useEffect(() => {
-        autoScrollRef.current = true;
-        // Use a short delay to let the DOM render the new steps first
-        const timer = setTimeout(() => {
-            bottomRef.current?.scrollIntoView({ behavior: 'instant' });
-            // Only auto-focus on desktop — on Android, programmatic focus triggers the soft keyboard
-            window.matchMedia('(pointer: fine)').matches && inputRef.current?.focus();
-        }, 50);
-        return () => clearTimeout(timer);
-    }, [currentConvId]);
 
     // Close pickers on outside click
     useEffect(() => {
@@ -469,43 +544,6 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
     }, [handleSend, showWorkflows]);
 
-    // Merge optimistic pending message into displayed steps
-    const displaySteps = useMemo(() => {
-        if (!pendingMessage) return steps;
-        // Check if pending message is already in real steps using extractStepContent (handles all formats)
-        const lastUserStep = [...steps].reverse().find(s => s.type === 'CORTEX_STEP_TYPE_USER_INPUT');
-        if (lastUserStep) {
-            const lastText = extractStepContent(lastUserStep) || '';
-            if (lastText === pendingMessage) return steps;
-        }
-        // Append optimistic user step with image data
-        const optimisticStep: Step & { _media?: typeof pendingMediaRef.current } = {
-            type: 'CORTEX_STEP_TYPE_USER_INPUT',
-            status: 'CORTEX_STEP_STATUS_DONE',
-            userInput: { items: [{ text: pendingMessage }] },
-        };
-        // Attach image snapshots for UserMessage rendering
-        if (pendingMediaRef.current.length > 0) {
-            optimisticStep._media = pendingMediaRef.current;
-        }
-        return [...steps, optimisticStep];
-    }, [steps, pendingMessage]);
-
-    // Clear pending message when real steps pick it up (avoids setTimeout inside useMemo)
-    useEffect(() => {
-        if (!pendingMessage) return;
-        const lastUserStep = [...steps].reverse().find(s => s.type === 'CORTEX_STEP_TYPE_USER_INPUT');
-        if (lastUserStep) {
-            const lastText = extractStepContent(lastUserStep) || '';
-            if (lastText === pendingMessage) {
-                setPendingMessage(null);
-                pendingMediaRef.current = [];
-            }
-        }
-    }, [steps, pendingMessage]);
-
-    const groups = useMemo(() => groupSteps(displaySteps), [displaySteps]);
-
     // Highest step index with a terminal status — a WAITING gate is live unless a
     // LATER step already completed past it (queued PENDING steps must not hide it).
     const lastTerminalIndex = useMemo(() => {
@@ -594,8 +632,17 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
                             </div>
                         ) : (
                             <div className="max-w-4xl mx-auto">
-                                {/* Load older steps trigger */}
-                                {baseIndex > 0 && (
+                                {/* Load older steps trigger: first reveal hidden in-memory groups, then server steps */}
+                                {hiddenGroupsCount > 0 ? (
+                                    <div className="flex justify-center py-2 mb-2">
+                                        <button
+                                            onClick={loadOlderVisibleGroups}
+                                            className="text-xs text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-md hover:bg-muted/40 font-medium"
+                                        >
+                                            ↑ Show {Math.min(hiddenGroupsCount, 25)} older messages ({hiddenGroupsCount} more in memory)
+                                        </button>
+                                    </div>
+                                ) : baseIndex > 0 ? (
                                     <div className="flex justify-center py-3 mb-2">
                                         {loadingOlder ? (
                                             <span className="text-xs text-muted-foreground animate-pulse">Loading older steps...</span>
@@ -608,23 +655,24 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
                                             </button>
                                         )}
                                     </div>
-                                )}
-                                {groups.map((group, gIdx) => {
-                                    const isRecent = gIdx >= groups.length - 3;
-                                    const animClass = isRecent ? 'message-animate' : '';
+                                ) : null}
+                                {visibleGroups.map((group, vIdx) => {
+                                    const isRecent = vIdx >= visibleGroups.length - 2;
+                                    const animClass = (!isInitialRenderRef.current && isRecent && autoScrollRef.current) ? 'message-animate' : '';
+                                    const groupKey = `${group.type}-${group.steps[0]?.originalIndex ?? vIdx}`;
                                     if (group.type === 'user') {
                                         const { step, originalIndex } = group.steps[0];
-                                        return <div key={`u-${gIdx}`} className={animClass}><UserMessage step={step} index={originalIndex} /></div>;
+                                        return <div key={groupKey} className={animClass}><UserMessage step={step} index={originalIndex} /></div>;
                                     }
                                     if (group.type === 'response') {
                                         const { step, originalIndex } = group.steps[0];
-                                        return <div key={`r-${gIdx}`} className={animClass}><AgentResponse step={step} index={originalIndex} /></div>;
+                                        return <div key={groupKey} className={animClass}><AgentResponse step={step} index={originalIndex} /></div>;
                                     }
                                     if (group.type === 'image') {
                                         const { step, originalIndex } = group.steps[0];
-                                        return <div key={`img-${gIdx}`} className={animClass}><GeneratedImageStep step={step} originalIndex={originalIndex} /></div>;
+                                        return <div key={groupKey} className={animClass}><GeneratedImageStep step={step} originalIndex={originalIndex} /></div>;
                                     }
-                                    return <div key={`p-${gIdx}`} className={animClass}><ProcessingGroup steps={group.steps} cascadeId={activeCascadeId} lastTerminalIndex={lastTerminalIndex} /></div>;
+                                    return <div key={groupKey} className={animClass}><ProcessingGroup steps={group.steps} cascadeId={activeCascadeId} lastTerminalIndex={lastTerminalIndex} /></div>;
                                 })}
                                 {isRunning && <StreamingIndicator />}
                                 <div ref={bottomRef} className="h-4" />
