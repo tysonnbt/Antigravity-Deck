@@ -302,8 +302,8 @@ function GateCard({ icon, title, originalIndex, children }: {
     children: React.ReactNode;
 }) {
     return (
-        <div className="mx-4 mb-3 rounded-lg border border-border bg-card overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="p-4">
+        <div className="mx-0.5 sm:mx-4 mb-3 rounded-lg border border-border bg-card overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="p-3 sm:p-4">
                 <div className="flex items-center gap-2 mb-3">
                     <span className="text-sm text-muted-foreground">{icon}</span>
                     <span className="text-sm font-medium text-foreground">{title}</span>
@@ -429,8 +429,8 @@ export const WaitingStep = memo(function WaitingStep({ step, originalIndex, casc
     };
 
     return (
-        <div className="mx-4 mb-3 rounded-lg border border-border bg-card overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="p-4">
+        <div className="mx-0.5 sm:mx-4 mb-3 rounded-lg border border-border bg-card overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="p-3 sm:p-4">
                 {/* Header */}
                 <div className="flex items-center gap-2 mb-3">
                     <span className="text-sm text-muted-foreground">{icon}</span>

@@ -26,6 +26,15 @@ import { Settings, Folder, Zap, BarChart2, RefreshCcw, SendHorizontal, Square, P
 import { Switch } from '@/components/ui/switch';
 import { notificationService, NOTIFICATION_SETTINGS_CHANGED } from '@/lib/notifications';
 
+function formatThinkingLevel(label: string): string {
+    if (!label) return 'Default';
+    return label
+        .replace(/\(\s*Low\s*\)/gi, '(S)')
+        .replace(/\(\s*Small\s*\)/gi, '(S)')
+        .replace(/\(\s*Medium\s*\)/gi, '(M)')
+        .replace(/\(\s*High\s*\)/gi, '(H)');
+}
+
 // === Props ===
 interface ChatViewProps {
     steps: Step[];
@@ -187,16 +196,100 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
         }
     }, [input]);
 
+    // Merge optimistic pending message into displayed steps
+    const displaySteps = useMemo(() => {
+        if (!pendingMessage) return steps;
+        const lastUserStep = [...steps].reverse().find(s => s.type === 'CORTEX_STEP_TYPE_USER_INPUT');
+        if (lastUserStep) {
+            const lastText = extractStepContent(lastUserStep) || '';
+            if (lastText === pendingMessage) return steps;
+        }
+        const optimisticStep: Step & { _media?: typeof pendingMediaRef.current } = {
+            type: 'CORTEX_STEP_TYPE_USER_INPUT',
+            status: 'CORTEX_STEP_STATUS_DONE',
+            userInput: { items: [{ text: pendingMessage }] },
+        };
+        if (pendingMediaRef.current.length > 0) {
+            optimisticStep._media = pendingMediaRef.current;
+        }
+        return [...steps, optimisticStep];
+    }, [steps, pendingMessage]);
+
+    // Clear pending message when real steps pick it up
+    useEffect(() => {
+        if (!pendingMessage) return;
+        const lastUserStep = [...steps].reverse().find(s => s.type === 'CORTEX_STEP_TYPE_USER_INPUT');
+        if (lastUserStep) {
+            const lastText = extractStepContent(lastUserStep) || '';
+            if (lastText === pendingMessage) {
+                setPendingMessage(null);
+                pendingMediaRef.current = [];
+            }
+        }
+    }, [steps, pendingMessage]);
+
+    const INITIAL_VISIBLE_GROUPS = 25;
+    const [visibleGroupCount, setVisibleGroupCount] = useState(INITIAL_VISIBLE_GROUPS);
+    const prevConvIdRef = useRef(currentConvId);
+    const isInitialRenderRef = useRef(true);
+
+    // Reset visible window when switching conversation
+    useEffect(() => {
+        if (currentConvId !== prevConvIdRef.current) {
+            setVisibleGroupCount(INITIAL_VISIBLE_GROUPS);
+            prevConvIdRef.current = currentConvId;
+            isInitialRenderRef.current = true;
+        }
+    }, [currentConvId]);
+
+    const groups = useMemo(() => groupSteps(displaySteps), [displaySteps]);
+
+    const visibleGroups = useMemo(() => {
+        if (groups.length <= visibleGroupCount) return groups;
+        return groups.slice(-visibleGroupCount);
+    }, [groups, visibleGroupCount]);
+
+    const hiddenGroupsCount = Math.max(0, groups.length - visibleGroupCount);
+
+    const loadOlderVisibleGroups = useCallback(() => {
+        const el = containerRef.current;
+        if (!el) return;
+        const prevScrollHeight = el.scrollHeight;
+        const prevScrollTop = el.scrollTop;
+
+        setVisibleGroupCount(prev => prev + 25);
+
+        requestAnimationFrame(() => {
+            if (el) {
+                const heightDiff = el.scrollHeight - prevScrollHeight;
+                if (heightDiff > 0) {
+                    el.scrollTop = prevScrollTop + heightDiff;
+                }
+            }
+        });
+    }, []);
+
     // Auto-scroll: triggers on new steps (length change) AND streaming content updates (wsVersion)
     useEffect(() => {
-        if (autoScrollRef.current && bottomRef.current) {
+        if (!containerRef.current || !bottomRef.current) return;
+        const isNewConv = currentConvId !== prevConvIdRef.current;
+        const stepDiff = steps.length - prevStepsLenRef.current;
+
+        if (isNewConv || isInitialRenderRef.current || stepDiff > 5) {
+            // Initial load, conversation switch, or reconnect: instant jump to bottom
+            containerRef.current.scrollTop = containerRef.current.scrollHeight;
+            bottomRef.current.scrollIntoView({ behavior: 'instant' });
+            autoScrollRef.current = true;
+            isInitialRenderRef.current = false;
+            window.matchMedia('(pointer: fine)').matches && inputRef.current?.focus();
+        } else if (autoScrollRef.current) {
+            // Live single step streaming: smooth scroll
             bottomRef.current.scrollIntoView({ behavior: 'smooth' });
-        } else if (steps.length > prevStepsLenRef.current) {
-            // New steps arrived but user is scrolled up — show button
+        } else if (stepDiff > 0) {
             setShowScrollBtn(true);
         }
         prevStepsLenRef.current = steps.length;
-    }, [steps.length, wsVersion]);
+    }, [steps.length, wsVersion, currentConvId]);
 
     // Preserve scroll position when older steps are prepended (baseIndex decreased)
     useEffect(() => {
@@ -214,17 +307,20 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
         if (!containerRef.current) return;
         const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
         // Only update autoScroll state from REAL user scrolls (wheel/touch)
-        // Programmatic scrollIntoView fires scroll events but NOT wheel/touch events
         if (isUserScrollingRef.current) {
             const atBottom = scrollHeight - scrollTop <= clientHeight + 100;
             autoScrollRef.current = atBottom;
             if (atBottom) setShowScrollBtn(false);
         }
-        // Always check: load older steps when near top
-        if (scrollTop < 100 && baseIndex > 0 && !loadingOlder && onLoadOlder) {
-            onLoadOlder();
+        // Lazy load older steps when near top
+        if (scrollTop < 120 && isUserScrollingRef.current) {
+            if (hiddenGroupsCount > 0) {
+                loadOlderVisibleGroups();
+            } else if (baseIndex > 0 && !loadingOlder && onLoadOlder) {
+                onLoadOlder();
+            }
         }
-    }, [baseIndex, loadingOlder, onLoadOlder]);
+    }, [hiddenGroupsCount, loadOlderVisibleGroups, baseIndex, loadingOlder, onLoadOlder]);
 
     const scrollToBottom = useCallback(() => {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -264,18 +360,6 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
 
     // Reset localCascadeId when currentConvId changes
     useEffect(() => { setLocalCascadeId(null); }, [currentConvId]);
-
-    // Scroll to bottom when entering/switching conversations
-    useEffect(() => {
-        autoScrollRef.current = true;
-        // Use a short delay to let the DOM render the new steps first
-        const timer = setTimeout(() => {
-            bottomRef.current?.scrollIntoView({ behavior: 'instant' });
-            // Only auto-focus on desktop — on Android, programmatic focus triggers the soft keyboard
-            window.matchMedia('(pointer: fine)').matches && inputRef.current?.focus();
-        }, 50);
-        return () => clearTimeout(timer);
-    }, [currentConvId]);
 
     // Close pickers on outside click
     useEffect(() => {
@@ -460,43 +544,6 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
     }, [handleSend, showWorkflows]);
 
-    // Merge optimistic pending message into displayed steps
-    const displaySteps = useMemo(() => {
-        if (!pendingMessage) return steps;
-        // Check if pending message is already in real steps using extractStepContent (handles all formats)
-        const lastUserStep = [...steps].reverse().find(s => s.type === 'CORTEX_STEP_TYPE_USER_INPUT');
-        if (lastUserStep) {
-            const lastText = extractStepContent(lastUserStep) || '';
-            if (lastText === pendingMessage) return steps;
-        }
-        // Append optimistic user step with image data
-        const optimisticStep: Step & { _media?: typeof pendingMediaRef.current } = {
-            type: 'CORTEX_STEP_TYPE_USER_INPUT',
-            status: 'CORTEX_STEP_STATUS_DONE',
-            userInput: { items: [{ text: pendingMessage }] },
-        };
-        // Attach image snapshots for UserMessage rendering
-        if (pendingMediaRef.current.length > 0) {
-            optimisticStep._media = pendingMediaRef.current;
-        }
-        return [...steps, optimisticStep];
-    }, [steps, pendingMessage]);
-
-    // Clear pending message when real steps pick it up (avoids setTimeout inside useMemo)
-    useEffect(() => {
-        if (!pendingMessage) return;
-        const lastUserStep = [...steps].reverse().find(s => s.type === 'CORTEX_STEP_TYPE_USER_INPUT');
-        if (lastUserStep) {
-            const lastText = extractStepContent(lastUserStep) || '';
-            if (lastText === pendingMessage) {
-                setPendingMessage(null);
-                pendingMediaRef.current = [];
-            }
-        }
-    }, [steps, pendingMessage]);
-
-    const groups = useMemo(() => groupSteps(displaySteps), [displaySteps]);
-
     // Highest step index with a terminal status — a WAITING gate is live unless a
     // LATER step already completed past it (queued PENDING steps must not hide it).
     const lastTerminalIndex = useMemo(() => {
@@ -570,7 +617,7 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
                         </div>
                     )}
                     {/* Chat messages */}
-                    <div ref={containerRef} onScroll={handleScroll} className="relative flex-1 overflow-y-auto px-3 sm:px-6 py-3 sm:py-5">
+                    <div ref={containerRef} onScroll={handleScroll} className="relative flex-1 overflow-y-auto px-2 sm:px-6 py-2 sm:py-5">
                         {displaySteps.length === 0 ? (
                             <div className="flex items-center justify-center h-full">
                                 <div className="text-center space-y-4">
@@ -585,8 +632,17 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
                             </div>
                         ) : (
                             <div className="max-w-4xl mx-auto">
-                                {/* Load older steps trigger */}
-                                {baseIndex > 0 && (
+                                {/* Load older steps trigger: first reveal hidden in-memory groups, then server steps */}
+                                {hiddenGroupsCount > 0 ? (
+                                    <div className="flex justify-center py-2 mb-2">
+                                        <button
+                                            onClick={loadOlderVisibleGroups}
+                                            className="text-xs text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-md hover:bg-muted/40 font-medium"
+                                        >
+                                            ↑ Show {Math.min(hiddenGroupsCount, 25)} older messages ({hiddenGroupsCount} more in memory)
+                                        </button>
+                                    </div>
+                                ) : baseIndex > 0 ? (
                                     <div className="flex justify-center py-3 mb-2">
                                         {loadingOlder ? (
                                             <span className="text-xs text-muted-foreground animate-pulse">Loading older steps...</span>
@@ -599,23 +655,24 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
                                             </button>
                                         )}
                                     </div>
-                                )}
-                                {groups.map((group, gIdx) => {
-                                    const isRecent = gIdx >= groups.length - 3;
-                                    const animClass = isRecent ? 'message-animate' : '';
+                                ) : null}
+                                {visibleGroups.map((group, vIdx) => {
+                                    const isRecent = vIdx >= visibleGroups.length - 2;
+                                    const animClass = (!isInitialRenderRef.current && isRecent && autoScrollRef.current) ? 'message-animate' : '';
+                                    const groupKey = `${group.type}-${group.steps[0]?.originalIndex ?? vIdx}`;
                                     if (group.type === 'user') {
                                         const { step, originalIndex } = group.steps[0];
-                                        return <div key={`u-${gIdx}`} className={animClass}><UserMessage step={step} index={originalIndex} /></div>;
+                                        return <div key={groupKey} className={animClass}><UserMessage step={step} index={originalIndex} /></div>;
                                     }
                                     if (group.type === 'response') {
                                         const { step, originalIndex } = group.steps[0];
-                                        return <div key={`r-${gIdx}`} className={animClass}><AgentResponse step={step} index={originalIndex} /></div>;
+                                        return <div key={groupKey} className={animClass}><AgentResponse step={step} index={originalIndex} /></div>;
                                     }
                                     if (group.type === 'image') {
                                         const { step, originalIndex } = group.steps[0];
-                                        return <div key={`img-${gIdx}`} className={animClass}><GeneratedImageStep step={step} originalIndex={originalIndex} /></div>;
+                                        return <div key={groupKey} className={animClass}><GeneratedImageStep step={step} originalIndex={originalIndex} /></div>;
                                     }
-                                    return <div key={`p-${gIdx}`} className={animClass}><ProcessingGroup steps={group.steps} cascadeId={activeCascadeId} lastTerminalIndex={lastTerminalIndex} /></div>;
+                                    return <div key={groupKey} className={animClass}><ProcessingGroup steps={group.steps} cascadeId={activeCascadeId} lastTerminalIndex={lastTerminalIndex} /></div>;
                                 })}
                                 {isRunning && <StreamingIndicator />}
                                 <div ref={bottomRef} className="h-4" />
@@ -635,7 +692,7 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
                     </div>
 
                     {/* Input bar */}
-                    <div className="border-t border-border bg-background/80 backdrop-blur px-2 sm:px-4 py-2 sm:py-3"
+                    <div className="border-t border-border bg-background/80 backdrop-blur px-2 sm:px-4 pt-2 sm:pt-3 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
                         onDragOver={handleDragOver}
                         onDragLeave={handleDragLeave}
                         onDrop={handleDrop}
@@ -653,79 +710,84 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
                         )}
                         <div className="max-w-4xl mx-auto space-y-2">
                             {/* Pickers row */}
-                            <div className="flex items-center gap-1.5 sm:gap-2 text-xs flex-wrap">
-                                {/* Model picker */}
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground h-7 px-2 font-normal">
-                                            <span><Brain className="h-3.5 w-3.5" /></span>
-                                            <span className="truncate max-w-[200px] sm:max-w-[240px]">{selectedModelLabel}</span>
-                                            <ChevronDown className="h-3 w-3 opacity-50" />
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="start" className="w-72">
-                                        {modelDisplayGroups.map((group, gi) => (
-                                            <DropdownMenuGroup key={group.name || `g${gi}`}>
-                                                {/* IDE shows a flat list when there's a single group; only label real sub-groups. */}
-                                                {modelDisplayGroups.length > 1 && group.name && (
-                                                    <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground/70 py-1">{group.name}</DropdownMenuLabel>
-                                                )}
-                                                {group.models.map(m => (
-                                                    <DropdownMenuItem
-                                                        key={m.modelId || m.label}
-                                                        onClick={() => setSelectedModel(m.modelId)}
-                                                        className={cn('cursor-pointer flex items-center justify-between gap-2',
-                                                            m.modelId === selectedModel && 'text-primary')}
-                                                    >
-                                                        <div className="flex items-center gap-2 min-w-0">
-                                                            <span className="truncate">{m.label}</span>
-                                                            {m.tagTitle && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 shrink-0" title={m.tagDescription || undefined}>{m.tagTitle}</Badge>}
-                                                            {m.isRecommended && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 shrink-0"><Star className="w-2.5 h-2.5 text-amber-400" /></Badge>}
-                                                        </div>
-                                                        <div className="flex items-center gap-1.5 shrink-0">
-                                                            {m.supportsImages && <span className="text-[9px]"><ImageIcon className="h-3 w-3" /></span>}
-                                                            <div className="w-12 h-1.5 rounded-full bg-muted overflow-hidden">
-                                                                <div className="h-full rounded-full bg-emerald-500/70" style={{ width: `${Math.round(m.quota * 100)}%` }} />
+                            <div className="flex items-center justify-between gap-1 text-xs w-full min-w-0">
+                                <div className="flex items-center gap-1 min-w-0 flex-1">
+                                    {/* Model picker */}
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="ghost" size="sm" className="gap-1 sm:gap-1.5 text-muted-foreground h-7 px-1.5 sm:px-2 font-normal shrink min-w-0 max-w-full">
+                                                <span><Brain className="h-3.5 w-3.5 shrink-0" /></span>
+                                                <span className="truncate max-w-[140px] xs:max-w-[180px] sm:max-w-[240px]" title={selectedModelLabel}>
+                                                    {formatThinkingLevel(selectedModelLabel)}
+                                                </span>
+                                                <ChevronDown className="h-3 w-3 opacity-50 shrink-0" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="start" className="w-72">
+                                            {modelDisplayGroups.map((group, gi) => (
+                                                <DropdownMenuGroup key={group.name || `g${gi}`}>
+                                                    {/* IDE shows a flat list when there's a single group; only label real sub-groups. */}
+                                                    {modelDisplayGroups.length > 1 && group.name && (
+                                                        <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground/70 py-1">{group.name}</DropdownMenuLabel>
+                                                    )}
+                                                    {group.models.map(m => (
+                                                        <DropdownMenuItem
+                                                            key={m.modelId || m.label}
+                                                            onClick={() => setSelectedModel(m.modelId)}
+                                                            className={cn('cursor-pointer flex items-center justify-between gap-2',
+                                                                m.modelId === selectedModel && 'text-primary')}
+                                                        >
+                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                <span className="truncate">{formatThinkingLevel(m.label)}</span>
+                                                                {m.tagTitle && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 shrink-0" title={m.tagDescription || undefined}>{m.tagTitle}</Badge>}
+                                                                {m.isRecommended && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 shrink-0"><Star className="w-2.5 h-2.5 text-amber-400" /></Badge>}
                                                             </div>
-                                                        </div>
-                                                    </DropdownMenuItem>
-                                                ))}
-                                                {gi < modelDisplayGroups.length - 1 && <DropdownMenuSeparator />}
-                                            </DropdownMenuGroup>
-                                        ))}
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
+                                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                                {m.supportsImages && <span className="text-[9px]"><ImageIcon className="h-3 w-3" /></span>}
+                                                                <div className="w-12 h-1.5 rounded-full bg-muted overflow-hidden">
+                                                                    <div className="h-full rounded-full bg-emerald-500/70" style={{ width: `${Math.round(m.quota * 100)}%` }} />
+                                                                </div>
+                                                            </div>
+                                                        </DropdownMenuItem>
+                                                    ))}
+                                                    {gi < modelDisplayGroups.length - 1 && <DropdownMenuSeparator />}
+                                                </DropdownMenuGroup>
+                                            ))}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
 
-                                {/* Status indicator */}
-                                {isActive && (
-                                    <div className="flex items-center gap-1.5 text-[10px] text-purple-400/70 ml-1">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
-                                        {isWaiting ? (autoAccept ? 'Auto-accepting...' : 'Waiting for approval') : 'Running'}
-                                    </div>
-                                )}
+                                    {/* Status indicator */}
+                                    {isActive && (
+                                        <div className="flex items-center gap-1 text-[10px] text-purple-400/70 shrink-0">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+                                            <span className="hidden sm:inline">{isWaiting ? (autoAccept ? 'Auto-accepting...' : 'Waiting for approval') : 'Running'}</span>
+                                            <span className="sm:hidden">{isWaiting ? 'Waiting' : 'Running'}</span>
+                                        </div>
+                                    )}
+                                </div>
 
-                                <div className="flex-1" />
+                                <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+                                    {/* New chat button */}
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={handleNewChat}
+                                        className="gap-1 h-7 px-1.5 sm:px-2 text-muted-foreground hover:text-foreground"
+                                        title="New Chat"
+                                    >
+                                        <Plus className="h-3.5 w-3.5" />
+                                        <span className="hidden sm:inline">New Chat</span>
+                                    </Button>
 
-                                {/* New chat button */}
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={handleNewChat}
-                                    className="gap-1 h-7 text-muted-foreground hover:text-foreground"
-                                >
-                                    <Plus className="h-3.5 w-3.5" />
-                                    <span className="hidden sm:inline">New Chat</span>
-                                </Button>
-
-                                {/* Chat Settings Dropdown */}
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="sm" className="gap-1.5 h-7 text-muted-foreground hover:text-foreground">
-                                            <Settings className="w-3.5 h-3.5" />
-                                            <span className="hidden sm:inline">Settings</span>
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" className="w-56 mb-1 bg-popover/95 backdrop-blur-sm shadow-xl rounded-lg border-border">
+                                    {/* Chat Settings Dropdown */}
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="ghost" size="sm" className="gap-1.5 h-7 px-1.5 sm:px-2 text-muted-foreground hover:text-foreground" title="Settings">
+                                                <Settings className="w-3.5 h-3.5" />
+                                                <span className="hidden sm:inline">Settings</span>
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="w-56 mb-1 bg-popover/95 backdrop-blur-sm shadow-xl rounded-lg border-border">
                                         <DropdownMenuLabel className="flex items-center gap-2 text-xs font-normal text-muted-foreground px-2 py-1.5">
                                             <Folder className="w-3.5 h-3.5" />
                                             <span className="truncate flex-1 min-w-0">{selectedWsName}</span>
@@ -796,6 +858,7 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
                                         </DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>
+                                </div>
                             </div>
 
                             {/* Token usage display */}

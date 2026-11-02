@@ -790,7 +790,7 @@ export default function Home() {
           )}
 
           {/* Footer */}
-          <footer className="flex items-center justify-between px-2 sm:px-4 h-8 bg-background border-t border-border flex-shrink-0 text-[10px] text-muted-foreground/60">
+          <footer className="hidden sm:flex items-center justify-between px-2 sm:px-4 h-8 bg-background border-t border-border flex-shrink-0 text-[10px] text-muted-foreground/60">
             <div className="flex items-center gap-2 sm:gap-3">
               <span><FolderSync className="w-3 h-3 inline-block mr-1" />Antigravity Deck v3</span>
               <span className="w-px h-3 bg-border hidden sm:block" />
